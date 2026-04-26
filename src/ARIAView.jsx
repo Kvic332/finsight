@@ -42,7 +42,7 @@ const SAMPLE_CONTEXT = {
 };
 
 // ── Paste your Anthropic API key here ───────────────────────────────────────
-const ANTHROPIC_API_KEY = "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";
+const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_KEY;
 // ────────────────────────────────────────────────────────────────────────────
 
 function buildSystemPrompt(ctx) {
@@ -120,7 +120,11 @@ const QUICK_QUESTIONS = [
 ];
 
 export default function ARIAView({ financialContext = SAMPLE_CONTEXT }) {
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(() => [{
+    role: "aria",
+    text: `Hey! I'm ARIA, your financial companion. I can see your balance is ₦${financialContext.balance.toLocaleString()} and you have ${financialContext.daysLeft} days before you run out at your current rate. What would you like to work on today?`,
+    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  }]);
   const [chatHistory, setChatHistory] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -130,15 +134,6 @@ export default function ARIAView({ financialContext = SAMPLE_CONTEXT }) {
   const chatEndRef = useRef(null);
   const recognitionRef = useRef(null);
   const synthRef = useRef(window.speechSynthesis);
-
-  useEffect(() => {
-    const greeting = {
-      role: "aria",
-      text: `Hey! I'm ARIA, your financial companion. I can see your balance is ₦${financialContext.balance.toLocaleString()} and you have ${financialContext.daysLeft} days before you run out at your current rate. What would you like to work on today?`,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
-    setMessages([greeting]);
-  }, []);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
