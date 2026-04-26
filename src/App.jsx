@@ -1,3 +1,4 @@
+import SMSPanel from './SMSPanel';
 import { useState } from "react";
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import ARIAViewAI from './ARIAView';
@@ -26,7 +27,7 @@ const INVESTMENTS = [
   { name: "Risevest Real Estate", return: "15–18% p.a", risk: "Medium", min: "₦3,000", liquidity: "12 months", color: COLORS.purple },
 ];
 
-const NAV_ITEMS = ["Dashboard", "Transactions", "Savings", "Investments", "ARIA"];
+const NAV_ITEMS = ["Dashboard", "Transactions", "Savings", "Investments", "SMS Import", "ARIA"];
 const CAT_ICONS = { Food: "🍔", Transport: "🚗", Entertainment: "🎬", Utilities: "💡", Health: "💊", Savings: "🏦", Income: "💰", Other: "📦" };
 const CAT_COLORS = { Food: COLORS.orange, Entertainment: COLORS.purple, Transport: COLORS.accent, Utilities: COLORS.yellow, Health: COLORS.green, Savings: "#4ADE80", Income: COLORS.green, Other: COLORS.muted };
 
@@ -106,7 +107,7 @@ export default function FinSight() {
           <nav style={{ flex: 1, marginTop: 20, display: "flex", flexDirection: "column", gap: 4 }}>
             {NAV_ITEMS.map(item => (
               <div key={item} className={`nav-item ${active === item ? "active" : ""}`} onClick={() => setActive(item)}>
-                {item === "Dashboard" ? "⬛ " : item === "Transactions" ? "↕️ " : item === "Savings" ? "🏦 " : item === "Investments" ? "📈 " : "🤖 "}{item}
+                {item === "Dashboard" ? "⬛ " : item === "Transactions" ? "↕️ " : item === "Savings" ? "🏦 " : item === "Investments" ? "📈 " : item === "SMS Import" ? "📱 " : "🤖 "}{item}
               </div>
             ))}
           </nav>
@@ -143,6 +144,13 @@ export default function FinSight() {
             <SavingsView totalSaved={totalSaved} savingsGoals={savingsGoals} savingsRate={stats.savingsRate} />
           )}
           {active === "Investments" && <InvestmentsView totalSaved={totalSaved} />}
+          {active === "SMS Import" && (
+            <SMSPanel onImport={(txs, goHome) => {
+              if (goHome) { setActive("Dashboard"); return; }
+              txs.forEach(tx => saveNewTransaction(tx));
+              setTransactions(loadTransactions());
+            }} />
+            )}
           {active === "ARIA" && (
             <ARIAViewAI financialContext={{
               balance, totalSpend, totalSaved, daysLeft, finScore,
