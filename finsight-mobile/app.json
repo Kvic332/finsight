@@ -36,7 +36,8 @@
           }
         }
       ],
-      "./plugins/withAndroidExclusion"
+      "./plugins/withAndroidExclusion",
+      "./plugins/withNativeBankCapture"
     ],
     "extra": {
       "eas": {
