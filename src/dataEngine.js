@@ -191,9 +191,16 @@ function parseSingleSMS(text) {
 
   if (!amount) return null;
 
+  // Must be a genuine bank SMS — reject noise (Jumia, OTP, promo, subscription alerts)
+  const hasBankName = detectBank(text) !== "Unknown Bank";
+  const hasBankPattern = /\b(acct|a\/c|account\s*no|avail(?:able)?\s*bal|new\s*bal|bal[:\s]|trf|ref\s*no|trans(?:action)?\s*id|DR[:\s]|CR[:\s])\b/i.test(text);
+  if (!hasBankName && !hasBankPattern) return null;
+
   // Transaction type detection
-  const isDebit = /debit|debited|DR:|dr\s|withdrawal|charged|purchase|payment|withdraw|sent|transfer out|pos|web|atm/i.test(text);
-  const isCredit = /credit|credited|CR:|received|deposit|transfer in|salary|income|lodgement|inflow/i.test(text);
+  // Debit = money OUT (you sent, transferred, paid, withdrew)
+  const isDebit = /debit|debited|DR:|dr\s|withdrawal|charged|purchase|payment|withdraw|\bsent\b|transfer(?:red)?\s*to|trf\s*to|transfer out|pos|web|atm/i.test(text);
+  // Credit = money IN (received, deposited, salary, refund)
+  const isCredit = /credit|credited|CR:|received|deposit|transfer in|salary|income|lodgement|inflow|refund|cashback/i.test(text);
 
   if (!isDebit && !isCredit) return null;
 
