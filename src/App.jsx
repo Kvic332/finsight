@@ -1,35 +1,72 @@
 import SMSPanel from './SMSPanel';
 import { useState } from "react";
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from "recharts";
 import ARIAViewAI from './ARIAView';
 import Onboarding from './Onboarding';
 import { loadUser, loadTransactions, computeStats, addTransaction as saveNewTransaction } from './dataEngine';
+function GridIcon({ size = 16 }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>;
+}
+function TxIcon({ size = 16 }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M7 16V4m0 0L3 8m4-4 4 4M17 8v12m0 0 4-4m-4 4-4-4"/></svg>;
+}
+function PigIcon({ size = 16 }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M19 9a7 7 0 1 0-13.9 1.4L4 14h1l1 3h8l1-3h1l-.1-3.6A7 7 0 0 0 19 9z"/><path d="M12 7v2m5 4h1"/></svg>;
+}
+function ChartIcon({ size = 16 }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>;
+}
+function PhoneIcon({ size = 16 }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>;
+}
+function BotIcon({ size = 16 }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M12 11V7m-3 0a3 3 0 1 1 6 0"/><circle cx="9" cy="16" r="1"/><circle cx="15" cy="16" r="1"/></svg>;
+}
 
-const COLORS = {
-  bg: "#0A0E1A",
-  surface: "#111827",
-  card: "#151D2E",
-  border: "#1E2D45",
-  accent: "#00D4FF",
-  green: "#00F5A0",
-  orange: "#FF6B35",
-  red: "#FF3B5C",
-  yellow: "#FFD166",
-  purple: "#9B5DE5",
-  text: "#E8EDF5",
-  muted: "#6B7FA3",
+// ── Design Tokens (matching HTML design) ─────────────────────────────────────
+const T = {
+  bg0:      "#F5F3EE",
+  bg1:      "#ECE9E2",
+  bg2:      "#F0EDE6",
+  surface:  "#FFFFFF",
+  surface2: "#F8F6F1",
+  line:     "#E2DED4",
+  line2:    "#CFC9BC",
+  ink:      "#0E120F",
+  ink2:     "#2B3127",
+  mute:     "#6B6E66",
+  mute2:    "#989A91",
+  lime:     "#B4DC2A",
+  limeDeep: "#84A816",
+  amber:    "#C77A00",
+  rose:     "#D14545",
+  indigo:   "#4F4FE0",
+  radius:   "18px",
+  radiusSm: "12px",
 };
 
 const INVESTMENTS = [
-  { name: "Cowrywise Mutual Fund", return: "14% p.a", risk: "Low", min: "₦1,000", liquidity: "7 days", color: COLORS.green },
-  { name: "Piggyvest Fixed", return: "10–13% p.a", risk: "Low", min: "₦1,000", liquidity: "Lock-in", color: COLORS.accent },
-  { name: "FGN Savings Bond", return: "12.5% p.a", risk: "Zero", min: "₦5,000", liquidity: "90 days", color: COLORS.yellow },
-  { name: "Risevest Real Estate", return: "15–18% p.a", risk: "Medium", min: "₦3,000", liquidity: "12 months", color: COLORS.purple },
+  { name: "Cowrywise Mutual Fund", ret: "14%", risk: "Low risk", riskColor: T.limeDeep, riskBg: T.lime, min: "₦1,000", lock: "7 days" },
+  { name: "Piggyvest Fixed Savings", ret: "10–13%", risk: "Low risk", riskColor: T.limeDeep, riskBg: T.lime, min: "₦1,000", lock: "Lock-in" },
+  { name: "FGN Savings Bond", ret: "12.5%", risk: "Zero risk", riskColor: T.amber, riskBg: "rgba(199,122,0,0.10)", min: "₦5,000", lock: "90 days" },
+  { name: "Risevest — Real Estate", ret: "15–18%", risk: "Medium risk", riskColor: T.indigo, riskBg: "rgba(79,79,224,0.10)", min: "₦3,000", lock: "12 months" },
 ];
 
-const NAV_ITEMS = ["Dashboard", "Transactions", "Savings", "Investments", "SMS Import", "ARIA"];
-const CAT_ICONS = { Food: "🍔", Transport: "🚗", Entertainment: "🎬", Utilities: "💡", Health: "💊", Savings: "🏦", Income: "💰", Other: "📦" };
-const CAT_COLORS = { Food: COLORS.orange, Entertainment: COLORS.purple, Transport: COLORS.accent, Utilities: COLORS.yellow, Health: COLORS.green, Savings: "#4ADE80", Income: COLORS.green, Other: COLORS.muted };
+const NAV = [
+  { id: "Dashboard", icon: <GridIcon />, label: "Dashboard" },
+  { id: "Transactions", icon: <TxIcon />, label: "Transactions" },
+  { id: "Savings", icon: <PigIcon />, label: "Savings" },
+  { id: "Investments", icon: <ChartIcon />, label: "Investments" },
+  { id: "SMS Import", icon: <PhoneIcon />, label: "SMS Import" },
+  { id: "ARIA", icon: <BotIcon />, label: "ARIA" },
+];
+
+const CAT_COLORS = {
+  Food: "#84A816", Transport: "#4F4FE0", Entertainment: "#C77A00",
+  Utilities: "#D14545", Health: "#84A816", Savings: "#0E120F",
+  Income: "#84A816", Transfer: "#6B6E66", Shopping: "#C77A00", Other: "#989A91",
+};
+const CAT_ICONS = { Food:"🍔", Transport:"🚗", Entertainment:"🎬", Utilities:"💡", Health:"💊", Savings:"🏦", Income:"💰", Other:"📦" };
 
 export default function FinSight() {
   const [user, setUser] = useState(() => loadUser());
@@ -38,99 +75,149 @@ export default function FinSight() {
   const [showAddTx, setShowAddTx] = useState(false);
   const [newTx, setNewTx] = useState({ desc: "", amount: "", type: "debit", cat: "Food" });
 
-  // Show onboarding if user hasn't set up yet
   if (!user || !user.setupComplete) {
     return <Onboarding onComplete={(data) => setUser(data)} />;
   }
 
-  // Compute all stats from real data
   const stats = computeStats(user, transactions);
   const { balance, totalSpend, totalSaved, daysLeft, finScore, spendTrend, balanceProjection, categoryTotals, savingsGoals } = stats;
-  const scoreColor = finScore >= 70 ? COLORS.green : finScore >= 50 ? COLORS.yellow : COLORS.red;
 
-  // Category chart data from real transactions
   const catChartData = Object.entries(categoryTotals).map(([name, value]) => ({
-    name, value, color: CAT_COLORS[name] || COLORS.muted,
+    name, value, color: CAT_COLORS[name] || T.mute,
   }));
 
   function handleAddTransaction() {
     if (!newTx.desc || !newTx.amount) return;
     const updated = saveNewTransaction({
-      desc: newTx.desc,
-      amount: parseInt(newTx.amount),
-      type: newTx.type,
-      cat: newTx.cat,
-      source: "manual",
+      desc: newTx.desc, amount: parseInt(newTx.amount),
+      type: newTx.type, cat: newTx.cat, source: "manual",
     });
     setTransactions(updated);
     setNewTx({ desc: "", amount: "", type: "debit", cat: "Food" });
     setShowAddTx(false);
   }
 
-  // First name from user profile
   const firstName = user.name ? user.name.split(" ")[0] : "there";
-  const initial = firstName[0].toUpperCase();
+  const initial = firstName[0]?.toUpperCase() || "U";
+  const scoreGrade = finScore >= 90 ? "A · Excellent" : finScore >= 80 ? "A− · Great" : finScore >= 70 ? "B+ · Above average" : finScore >= 60 ? "B · Good" : finScore >= 50 ? "C · Average" : "D · Needs work";
 
   return (
-    <div style={{ fontFamily: "'DM Sans', sans-serif", background: COLORS.bg, minHeight: "100vh", color: COLORS.text }}>
+    <div style={{ fontFamily: "'Space Grotesk', system-ui, sans-serif", background: T.bg0, minHeight: "100vh", color: T.ink, WebkitFontSmoothing: "antialiased" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Syne:wght@700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: #111; } ::-webkit-scrollbar-thumb { background: #1E2D45; border-radius: 2px; }
-        .nav-item { cursor: pointer; padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; transition: all 0.2s; color: ${COLORS.muted}; }
-        .nav-item:hover { background: ${COLORS.border}; color: ${COLORS.text}; }
-        .nav-item.active { background: linear-gradient(135deg, #00D4FF22, #9B5DE522); color: ${COLORS.accent}; border: 1px solid ${COLORS.accent}33; }
-        .card { background: ${COLORS.card}; border: 1px solid ${COLORS.border}; border-radius: 16px; padding: 20px; }
-        .btn-primary { background: linear-gradient(135deg, ${COLORS.accent}, #0099BB); color: #000; border: none; border-radius: 10px; padding: 10px 20px; font-weight: 600; cursor: pointer; font-size: 13px; transition: all 0.2s; }
-        .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
-        .btn-ghost { background: ${COLORS.border}; color: ${COLORS.text}; border: none; border-radius: 10px; padding: 10px 20px; font-weight: 500; cursor: pointer; font-size: 13px; transition: all 0.2s; }
-        .btn-ghost:hover { background: #2A3A55; }
-        .input { background: ${COLORS.surface}; border: 1px solid ${COLORS.border}; border-radius: 10px; padding: 10px 14px; color: ${COLORS.text}; font-size: 13px; outline: none; width: 100%; }
-        .input:focus { border-color: ${COLORS.accent}66; }
-        .select { background: ${COLORS.surface}; border: 1px solid ${COLORS.border}; border-radius: 10px; padding: 10px 14px; color: ${COLORS.text}; font-size: 13px; outline: none; }
-        .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        .fade-in { animation: fadeIn 0.3s ease; }
-        .glow { box-shadow: 0 0 20px ${COLORS.accent}22; }
-        .score-bar { height: 6px; border-radius: 3px; background: ${COLORS.border}; overflow: hidden; }
-        .score-fill { height: 100%; border-radius: 3px; transition: width 1s ease; }
+        body { background: radial-gradient(900px 600px at 8% -5%, rgba(180,220,42,0.10), transparent 60%), radial-gradient(700px 500px at 100% 0%, rgba(79,79,224,0.04), transparent 60%), linear-gradient(180deg, #F5F3EE 0%, #EFEDE6 100%); }
+        .serif { font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: ${T.line2}; border-radius: 2px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; font-size: 13px; font-weight: 500; color: ${T.ink2}; cursor: pointer; border: 1px solid transparent; transition: all 0.15s; }
+        .nav-item:hover { background: rgba(0,0,0,0.03); color: ${T.ink}; }
+        .nav-item.active { background: ${T.ink}; color: ${T.lime}; font-weight: 600; }
+        .nav-item.active svg { color: ${T.lime}; }
+        .nav-item svg { color: ${T.mute}; transition: color 0.15s; }
+        .nav-item:hover svg { color: ${T.ink}; }
+        .card { background: ${T.surface}; border: 1px solid ${T.line}; border-radius: ${T.radius}; padding: 22px; }
+        .card-sm { background: ${T.surface}; border: 1px solid ${T.line}; border-radius: ${T.radiusSm}; padding: 16px; }
+        .btn-cta { display: inline-flex; align-items: center; gap: 8px; background: ${T.ink}; color: ${T.lime}; border: none; padding: 10px 18px; border-radius: 12px; font-weight: 700; font-size: 13px; cursor: pointer; font-family: inherit; box-shadow: 0 8px 20px -10px rgba(14,18,15,0.4); transition: all 0.15s; }
+        .btn-cta:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .btn-ghost { display: inline-flex; align-items: center; gap: 8px; background: transparent; color: ${T.ink2}; border: 1px solid ${T.line}; padding: 10px 18px; border-radius: 12px; font-weight: 500; font-size: 13px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+        .btn-ghost:hover { border-color: ${T.line2}; color: ${T.ink}; background: ${T.bg1}; }
+        .lbl { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: ${T.mute}; font-weight: 600; }
+        .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid ${T.line}; background: ${T.surface}; border-radius: 999px; font-size: 12px; color: ${T.ink2}; }
+        .input { background: ${T.surface2}; border: 1px solid ${T.line}; border-radius: 10px; padding: 11px 14px; color: ${T.ink}; font-size: 13px; outline: none; width: 100%; font-family: inherit; transition: border-color 0.15s; }
+        .input:focus { border-color: ${T.limeDeep}; box-shadow: 0 0 0 3px rgba(132,168,22,0.12); }
+        .select { background: ${T.surface2}; border: 1px solid ${T.line}; border-radius: 10px; padding: 11px 14px; color: ${T.ink}; font-size: 13px; outline: none; font-family: inherit; }
+        .bar-track { height: 4px; background: ${T.line}; border-radius: 2px; overflow: hidden; margin-top: 8px; }
+        .bar-fill { height: 100%; border-radius: 2px; transition: width 0.8s ease; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-up { animation: fadeUp 0.35s ease; }
+        .source-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; background: ${T.bg1}; color: ${T.ink2}; border: 1px solid ${T.line}; font-family: 'JetBrains Mono', monospace; }
+        .tx-row { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid ${T.line}; }
+        .tx-row:last-child { border-bottom: none; }
+        .tx-icon { width: 36px; height: 36px; border-radius: 10px; background: ${T.bg1}; border: 1px solid ${T.line}; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; }
+        .tx-icon.in { background: rgba(132,168,22,0.12); border-color: rgba(132,168,22,0.25); }
+        .risk-badge { font-size: 10px; padding: 3px 9px; border-radius: 999px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
       `}</style>
 
-      <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
-        {/* Sidebar */}
-        <div style={{ width: 220, background: COLORS.surface, borderRight: `1px solid ${COLORS.border}`, display: "flex", flexDirection: "column", padding: "24px 12px", flexShrink: 0 }}>
-          <div style={{ padding: "0 8px 24px", borderBottom: `1px solid ${COLORS.border}` }}>
-            <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 22, fontWeight: 800, background: `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.green})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>FinSight</div>
-            <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 2 }}>Your Financial OS</div>
+      <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", maxWidth: 1440, margin: "0 auto", minHeight: "100vh" }}>
+
+        {/* ── SIDEBAR ── */}
+        <aside style={{ padding: "24px 14px", borderRight: `1px solid ${T.line}`, display: "flex", flexDirection: "column", gap: 22, position: "sticky", top: 0, height: "100vh", background: "rgba(245,243,238,0.85)", backdropFilter: "blur(12px)" }}>
+          {/* Brand */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 10px" }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: T.ink, color: T.lime, display: "grid", placeItems: "center", fontFamily: "'Instrument Serif', serif", fontSize: 22, fontStyle: "italic" }}>f</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 17, letterSpacing: "-0.02em" }}>Fin<em style={{ fontFamily: "'Instrument Serif', serif", fontStyle: "italic", fontWeight: 400, color: T.limeDeep }}>Sight</em></div>
+            </div>
           </div>
-          <nav style={{ flex: 1, marginTop: 20, display: "flex", flexDirection: "column", gap: 4 }}>
-            {NAV_ITEMS.map(item => (
-              <div key={item} className={`nav-item ${active === item ? "active" : ""}`} onClick={() => setActive(item)}>
-                {item === "Dashboard" ? "⬛ " : item === "Transactions" ? "↕️ " : item === "Savings" ? "🏦 " : item === "Investments" ? "📈 " : item === "SMS Import" ? "📱 " : "🤖 "}{item}
+          <div style={{ fontSize: 10, color: T.mute2, letterSpacing: "0.16em", textTransform: "uppercase", padding: "0 10px", marginTop: -16 }}>Personal Finance, Clearer</div>
+
+          {/* Nav */}
+          <div>
+            <div className="lbl" style={{ padding: "0 12px 8px" }}>Menu</div>
+            <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {NAV.map(n => (
+                <div key={n.id} className={`nav-item ${active === n.id ? "active" : ""}`} onClick={() => setActive(n.id)}>
+                  {n.icon}
+                  <span>{n.label}</span>
+                </div>
+              ))}
+            </nav>
+          </div>
+
+          {/* FinScore card */}
+          <div style={{ marginTop: "auto" }}>
+            <div className="card-sm" style={{ marginBottom: 12 }}>
+              <div className="lbl">FinScore</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
+                <span className="serif" style={{ fontSize: 36, lineHeight: 1, color: T.ink }}>{finScore}</span>
+                <span style={{ color: T.mute, fontSize: 13 }}>/100</span>
               </div>
-            ))}
-          </nav>
-          <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 16, marginTop: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px" }}>
-              <div style={{ width: 36, height: 36, borderRadius: "50%", background: `linear-gradient(135deg, ${COLORS.accent}, ${COLORS.purple})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "#000" }}>{initial}</div>
+              <div className="bar-track">
+                <div className="bar-fill" style={{ width: `${finScore}%`, background: finScore >= 70 ? T.limeDeep : finScore >= 50 ? T.amber : T.rose }} />
+              </div>
+              <div style={{ fontSize: 11, color: T.mute, marginTop: 8 }}>Grade {scoreGrade}</div>
+            </div>
+
+            {/* Profile */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, border: `1px solid ${T.line}`, borderRadius: 12, background: T.surface }}>
+              <div style={{ width: 34, height: 34, borderRadius: "50%", background: T.ink, color: T.lime, display: "grid", placeItems: "center", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>{initial}</div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{firstName}</div>
-                <div style={{ fontSize: 11, color: COLORS.muted }}>FinScore: <span style={{ color: scoreColor }}>{finScore}</span></div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{user.name || firstName}</div>
+                <div style={{ fontSize: 11, color: T.mute }}>
+                  {user.banks?.[0] || "FinSight user"}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </aside>
 
-        {/* Main Content */}
-        <div style={{ flex: 1, overflow: "auto", padding: "24px 28px" }}>
+        {/* ── MAIN ── */}
+        <main style={{ padding: "22px 28px 40px", minWidth: 0 }}>
+
+          {/* Top bar */}
+          <div style={{ display: "flex", alignItems: "center", gap: 14, paddingBottom: 22 }}>
+            <div style={{ fontSize: 11, letterSpacing: "0.18em", textTransform: "uppercase", color: T.mute }}>
+              FinSight · <strong style={{ color: T.ink }}>{active}</strong>
+            </div>
+            <div style={{ flex: 1 }} />
+            <div className="pill">
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: T.limeDeep }} />
+              {new Date().toLocaleDateString("en-NG", { weekday: "short", month: "short", day: "numeric" })}
+            </div>
+            <button className="btn-cta" onClick={() => setActive("SMS Import")}>
+              <PhoneIcon size={14} /> Import SMS
+            </button>
+          </div>
+
+          {/* ── VIEWS ── */}
           {active === "Dashboard" && (
             <DashboardView
               balance={balance} daysLeft={daysLeft} totalSpend={totalSpend}
-              totalSaved={totalSaved} finScore={finScore} scoreColor={scoreColor}
+              totalSaved={totalSaved} finScore={finScore} scoreGrade={scoreGrade}
               transactions={transactions} spendTrend={spendTrend}
               balanceProjection={balanceProjection} catChartData={catChartData}
-              firstName={firstName} income={stats.income}
+              firstName={firstName} income={stats.income} savingsGoals={savingsGoals}
             />
           )}
           {active === "Transactions" && (
@@ -141,7 +228,7 @@ export default function FinSight() {
             />
           )}
           {active === "Savings" && (
-            <SavingsView totalSaved={totalSaved} savingsGoals={savingsGoals} savingsRate={stats.savingsRate} />
+            <SavingsView totalSaved={totalSaved} savingsGoals={savingsGoals} savingsRate={stats.savingsRate} income={stats.income} />
           )}
           {active === "Investments" && <InvestmentsView totalSaved={totalSaved} />}
           {active === "SMS Import" && (
@@ -150,315 +237,393 @@ export default function FinSight() {
               txs.forEach(tx => saveNewTransaction(tx));
               setTransactions(loadTransactions());
             }} />
-            )}
+          )}
           {active === "ARIA" && (
             <ARIAViewAI financialContext={{
               balance, totalSpend, totalSaved, daysLeft, finScore,
-              income: stats.income,
-              transactions: transactions.slice(0, 20),
-              savingsGoals,
+              income: stats.income, transactions: transactions.slice(0, 20), savingsGoals,
             }} />
           )}
-        </div>
+        </main>
       </div>
     </div>
   );
 }
 
-function DashboardView({ balance, daysLeft, totalSpend, totalSaved, finScore, scoreColor, transactions, spendTrend, balanceProjection, catChartData, firstName, income }) {
-  const urgency = daysLeft < 20 ? COLORS.red : daysLeft < 30 ? COLORS.yellow : COLORS.green;
-  const today = new Date().toLocaleDateString("en-NG", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+// ── DASHBOARD ────────────────────────────────────────────────────────────────
+function DashboardView({ balance, daysLeft, totalSpend, totalSaved, finScore, scoreGrade, transactions, spendTrend, balanceProjection, catChartData, firstName, income, savingsGoals }) {
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const greeting = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+  const urgencyColor = daysLeft < 20 ? T.rose : daysLeft < 30 ? T.amber : T.limeDeep;
 
   return (
-    <div className="fade-in">
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 26, fontWeight: 800 }}>{greeting}, {firstName} 👋</h1>
-        <p style={{ color: COLORS.muted, fontSize: 14, marginTop: 4 }}>Here's your financial pulse for today — {today}</p>
-      </div>
+    <div className="fade-up">
+      {/* HERO */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 22, marginBottom: 22 }}>
+        {/* Hero Left */}
+        <div style={{
+          border: `1px solid ${T.line}`, borderRadius: T.radius, padding: "30px 32px 26px",
+          background: `radial-gradient(700px 400px at 100% 0%, rgba(180,220,42,0.18), transparent 55%), linear-gradient(180deg, ${T.surface} 0%, ${T.bg2} 100%)`,
+          position: "relative", overflow: "hidden"
+        }}>
+          <div className="lbl">Good {greeting} · <strong style={{ color: T.ink, letterSpacing: 0 }}>{firstName}</strong></div>
+          <h1 className="serif" style={{ margin: "14px 0 0", fontSize: 52, lineHeight: 1.0, letterSpacing: "-0.025em" }}>
+            ₦<em style={{ fontStyle: "italic", color: T.limeDeep }}>{balance >= 1000000 ? `${(balance/1000000).toFixed(1)}M` : balance >= 1000 ? `${(balance/1000).toFixed(0)}K` : balance.toLocaleString()}</em>
+            <span style={{ fontFamily: "'Space Grotesk'", fontSize: 22, fontWeight: 600, verticalAlign: "top", marginLeft: 6, color: T.ink2, fontStyle: "normal", lineHeight: 1.8 }}>balance</span>
+          </h1>
+          <p style={{ color: T.ink2, fontSize: 14, maxWidth: 420, lineHeight: 1.5, marginTop: 12 }}>
+            {daysLeft >= 365 ? "Your balance is healthy — keep tracking." : `At your current pace, your balance covers <strong>${daysLeft} more days</strong>. ARIA has suggestions.`}
+          </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
-        {[
-          { label: "Est. Balance", value: `₦${balance.toLocaleString()}`, sub: "Based on your activity", color: COLORS.accent },
-          { label: "Spent This Month", value: `₦${totalSpend.toLocaleString()}`, sub: income > 0 ? `${((totalSpend/income)*100).toFixed(0)}% of income` : "Log income to compare", color: COLORS.orange },
-          { label: "Total Saved", value: `₦${totalSaved.toLocaleString()}`, sub: income > 0 ? `${((totalSaved/income)*100).toFixed(1)}% of income` : "Keep it up!", color: COLORS.green },
-          { label: "FinScore", value: finScore, sub: finScore >= 70 ? "Great shape!" : finScore >= 50 ? "Good — improving" : "Needs attention", color: scoreColor },
-        ].map((stat, i) => (
-          <div key={i} className="card glow" style={{ borderColor: stat.color + "33" }}>
-            <div style={{ fontSize: 11, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>{stat.label}</div>
-            <div style={{ fontSize: 26, fontWeight: 700, fontFamily: "'Syne', sans-serif", color: stat.color }}>{stat.value}</div>
-            <div style={{ fontSize: 12, color: COLORS.muted, marginTop: 4 }}>{stat.sub}</div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-        {/* Broke Clock */}
-        <div className="card" style={{ borderColor: urgency + "44", background: `linear-gradient(135deg, ${COLORS.card}, ${urgency}08)` }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <div style={{ fontSize: 11, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>🕐 Broke Clock™</div>
-              <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 42, fontWeight: 800, color: urgency }}>
-                {daysLeft >= 365 ? "365+" : daysLeft}<span style={{ fontSize: 16, marginLeft: 4 }}>days</span>
-              </div>
-              <div style={{ fontSize: 13, color: COLORS.muted, marginTop: 4 }}>at current spending rate</div>
-            </div>
-            <div style={{ position: "relative", width: 80, height: 80 }}>
-              <svg width="80" height="80" viewBox="0 0 80 80">
-                <circle cx="40" cy="40" r="35" fill="none" stroke={COLORS.border} strokeWidth="6" />
-                <circle cx="40" cy="40" r="35" fill="none" stroke={urgency} strokeWidth="6"
-                  strokeDasharray={`${(Math.min(daysLeft, 45) / 45) * 220} 220`} strokeLinecap="round"
-                  transform="rotate(-90 40 40)" style={{ transition: "all 1s ease" }} />
-              </svg>
-              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
-                {daysLeft < 20 ? "🔴" : daysLeft < 30 ? "🟡" : "🟢"}
-              </div>
-            </div>
-          </div>
-          <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 28, marginTop: 26, paddingTop: 22, borderTop: `1px dashed ${T.line2}` }}>
             {[
-              { label: "Current path", days: daysLeft, color: COLORS.red },
-              { label: "Cut 20%", days: Math.round(daysLeft * 1.25), color: COLORS.yellow },
-              { label: "ARIA plan", days: Math.round(daysLeft * 1.5), color: COLORS.green },
+              { k: "Spent / month", v: `₦${totalSpend >= 1000 ? (totalSpend/1000).toFixed(0)+"K" : totalSpend.toLocaleString()}`, sub: income > 0 ? `${((totalSpend/income)*100).toFixed(0)}% of income` : "" },
+              { k: "Saved / month", v: `₦${totalSaved >= 1000 ? (totalSaved/1000).toFixed(0)+"K" : totalSaved.toLocaleString()}`, sub: income > 0 ? `${((totalSaved/income)*100).toFixed(1)}%` : "" },
+              { k: "Broke Clock™", v: daysLeft >= 365 ? "365+d" : `${daysLeft}d`, sub: "remaining", vColor: urgencyColor },
             ].map((s, i) => (
-              <div key={i} style={{ flex: 1, background: COLORS.surface, borderRadius: 8, padding: "8px 10px", border: `1px solid ${s.color}33` }}>
-                <div style={{ fontSize: 10, color: COLORS.muted }}>{s.label}</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: s.color, marginTop: 2 }}>{s.days >= 365 ? "365+d" : `${s.days}d`}</div>
+              <div key={i}>
+                <div className="lbl" style={{ marginBottom: 6 }}>{s.k}</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: s.vColor || T.ink, letterSpacing: "-0.02em" }}>{s.v}</div>
+                {s.sub && <div style={{ fontSize: 11, color: T.mute, marginTop: 2 }}>{s.sub}</div>}
               </div>
             ))}
           </div>
         </div>
 
-        {/* Spend Trend */}
-        <div className="card">
-          <div style={{ fontSize: 11, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>Daily Spend Trend</div>
-          {spendTrend.some(d => d.spend > 0) ? (
-            <ResponsiveContainer width="100%" height={160}>
-              <AreaChart data={spendTrend}>
-                <defs>
-                  <linearGradient id="spendGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={COLORS.accent} stopOpacity={0.3} />
-                    <stop offset="95%" stopColor={COLORS.accent} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="day" tick={{ fontSize: 10, fill: COLORS.muted }} axisLine={false} tickLine={false} />
-                <YAxis hide />
-                <Tooltip contentStyle={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 12 }} formatter={v => `₦${v.toLocaleString()}`} />
-                <Area type="monotone" dataKey="spend" stroke={COLORS.accent} fill="url(#spendGrad)" strokeWidth={2} dot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <div style={{ height: 160, display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.muted, fontSize: 13 }}>
-              Add transactions to see your spend trend
+        {/* Hero Right — Broke Clock detail */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className="card" style={{ flex: 1, background: T.ink, borderColor: T.ink, color: T.lime }}>
+            <div className="lbl" style={{ color: "rgba(180,220,42,0.6)" }}>Broke Clock™</div>
+            <div className="serif" style={{ fontSize: 64, lineHeight: 1, marginTop: 8, color: T.lime }}>
+              {daysLeft >= 365 ? "∞" : daysLeft}
             </div>
-          )}
+            <div style={{ fontSize: 13, color: "rgba(180,220,42,0.6)", marginTop: 4 }}>days remaining</div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              {[
+                { l: "Now", d: daysLeft, c: "#D14545" },
+                { l: "−20%", d: Math.round(daysLeft * 1.25), c: "#C77A00" },
+                { l: "ARIA", d: Math.round(daysLeft * 1.5), c: T.lime },
+              ].map((s, i) => (
+                <div key={i} style={{ flex: 1, background: "rgba(255,255,255,0.06)", borderRadius: 10, padding: "8px 10px", border: `1px solid rgba(255,255,255,0.10)` }}>
+                  <div style={{ fontSize: 10, color: "rgba(180,220,42,0.5)", letterSpacing: "0.14em", textTransform: "uppercase" }}>{s.l}</div>
+                  <div style={{ fontSize: 17, fontWeight: 700, color: s.c, marginTop: 3, fontFamily: "'JetBrains Mono', monospace" }}>{s.d >= 365 ? "365+" : s.d}d</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card-sm" style={{ background: `linear-gradient(135deg, ${T.surface}, rgba(180,220,42,0.06))` }}>
+            <div className="lbl" style={{ marginBottom: 10 }}>FinScore · {scoreGrade}</div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+              <span className="serif" style={{ fontSize: 40, color: T.ink, lineHeight: 1 }}>{finScore}</span>
+              <span style={{ color: T.mute, fontSize: 13 }}>/100</span>
+            </div>
+            <div className="bar-track">
+              <div className="bar-fill" style={{ width: `${finScore}%`, background: finScore >= 70 ? T.limeDeep : finScore >= 50 ? T.amber : T.rose }} />
+            </div>
+          </div>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-        {/* Balance Projection */}
+      {/* GRID: Charts + Transactions + Investments */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 340px", gap: 22, marginBottom: 22 }}>
+
+        {/* Spend trend */}
         <div className="card">
-          <div style={{ fontSize: 11, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>Balance Projection</div>
-          <ResponsiveContainer width="100%" height={150}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+            <div>
+              <div className="lbl">Daily spend</div>
+              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>₦{totalSpend >= 1000 ? (totalSpend/1000).toFixed(0)+"K" : totalSpend}</div>
+            </div>
+            <div style={{ fontSize: 11, color: T.mute }}>Last 7 days</div>
+          </div>
+          {spendTrend.some(d => d.spend > 0) ? (
+            <ResponsiveContainer width="100%" height={130}>
+              <AreaChart data={spendTrend}>
+                <defs>
+                  <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={T.limeDeep} stopOpacity={0.25} />
+                    <stop offset="95%" stopColor={T.limeDeep} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="day" tick={{ fontSize: 10, fill: T.mute }} axisLine={false} tickLine={false} />
+                <YAxis hide />
+                <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: 8, fontSize: 11, color: T.ink }} formatter={v => [`₦${v.toLocaleString()}`, "Spent"]} />
+                <Area type="monotone" dataKey="spend" stroke={T.limeDeep} fill="url(#sg)" strokeWidth={2} dot={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div style={{ height: 130, display: "flex", alignItems: "center", justifyContent: "center", color: T.mute2, fontSize: 13 }}>
+              Add transactions to see trend
+            </div>
+          )}
+        </div>
+
+        {/* Balance projection */}
+        <div className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+            <div>
+              <div className="lbl">Balance projection</div>
+              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>8-week outlook</div>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={130}>
             <LineChart data={balanceProjection}>
-              <XAxis dataKey="day" tick={{ fontSize: 10, fill: COLORS.muted }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="day" tick={{ fontSize: 10, fill: T.mute }} axisLine={false} tickLine={false} />
               <YAxis hide />
-              <Tooltip contentStyle={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 12 }} formatter={v => `₦${v.toLocaleString()}`} />
-              <Line type="monotone" dataKey="balance" stroke={COLORS.orange} strokeWidth={2} dot={false} strokeDasharray="4 2" />
+              <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: 8, fontSize: 11 }} formatter={v => [`₦${v.toLocaleString()}`, "Balance"]} />
+              <Line type="monotone" dataKey="balance" stroke={T.amber} strokeWidth={2} dot={false} strokeDasharray="4 3" />
             </LineChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Category Breakdown */}
+        {/* Category breakdown */}
         <div className="card">
-          <div style={{ fontSize: 11, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>Spending by Category</div>
+          <div className="lbl" style={{ marginBottom: 14 }}>Spending categories</div>
           {catChartData.length > 0 ? (
-            <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-              <PieChart width={120} height={120}>
-                <Pie data={catChartData} cx={55} cy={55} innerRadius={35} outerRadius={55} dataKey="value" strokeWidth={0}>
-                  {catChartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                </Pie>
-              </PieChart>
-              <div style={{ flex: 1 }}>
-                {catChartData.slice(0, 5).map((c, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: c.color }} />
-                      <span style={{ color: COLORS.muted }}>{c.name}</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {catChartData.slice(0, 5).map((c, i) => {
+                const max = Math.max(...catChartData.map(x => x.value));
+                return (
+                  <div key={i}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                      <span style={{ color: T.ink2, fontWeight: 500 }}>{c.name}</span>
+                      <span style={{ color: T.ink, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>₦{c.value.toLocaleString()}</span>
                     </div>
-                    <span style={{ fontWeight: 600 }}>₦{c.value.toLocaleString()}</span>
+                    <div className="bar-track">
+                      <div className="bar-fill" style={{ width: `${(c.value / max) * 100}%`, background: c.color }} />
+                    </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
           ) : (
-            <div style={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.muted, fontSize: 13 }}>
-              Add transactions to see breakdown
-            </div>
+            <div style={{ color: T.mute2, fontSize: 13, paddingTop: 20 }}>No category data yet</div>
           )}
         </div>
       </div>
 
-      {/* FinScore */}
+      {/* GRID: Recent Transactions + Investments */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 22, marginBottom: 22 }}>
+
+        {/* Recent transactions */}
+        <div className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700 }}>Recent transactions</h3>
+            <span style={{ fontSize: 12, color: T.mute }}>{transactions.length} total</span>
+          </div>
+          <div>
+            {transactions.length === 0 ? (
+              <div style={{ padding: "30px 0", textAlign: "center", color: T.mute2, fontSize: 13 }}>No transactions yet</div>
+            ) : transactions.slice(0, 6).map((tx, i) => (
+              <div key={tx.id} className="tx-row">
+                <div className={`tx-icon ${tx.type === "credit" ? "in" : ""}`}>
+                  {CAT_ICONS[tx.cat] || "📦"}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 3 }}>{tx.desc}</div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <span className="source-badge">{tx.source === "sms" ? "SMS" : tx.source === "push" ? "Push" : "Manual"}</span>
+                    {tx.bank && <span className="source-badge">{tx.bank}</span>}
+                    <span style={{ fontSize: 11, color: T.mute }}>{tx.date}</span>
+                  </div>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: tx.type === "credit" ? T.limeDeep : T.ink, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "-0.01em" }}>
+                    {tx.type === "credit" ? "+" : "−"}₦{tx.amount.toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.mute, marginTop: 2 }}>{tx.cat}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Quick investments */}
+        <div className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700 }}>Recommended for you</h3>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {INVESTMENTS.slice(0, 3).map((inv, i) => (
+              <div key={i} style={{ border: `1px solid ${T.line}`, borderRadius: 14, padding: 14, background: T.bg1 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{inv.name}</div>
+                  <span className="risk-badge" style={{ background: inv.riskBg, color: inv.riskColor, border: `1px solid ${inv.riskColor}44`, flexShrink: 0 }}>{inv.risk}</span>
+                </div>
+                <div style={{ display: "flex", gap: 16 }}>
+                  <div>
+                    <div className="lbl" style={{ marginBottom: 2 }}>Return</div>
+                    <div className="serif" style={{ fontSize: 20, color: inv.riskColor, lineHeight: 1.1 }}>{inv.ret} <span style={{ fontFamily: "'Space Grotesk'", fontSize: 11, color: T.mute }}>p.a</span></div>
+                  </div>
+                  <div>
+                    <div className="lbl" style={{ marginBottom: 2 }}>Min</div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.min}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* FINSCORE BREAKDOWN */}
       <div className="card">
-        <div style={{ fontSize: 11, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>FinScore Breakdown — {finScore}/100</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+          <div>
+            <div className="lbl" style={{ marginBottom: 8 }}>FinScore · Composite</div>
+            <h3 style={{ fontSize: 20, fontWeight: 700 }}>How <em className="serif" style={{ color: T.limeDeep, fontStyle: "italic" }}>healthy</em> are your money habits?</h3>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div className="serif" style={{ fontSize: 48, lineHeight: 1, color: T.ink }}>{finScore}<span style={{ fontFamily: "'Space Grotesk'", fontSize: 18, color: T.mute }}>/100</span></div>
+            <div style={{ fontSize: 12, color: T.mute, marginTop: 4 }}>Grade {scoreGrade}</div>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
           {[
-            { label: "Spend Discipline", score: Math.min(100, income > 0 ? Math.round((1 - totalSpend / income) * 100) : 50), color: COLORS.yellow },
-            { label: "Savings Rate", score: Math.min(100, income > 0 ? Math.round((totalSaved / income) * 500) : 0), color: COLORS.orange },
-            { label: "Budget Adherence", score: transactions.length > 5 ? 72 : Math.round((transactions.length / 5) * 72), color: COLORS.green },
-            { label: "Investment Activity", score: 30, color: COLORS.red },
-          ].map((f, i) => (
-            <div key={i}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12 }}>
-                <span style={{ color: COLORS.muted }}>{f.label}</span>
-                <span style={{ color: f.color, fontWeight: 600 }}>{Math.max(0, f.score)}</span>
+            { label: "Spend Discipline", score: Math.min(100, income > 0 ? Math.round((1 - totalSpend/income) * 100) : 50), desc: "% of income spent vs target 60%" },
+            { label: "Savings Rate", score: Math.min(100, income > 0 ? Math.round((totalSaved/income) * 500) : 0), desc: `${income > 0 ? ((totalSaved/income)*100).toFixed(1) : 0}% saved vs recommended 20%` },
+            { label: "Budget Adherence", score: transactions.length > 5 ? 72 : Math.round((transactions.length/5)*72), desc: "Based on transaction consistency" },
+            { label: "Investment Activity", score: 30, desc: "No active investments detected" },
+          ].map((f, i) => {
+            const c = f.score >= 70 ? T.limeDeep : f.score >= 50 ? T.amber : T.rose;
+            return (
+              <div key={i}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 13 }}>
+                  <span style={{ color: T.ink2, fontWeight: 500 }}>{f.label}</span>
+                  <strong style={{ color: c }}>{Math.max(0, f.score)}</strong>
+                </div>
+                <div className="bar-track">
+                  <div className="bar-fill" style={{ width: `${Math.max(0, Math.min(100, f.score))}%`, background: c }} />
+                </div>
+                <div style={{ fontSize: 11, color: T.mute, marginTop: 6, lineHeight: 1.4 }}>{f.desc}</div>
               </div>
-              <div className="score-bar">
-                <div className="score-fill" style={{ width: `${Math.max(0, Math.min(100, f.score))}%`, background: f.color }} />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
   );
 }
 
+// ── TRANSACTIONS ─────────────────────────────────────────────────────────────
 function TransactionsView({ transactions, showAdd, setShowAdd, newTx, setNewTx, addTransaction }) {
   const [filter, setFilter] = useState("All");
-
-  const filtered = transactions.filter(tx => {
-    if (filter === "All") return true;
-    return tx.source === filter.toLowerCase();
-  });
+  const filtered = transactions.filter(tx => filter === "All" || tx.source === filter.toLowerCase());
 
   return (
-    <div className="fade-in">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+    <div className="fade-up">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 800 }}>Transactions</h1>
-          <p style={{ color: COLORS.muted, fontSize: 14, marginTop: 2 }}>{transactions.length} transactions recorded</p>
+          <div className="lbl" style={{ marginBottom: 6 }}>Ledger</div>
+          <h1 className="serif" style={{ fontSize: 36, lineHeight: 1 }}>Transactions</h1>
+          <p style={{ color: T.mute, fontSize: 14, marginTop: 6 }}>{transactions.length} entries recorded</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowAdd(!showAdd)}>+ Add Transaction</button>
+        <button className="btn-cta" onClick={() => setShowAdd(!showAdd)}>+ Log transaction</button>
       </div>
 
       {showAdd && (
-        <div className="card fade-in" style={{ marginBottom: 20, borderColor: COLORS.accent + "44" }}>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Log New Transaction</div>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+        <div className="card fade-up" style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>New Transaction</div>
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
             <input className="input" placeholder="Description" value={newTx.desc} onChange={e => setNewTx({ ...newTx, desc: e.target.value })} />
             <input className="input" placeholder="Amount (₦)" type="number" value={newTx.amount} onChange={e => setNewTx({ ...newTx, amount: e.target.value })} />
-            <select className="select input" value={newTx.type} onChange={e => setNewTx({ ...newTx, type: e.target.value })}>
-              <option value="debit">Debit (Spend)</option>
-              <option value="credit">Credit (Income)</option>
+            <select className="select" value={newTx.type} onChange={e => setNewTx({ ...newTx, type: e.target.value })}>
+              <option value="debit">Debit</option>
+              <option value="credit">Credit</option>
             </select>
-            <select className="select input" value={newTx.cat} onChange={e => setNewTx({ ...newTx, cat: e.target.value })}>
-              {["Food", "Transport", "Entertainment", "Utilities", "Health", "Savings", "Income", "Other"].map(c => <option key={c}>{c}</option>)}
+            <select className="select" value={newTx.cat} onChange={e => setNewTx({ ...newTx, cat: e.target.value })}>
+              {["Food","Transport","Entertainment","Utilities","Health","Savings","Income","Other"].map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <button className="btn-primary" onClick={addTransaction}>Add Transaction</button>
+            <button className="btn-cta" onClick={addTransaction}>Add</button>
             <button className="btn-ghost" onClick={() => setShowAdd(false)}>Cancel</button>
           </div>
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-        {["All", "Manual", "SMS", "Push"].map(f => (
-          <button key={f} className={filter === f ? "btn-primary" : "btn-ghost"} style={{ fontSize: 12, padding: "6px 14px" }} onClick={() => setFilter(f)}>{f}</button>
+      <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+        {["All","Manual","SMS","Push"].map(f => (
+          <button key={f} onClick={() => setFilter(f)} style={{ padding: "7px 16px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", border: `1px solid ${filter === f ? T.ink : T.line}`, background: filter === f ? T.ink : T.surface, color: filter === f ? T.lime : T.ink2, transition: "all 0.15s" }}>{f}</button>
         ))}
       </div>
 
-      <div className="card" style={{ padding: 0 }}>
+      <div className="card" style={{ padding: "0 22px" }}>
         {filtered.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", color: COLORS.muted, fontSize: 14 }}>
-            No transactions yet. Add one above or paste an SMS below.
-          </div>
-        ) : (
-          filtered.map((tx, i) => (
-            <div key={tx.id} style={{ display: "flex", alignItems: "center", padding: "14px 20px", borderBottom: i < filtered.length - 1 ? `1px solid ${COLORS.border}` : "none", gap: 14 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 12, background: tx.type === "credit" ? COLORS.green + "22" : COLORS.orange + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
-                {CAT_ICONS[tx.cat] || "📦"}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>{tx.desc}</div>
-                <div style={{ fontSize: 12, color: COLORS.muted, marginTop: 2, display: "flex", gap: 8, alignItems: "center" }}>
-                  <span>{tx.date}</span>
-                  <span className="badge" style={{ background: COLORS.border, color: COLORS.muted }}>
-                    {tx.source === "sms" ? "📱 SMS" : tx.source === "push" ? "🔔 Push" : "✍️ Manual"}
-                  </span>
-                  {tx.bank && <span className="badge" style={{ background: COLORS.border, color: COLORS.muted }}>{tx.bank}</span>}
-                </div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: tx.type === "credit" ? COLORS.green : COLORS.text }}>
-                  {tx.type === "credit" ? "+" : "-"}₦{tx.amount.toLocaleString()}
-                </div>
-                <div style={{ fontSize: 11, color: COLORS.muted }}>{tx.cat}</div>
+          <div style={{ padding: "40px 0", textAlign: "center", color: T.mute2, fontSize: 14 }}>No transactions found. Add one or import from SMS.</div>
+        ) : filtered.map((tx, i) => (
+          <div key={tx.id} className="tx-row">
+            <div className={`tx-icon ${tx.type === "credit" ? "in" : ""}`}>{CAT_ICONS[tx.cat] || "📦"}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>{tx.desc}</div>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                <span className="source-badge">{tx.source === "sms" ? "📱 SMS" : tx.source === "push" ? "🔔 Push" : "✍️ Manual"}</span>
+                {tx.bank && <span className="source-badge">{tx.bank}</span>}
+                <span style={{ fontSize: 11, color: T.mute }}>{tx.date}</span>
               </div>
             </div>
-          ))
-        )}
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: tx.type === "credit" ? T.limeDeep : T.ink, fontFamily: "'JetBrains Mono', monospace" }}>
+                {tx.type === "credit" ? "+" : "−"}₦{tx.amount.toLocaleString()}
+              </div>
+              <div style={{ fontSize: 11, color: T.mute, marginTop: 2 }}>{tx.cat}</div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-function SavingsView({ totalSaved, savingsGoals, savingsRate }) {
-  const goalColors = [COLORS.accent, COLORS.purple, COLORS.yellow, COLORS.green, COLORS.orange];
-  const goalIcons = ["🛡️", "💻", "✈️", "🏠", "🎯"];
+// ── SAVINGS ──────────────────────────────────────────────────────────────────
+function SavingsView({ totalSaved, savingsGoals, savingsRate, income }) {
+  const goalColors = [T.limeDeep, T.indigo, T.amber, T.rose, "#0E120F"];
+  const goalIcons = ["🛡️","💻","✈️","🏠","🎯"];
 
   return (
-    <div className="fade-in">
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 800 }}>Savings</h1>
-        <p style={{ color: COLORS.muted, fontSize: 14, marginTop: 2 }}>Build your financial cushion, goal by goal</p>
+    <div className="fade-up">
+      <div style={{ marginBottom: 28 }}>
+        <div className="lbl" style={{ marginBottom: 6 }}>Goals & Progress</div>
+        <h1 className="serif" style={{ fontSize: 36, lineHeight: 1 }}>Savings</h1>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 22 }}>
         {[
-          { label: "Total Saved", value: `₦${totalSaved.toLocaleString()}`, color: COLORS.green },
-          { label: "Savings Rate", value: `${savingsRate}%`, sub: "Target: 20%", color: savingsRate >= 20 ? COLORS.green : COLORS.yellow },
-          { label: "Active Goals", value: `${savingsGoals.filter(g => g.name).length}`, color: COLORS.accent },
+          { label: "Total saved", value: `₦${totalSaved.toLocaleString()}`, sub: "This month" },
+          { label: "Savings rate", value: `${savingsRate}%`, sub: "Target: 20%", highlight: savingsRate >= 20 },
+          { label: "Active goals", value: `${savingsGoals.filter(g => g.name).length}`, sub: "Goals in progress" },
         ].map((s, i) => (
-          <div key={i} className="card">
-            <div style={{ fontSize: 11, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>{s.label}</div>
-            <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Syne', sans-serif", color: s.color }}>{s.value}</div>
-            {s.sub && <div style={{ fontSize: 12, color: COLORS.muted, marginTop: 4 }}>{s.sub}</div>}
+          <div key={i} className="card-sm">
+            <div className="lbl">{s.label}</div>
+            <div className="serif" style={{ fontSize: 32, marginTop: 4, color: s.highlight ? T.limeDeep : T.ink, lineHeight: 1.1 }}>{s.value}</div>
+            <div style={{ fontSize: 12, color: T.mute, marginTop: 6 }}>{s.sub}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 700 }}>Savings Goals</div>
-      </div>
-
       {savingsGoals.filter(g => g.name).length === 0 ? (
-        <div className="card" style={{ textAlign: "center", padding: 40, color: COLORS.muted }}>
-          No savings goals set yet. Add goals during onboarding or update your profile.
-        </div>
+        <div className="card" style={{ textAlign: "center", padding: 48, color: T.mute2 }}>No savings goals yet. Update your profile to add goals.</div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 16, marginBottom: 22 }}>
           {savingsGoals.filter(g => g.name).map((g, i) => {
-            const pct = g.target > 0 ? Math.min(100, Math.round((g.saved / g.target) * 100)) : 0;
+            const pct = g.target > 0 ? Math.min(100, Math.round((g.saved/g.target)*100)) : 0;
             const color = goalColors[i % goalColors.length];
             return (
-              <div key={i} className="card" style={{ borderColor: color + "33" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div key={i} className="card">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 22 }}>{goalIcons[i % goalIcons.length]}</span>
-                    <span style={{ fontWeight: 600, fontSize: 15 }}>{g.name}</span>
+                    <span style={{ fontSize: 20 }}>{goalIcons[i % goalIcons.length]}</span>
+                    <span style={{ fontWeight: 700, fontSize: 15 }}>{g.name}</span>
                   </div>
-                  <span style={{ color, fontWeight: 700, fontSize: 14 }}>{pct}%</span>
+                  <span className="mono" style={{ fontSize: 13, fontWeight: 700, color }}>{pct}%</span>
                 </div>
-                <div className="score-bar" style={{ marginBottom: 8 }}>
-                  <div className="score-fill" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${color}, ${color}88)` }} />
+                <div className="bar-track" style={{ height: 6 }}>
+                  <div className="bar-fill" style={{ width: `${pct}%`, background: color, height: "100%" }} />
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: COLORS.muted }}>
-                  <span>₦{(g.saved || 0).toLocaleString()} saved</span>
-                  <span>Target: ₦{(g.target || 0).toLocaleString()}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.mute, marginTop: 10 }}>
+                  <span>₦{(g.saved||0).toLocaleString()} saved</span>
+                  <span>Target ₦{(g.target||0).toLocaleString()}</span>
                 </div>
               </div>
             );
@@ -466,65 +631,68 @@ function SavingsView({ totalSaved, savingsGoals, savingsRate }) {
         </div>
       )}
 
-      <div className="card" style={{ marginTop: 16, borderColor: COLORS.green + "33", background: `linear-gradient(135deg, ${COLORS.card}, ${COLORS.green}08)` }}>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>💡 ARIA Insight</div>
-        <p style={{ fontSize: 13, color: COLORS.muted, lineHeight: 1.6 }}>
+      <div className="card" style={{ background: T.ink, borderColor: T.ink, color: T.lime }}>
+        <div style={{ fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(180,220,42,0.6)", marginBottom: 8 }}>ARIA Insight</div>
+        <p style={{ fontSize: 14, color: T.lime, lineHeight: 1.6 }}>
           {savingsRate >= 20
-            ? `Excellent! You're saving ${savingsRate}% of your income — above the recommended 20%. Keep it up!`
-            : `You're saving ${savingsRate}% of income. To reach the recommended 20%, try setting up automatic transfers on payday before you spend.`}
+            ? `You're saving ${savingsRate}% of income — above the recommended 20%. Excellent discipline.`
+            : `You're saving ${savingsRate}% of income. Reach 20% by automating a transfer on payday before any spending happens.`}
         </p>
       </div>
     </div>
   );
 }
 
+// ── INVESTMENTS ──────────────────────────────────────────────────────────────
 function InvestmentsView({ totalSaved }) {
   return (
-    <div className="fade-in">
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 800 }}>Investments</h1>
-        <p style={{ color: COLORS.muted, fontSize: 14, marginTop: 2 }}>Put your savings to work — personalized for you</p>
+    <div className="fade-up">
+      <div style={{ marginBottom: 28 }}>
+        <div className="lbl" style={{ marginBottom: 6 }}>Portfolio</div>
+        <h1 className="serif" style={{ fontSize: 36, lineHeight: 1 }}>Investments</h1>
+        <p style={{ color: T.mute, fontSize: 14, marginTop: 8 }}>
+          ₦{totalSaved.toLocaleString()} available · Personalized for your risk profile
+        </p>
       </div>
 
-      <div className="card" style={{ marginBottom: 20, borderColor: COLORS.accent + "44", background: `linear-gradient(135deg, ${COLORS.card}, ${COLORS.accent}08)` }}>
-        <div style={{ fontSize: 13, color: COLORS.muted, marginBottom: 4 }}>Available to Invest</div>
-        <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 36, fontWeight: 800, color: COLORS.accent }}>₦{totalSaved.toLocaleString()}</div>
-        <div style={{ fontSize: 13, color: COLORS.muted, marginTop: 4 }}>Based on your current savings</div>
-      </div>
-
-      <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Recommended for You</div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 18 }}>
         {INVESTMENTS.map((inv, i) => (
-          <div key={i} className="card" style={{ borderColor: inv.color + "44" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-              <div style={{ fontWeight: 600, fontSize: 15 }}>{inv.name}</div>
-              <span className="badge" style={{ background: inv.color + "22", color: inv.color }}>{inv.risk} Risk</span>
+          <div key={i} className="card" style={{ position: "relative", overflow: "hidden" }}>
+            <div style={{ position: "absolute", top: 0, right: 0, width: 120, height: 120, borderRadius: "0 18px 0 120px", background: `${inv.riskBg}`, opacity: 0.5 }} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, position: "relative" }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{inv.name}</div>
+                <div style={{ fontSize: 12, color: T.mute }}>Min {inv.min} · Lock {inv.lock}</div>
+              </div>
+              <span className="risk-badge" style={{ background: inv.riskBg, color: inv.riskColor, border: `1px solid ${inv.riskColor}44` }}>{inv.risk}</span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-              {[
-                { label: "Expected Return", value: inv.return },
-                { label: "Min. Investment", value: inv.min },
-                { label: "Liquidity", value: inv.liquidity },
-                { label: "Projection (6mo)", value: totalSaved > 0 ? `₦${Math.round(totalSaved * 0.06).toLocaleString()}` : "Add savings first" },
-              ].map((d, j) => (
-                <div key={j}>
-                  <div style={{ fontSize: 10, color: COLORS.muted, marginBottom: 2 }}>{d.label}</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: inv.color }}>{d.value}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, position: "relative" }}>
+              <div>
+                <div className="lbl" style={{ marginBottom: 4 }}>Return</div>
+                <div className="serif" style={{ fontSize: 26, color: inv.riskColor, lineHeight: 1.1 }}>{inv.ret} <span style={{ fontFamily: "'Space Grotesk'", fontSize: 12, color: T.mute }}>p.a</span></div>
+              </div>
+              <div>
+                <div className="lbl" style={{ marginBottom: 4 }}>6mo projection</div>
+                <div className="serif" style={{ fontSize: 22, lineHeight: 1.1 }}>
+                  +₦{totalSaved > 0 ? Math.round(totalSaved * 0.06).toLocaleString() : "—"}
                 </div>
-              ))}
+              </div>
+              <div style={{ display: "flex", alignItems: "flex-end" }}>
+                <button className="btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 12 }}>Learn →</button>
+              </div>
             </div>
-            <button className="btn-ghost" style={{ width: "100%", textAlign: "center", fontSize: 12 }}>Learn More →</button>
           </div>
         ))}
       </div>
 
-      <div className="card" style={{ marginTop: 16 }}>
-        <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 8 }}>⚠️ Disclaimer</div>
-        <p style={{ fontSize: 12, color: COLORS.muted, lineHeight: 1.6 }}>
-          Investment suggestions are for informational purposes only. FinSight does not execute transactions or provide regulated financial advice. Always research platforms independently before investing.
+      <div className="card" style={{ marginTop: 18, background: T.bg1 }}>
+        <div className="lbl" style={{ marginBottom: 6 }}>⚠️ Disclaimer</div>
+        <p style={{ fontSize: 12, color: T.mute, lineHeight: 1.6 }}>
+          Investment suggestions are for informational purposes only. FinSight does not execute transactions or provide regulated financial advice. Always research independently before investing.
         </p>
       </div>
     </div>
   );
 }
+
+// ── SVG ICONS ─────────────────────────────────────────────────────────────────
