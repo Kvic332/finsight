@@ -59,6 +59,10 @@ export function addToGoal(goals, id, amount) {
   return goals.map(g => (g.id === id ? { ...g, saved: g.saved + amount } : g));
 }
 
+export function updateGoal(goals, id, changes) {
+  return goals.map(g => (g.id === id ? { ...g, ...changes } : g));
+}
+
 export function goalProgress(goal) {
   const used = goal.target > 0 ? goal.saved / goal.target : 0;
   return {

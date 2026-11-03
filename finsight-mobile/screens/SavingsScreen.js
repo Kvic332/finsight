@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../services/dataStore';
 import { space } from '../constants/tokens';
 import {
   Badge, Button, Card, ConfirmSheet, EmptyState, Gradient, Icon, IconTile, Input, Money, ProgressBar, Sheet,
@@ -9,7 +9,7 @@ import {
 } from '../components/ui';
 import { computeStats, savingsFlows } from '../services/finance';
 import { formatMoney, parseAmount } from '../services/format';
-import { addToGoal, goalProgress, normalizeGoals } from '../services/plans';
+import { addToGoal, goalProgress, normalizeGoals, updateGoal } from '../services/plans';
 import { addTransaction, loadTransactions } from '../services/transactions';
 import { awardXP } from '../services/xpService';
 import { trackEvent } from '../services/cloudSync';
@@ -41,6 +41,7 @@ export default function SavingsScreen({ user, setUser }) {
   const [goalName, setGoalName] = useState('');
   const [goalTarget, setGoalTarget] = useState('');
   const [goalErrors, setGoalErrors] = useState({});
+  const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
 
   const goals = normalizeGoals(user?.goals);
@@ -81,6 +82,22 @@ export default function SavingsScreen({ user, setUser }) {
     await load();
   }
 
+  function openNewGoal() {
+    setEditing(null);
+    setGoalName('');
+    setGoalTarget('');
+    setGoalErrors({});
+    setShowNew(true);
+  }
+
+  function openEditGoal(goal) {
+    setEditing(goal);
+    setGoalName(goal.name);
+    setGoalTarget(String(goal.target));
+    setGoalErrors({});
+    setShowNew(true);
+  }
+
   async function createGoal() {
     const target = parseAmount(goalTarget);
     const errors = {
@@ -89,14 +106,18 @@ export default function SavingsScreen({ user, setUser }) {
     };
     setGoalErrors(errors);
     if (Object.keys(errors).length) return;
-    await saveGoals([...goals, { id: Date.now().toString(), name: goalName.trim(), target, saved: 0 }]);
+    const fields = { name: goalName.trim(), target };
+    await saveGoals(editing
+      ? updateGoal(goals, editing.id, fields)
+      : [...goals, { id: Date.now().toString(), ...fields, saved: 0 }]);
     setShowNew(false);
-    toast.show('Goal added', { tone: 'success' });
+    toast.show(editing ? 'Goal updated' : 'Goal added', { tone: 'success' });
   }
 
   async function removeGoal() {
     await saveGoals(goals.filter(g => g.id !== deleting.id));
     setDeleting(null);
+    setShowNew(false);
     toast.show('Goal deleted');
   }
 
@@ -137,7 +158,7 @@ export default function SavingsScreen({ user, setUser }) {
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: space.xs }}>
           <Text variant="heading" family="bold" accessibilityRole="header">Your goals</Text>
           {goals.length ? (
-            <Pressable onPress={() => { setGoalName(''); setGoalTarget(''); setGoalErrors({}); setShowNew(true); }} accessibilityRole="button" hitSlop={10}>
+            <Pressable onPress={() => openNewGoal} accessibilityRole="button" hitSlop={10}>
               <Text variant="label" family="semibold" color="accent">Add goal</Text>
             </Pressable>
           ) : null}
@@ -148,7 +169,7 @@ export default function SavingsScreen({ user, setUser }) {
             icon="flag-outline"
             title="Set a savings goal"
             body="Name something you're saving for and track your progress towards it."
-            action={<Button title="Add goal" onPress={() => { setGoalName(''); setGoalTarget(''); setGoalErrors({}); setShowNew(true); }} />}
+            action={<Button title="Add goal" onPress={() => openNewGoal} />}
           />
         ) : goals.map(goal => {
           const { used, percent, toGo, done } = goalProgress(goal);
@@ -168,8 +189,8 @@ export default function SavingsScreen({ user, setUser }) {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: space.md }}>
                 <Text variant="label" color="inkMuted" tabular style={{ flex: 1 }}>{done ? 'Well done' : `${formatMoney(toGo)} to go`}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.lg }}>
-                  <Pressable onPress={() => setDeleting(goal)} accessibilityRole="button" accessibilityLabel={`Delete ${goal.name}`} hitSlop={10}>
-                    <Icon name="trash-outline" size={18} color="inkMuted" />
+                  <Pressable onPress={() => openEditGoal(goal)} accessibilityRole="button" accessibilityLabel={`Edit ${goal.name}`} hitSlop={10}>
+                    <Icon name="create-outline" size={18} color="inkMuted" />
                   </Pressable>
                   <Pressable
                     onPress={() => { setAmount(''); setAmountError(''); setAdding(goal); }}
@@ -208,10 +229,15 @@ export default function SavingsScreen({ user, setUser }) {
       </Sheet>
 
       <Sheet
-        visible={showNew}
+        visible={showNew && !deleting}
         onClose={() => setShowNew(false)}
-        title="Add a savings goal"
-        footer={<Button full title="Save goal" onPress={createGoal} />}
+        title={editing ? 'Edit goal' : 'Add a savings goal'}
+        footer={(
+          <>
+            <Button full title={editing ? 'Save changes' : 'Save goal'} onPress={createGoal} />
+            {editing ? <Button full title="Delete goal" variant="ghost" onPress={() => setDeleting(editing)} /> : null}
+          </>
+        )}
       >
         <View style={{ gap: space.md }}>
           <Input label="Goal name" placeholder="New laptop" value={goalName} error={goalErrors.name} onChangeText={setGoalName} />

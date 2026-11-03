@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, StatusBar, AppState } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './services/dataStore';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 
@@ -12,6 +12,9 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { ThemeProvider, ToastProvider, useAppFonts } from './components/ui';
 import AppNavigator from './navigation/AppNavigator';
 import { hasPin, wipeAllData } from './services/pinStore';
+import { isRepeatAlert } from './services/alerts';
+import { DATA_LOCKED } from './services/dataStore';
+import DataLockedScreen from './screens/DataLockedScreen';
 import { LinearGradient } from 'expo-linear-gradient';
 import { gradients } from './constants/tokens';
 import { checkAndSendDigests } from './services/notificationService';
@@ -25,10 +28,6 @@ Notifications.setNotificationHandler({
     shouldShowAlert: false, shouldPlaySound: false, shouldSetBadge: false,
   }),
 });
-
-// ── Design Tokens ─────────────────────────────────────────────────────────────
-import { DARK, LIGHT, CAT_COLORS, CAT_ICONS, INVESTMENTS } from './constants/theme';
-export { DARK, LIGHT, CAT_COLORS, CAT_ICONS, INVESTMENTS };
 
 // ── Transaction parser from notification/SMS text ─────────────────────────────
 export function parseTransactionFromText(text) {
@@ -102,6 +101,7 @@ export function parseTransactionFromText(text) {
     desc: desc || 'Bank Transaction',
     amount, type, cat, bank,
     source: 'push',
+    capturedAt: Date.now(),
     date: new Date().toLocaleDateString('en-NG'),
   };
 }
@@ -114,6 +114,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [locked, setLocked] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [dataLocked, setDataLocked] = useState(false);
   const appState = useRef(AppState.currentState);
   const notifListener = useRef();
   const backgroundedAt = useRef(null);
@@ -146,7 +147,10 @@ export default function App() {
         checkAndSendDigests(name);
       }
       await drainNativeQueue();
-    } catch(e){}
+    } catch(e){
+      // Never fall through to onboarding here: it would overwrite the unreadable data.
+      if (e?.code === DATA_LOCKED) setDataLocked(true);
+    }
     setLoading(false);
   }
 
@@ -165,9 +169,7 @@ export default function App() {
         if (!tx) return;
         const raw = await AsyncStorage.getItem('finsight_transactions');
         const existing = raw ? JSON.parse(raw) : [];
-        const isDup = existing.some(e => e.amount===tx.amount && e.source==='push' &&
-          (Date.now()-new Date(e.date).getTime()) < 120000);
-        if (!isDup) await AsyncStorage.setItem('finsight_transactions', JSON.stringify([tx,...existing]));
+        if (!isRepeatAlert(existing, tx)) await AsyncStorage.setItem('finsight_transactions', JSON.stringify([tx,...existing]));
       });
     } catch(e){}
   }
@@ -251,7 +253,12 @@ export default function App() {
       <ThemeProvider scheme={theme}>
       <ToastProvider>
       <NavigationContainer>
-        {!user ? (
+        {dataLocked ? (
+          <DataLockedScreen
+            onRetry={() => { setDataLocked(false); setLoading(true); initApp(); }}
+            onStartOver={async () => { await wipeAllData(); setDataLocked(false); setUser(null); setLocked(false); }}
+          />
+        ) : !user ? (
           <Stack.Navigator screenOptions={{ headerShown:false }}>
             <Stack.Screen name="Onboarding">
               {p=><OnboardingScreen {...p} onComplete={async(ud)=>{

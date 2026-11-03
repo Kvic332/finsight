@@ -15,7 +15,9 @@ import PlanScreen from '../screens/PlanScreen';
 import ARIAScreen from '../screens/ARIAScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import SettingsScreen from '../screens/SettingsScreen';
-import { BankImportScreen, InvestmentsScreen, SMSScreen } from './legacyScreens';
+import SMSScreen from '../screens/SMSScreen';
+import BankImportScreen from '../screens/BankImportScreen';
+import { InvestmentsScreen } from './legacyScreens';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -110,7 +112,7 @@ function MainTabs({ theme, user, setUser }) {
       <Tab.Screen name="Activity">{p => <ActivityScreen {...p} user={user} />}</Tab.Screen>
       <Tab.Screen name="Plan">{p => <PlanScreen {...p} user={user} setUser={setUser} />}</Tab.Screen>
       <Tab.Screen name="Grow">
-        {p => (SHOW_GROW_PREVIEW ? <GrowPreviewScreen {...p} /> : <InvestmentsScreen {...p} theme={theme} user={user} />)}
+        {p => (SHOW_GROW_PREVIEW ? <GrowPreviewScreen {...p} /> : <InvestmentsScreen {...p} />)}
       </Tab.Screen>
     </Tab.Navigator>
   );
@@ -127,9 +129,9 @@ export default function AppNavigator({ theme, toggleTheme, user, setUser }) {
       <Stack.Screen name="ARIA">{p => <ARIAScreen {...p} user={user} />}</Stack.Screen>
       <Stack.Screen name="Insights">{back('Insights', p => <DashboardScreen {...p} user={user} />)}</Stack.Screen>
       <Stack.Screen name="Settings">{back('Settings', p => <SettingsScreen {...p} theme={theme} toggleTheme={toggleTheme} user={user} setUser={setUser} />)}</Stack.Screen>
-      <Stack.Screen name="ImportSMS">{back('Import bank SMS', p => <SMSScreen {...p} theme={theme} user={user} />)}</Stack.Screen>
+      <Stack.Screen name="ImportSMS">{back('Import bank SMS', p => <SMSScreen {...p} />)}</Stack.Screen>
       <Stack.Screen name="ImportStatement">
-        {p => <BankImportScreen {...p} theme={theme} onClose={() => p.navigation.goBack()} />}
+        {p => <BankImportScreen onClose={() => p.navigation.goBack()} />}
       </Stack.Screen>
     </Stack.Navigator>
   );

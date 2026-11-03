@@ -9,7 +9,7 @@ import {
   doc, setDoc, getDoc, updateDoc, serverTimestamp, increment, deleteField,
   collection, onSnapshot, query, orderBy,
 } from 'firebase/firestore';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './dataStore';
 import { auth, db } from './firebase';
 
 // ── Auth ──────────────────────────────────────────────────────────────────────

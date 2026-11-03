@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './dataStore';
 
 const KEY = 'finsight_transactions';
 
@@ -11,6 +11,8 @@ async function save(list) {
   await AsyncStorage.setItem(KEY, JSON.stringify(list));
   return list;
 }
+
+export const saveTransactions = save;
 
 export async function addTransaction({ desc, amount, type, cat }) {
   const list = await loadTransactions();

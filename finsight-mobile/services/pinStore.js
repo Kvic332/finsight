@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import { deleteSecure, getSecure, setSecure } from './secureStorage';
+import { deleteDataKey } from './dataStore';
 import { nextAttemptState, secondsLeft } from './pinPolicy';
 
 const PIN_KEY = 'finsight_pin_hash';
@@ -81,4 +82,5 @@ export async function wipeAllData() {
   await removePin();
   const keys = (await AsyncStorage.getAllKeys()).filter(k => k.startsWith('finsight_'));
   if (keys.length) await AsyncStorage.multiRemove(keys);
+  await deleteDataKey();
 }

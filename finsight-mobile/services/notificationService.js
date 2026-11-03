@@ -1,5 +1,5 @@
 import * as Notifications from 'expo-notifications';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from './dataStore';
 import { computeStats, formatRunway, parseTxDate, savingsFlows, spendingOf } from './finance';
 
 // ── Permission ────────────────────────────────────────────────────────────────

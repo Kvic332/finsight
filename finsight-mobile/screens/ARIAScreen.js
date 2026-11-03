@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../services/dataStore';
 import * as Speech from 'expo-speech';
 import { fontFamily, radius, space, type } from '../constants/tokens';
 import {

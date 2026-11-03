@@ -3,7 +3,7 @@ import {
   AppState, Image, Modal, Platform, Pressable, ScrollView, Switch, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../services/dataStore';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as ImagePicker from 'expo-image-picker';
 import { radius, space } from '../constants/tokens';
@@ -717,10 +717,10 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
       />
 
       <Modal visible={showBankImport} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowBankImport(false)}>
-        <BankImportScreen theme={theme} onClose={() => setShowBankImport(false)} />
+        <BankImportScreen onClose={() => setShowBankImport(false)} />
       </Modal>
       <Modal visible={showCloud} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowCloud(false)}>
-        <CloudAccountScreen theme={theme} onBack={() => setShowCloud(false)} />
+        <CloudAccountScreen onBack={() => setShowCloud(false)} />
       </Modal>
       <Modal visible={showGallery} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowGallery(false)}>
         <ThemeProvider scheme={galleryScheme}>
@@ -734,7 +734,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
         </ThemeProvider>
       </Modal>
       <Modal visible={showAdmin} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowAdmin(false)}>
-        <AdminDashboardScreen theme={theme} onBack={() => setShowAdmin(false)} />
+        <AdminDashboardScreen onBack={() => setShowAdmin(false)} />
       </Modal>
       <Modal visible={showPinSetup} animationType="slide" statusBarTranslucent onRequestClose={() => setShowPinSetup(false)}>
         <PinScreen

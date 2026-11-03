@@ -8,6 +8,8 @@ import { Icon, ThemeProvider, ToastProvider, useAppFonts } from './components/ui
 import AppNavigator from './navigation/AppNavigator';
 import OnboardingScreen from './screens/OnboardingScreen';
 import PinScreen from './screens/PinScreen';
+import DataLockedScreen from './screens/DataLockedScreen';
+import AdminDashboardScreen from './screens/AdminDashboardScreen';
 
 // The web build only previews the design while building it. It runs the real
 // screens on made-up data; bank capture, voice and biometrics stay in App.js.
@@ -34,7 +36,7 @@ export default function WebPreview() {
   const [scheme, setScheme] = useState('light');
   const [seeded, setSeeded] = useState(false);
   const [user, setUser] = useState(INITIAL_USER);
-  // Preview a single screen with ?view=onboarding or ?view=pin.
+  // Preview a single screen with ?view=onboarding, pin, locked or admin.
   const view = new URLSearchParams(window.location.search).get('view');
   const c = colors[scheme];
 
@@ -66,6 +68,8 @@ export default function WebPreview() {
               <NavigationContainer>
                 {view === 'onboarding' ? <OnboardingScreen onComplete={() => {}} />
                   : view === 'pin' ? <PinScreen mode="unlock" onSuccess={() => {}} onForgot={() => {}} />
+                  : view === 'locked' ? <DataLockedScreen onRetry={() => {}} onStartOver={() => {}} />
+                  : view === 'admin' ? <AdminDashboardScreen onBack={() => {}} />
                   : (
                     <AppNavigator
                       theme={scheme}

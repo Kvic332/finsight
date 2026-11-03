@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  addToGoal, budgetSpent, budgetStatus, goalProgress, normalizeGoals,
+  addToGoal, budgetSpent, budgetStatus, goalProgress, normalizeGoals, updateGoal,
 } from '../services/plans.js';
 
 const now = new Date(2026, 10, 20);
@@ -60,4 +60,11 @@ test('goal progress never overstates and caps at 100%', () => {
   assert.equal(done.percent, 100);
   assert.equal(done.toGo, 0);
   assert.equal(done.done, true);
+});
+
+test('editing a goal keeps its saved amount and leaves others alone', () => {
+  const goals = [{ id: 'a', name: 'A', target: 100, saved: 40 }, { id: 'b', name: 'B', target: 200, saved: 0 }];
+  const out = updateGoal(goals, 'a', { name: 'Car', target: 900 });
+  assert.deepEqual(out[0], { id: 'a', name: 'Car', target: 900, saved: 40 });
+  assert.deepEqual(out[1], goals[1]);
 });

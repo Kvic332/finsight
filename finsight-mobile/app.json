@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Kvic7 FinSight",
+    "name": "FinSight",
     "slug": "finsight-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,6 +16,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0D0F0E"
       },
+      "allowBackup": false,
       "package": "com.kvic.finsightmobile",
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
