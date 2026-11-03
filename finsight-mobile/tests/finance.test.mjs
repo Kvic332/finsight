@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseTxDate, isSameMonth, savingsFlows, spendingOf,
-  daysUntilSalary, runwayDays, formatRunway, computeStats,
+  daysUntilSalary, runwayDays, formatRunway, computeStats, payCycle, computePaydayPlan,
 } from '../services/finance.js';
 
 const date = (y, m, d) => new Date(y, m - 1, d);
@@ -168,4 +168,77 @@ test('FinScore stays within 10 to 100', () => {
   ], date(2026, 6, 20));
   assert.equal(high.finScore <= 100, true);
   assert.equal(high.finScore > low.finScore, true);
+});
+
+test('payCycle runs from the last payday to the next', () => {
+  const c = payCycle(25, date(2026, 11, 3));
+  assert.deepEqual(c.start, date(2026, 10, 25));
+  assert.deepEqual(c.end, date(2026, 11, 25));
+  assert.equal(c.length, 31);
+  assert.equal(c.elapsed, 10);
+  assert.equal(c.daysToGo, 22);
+  assert.equal(c.hasPayday, true);
+});
+
+test('payCycle starts fresh on payday itself', () => {
+  const c = payCycle(25, date(2026, 11, 25));
+  assert.deepEqual(c.start, date(2026, 11, 25));
+  assert.deepEqual(c.end, date(2026, 12, 25));
+  assert.equal(c.elapsed, 1);
+  assert.equal(c.daysToGo, 30);
+});
+
+test('payCycle handles month ends and the new year', () => {
+  assert.deepEqual(payCycle(31, date(2026, 2, 28)).start, date(2026, 2, 28));
+  assert.deepEqual(payCycle(31, date(2026, 2, 28)).end, date(2026, 3, 31));
+  assert.deepEqual(payCycle(25, date(2027, 1, 5)).start, date(2026, 12, 25));
+});
+
+test('payCycle falls back to the calendar month without a salary day', () => {
+  const c = payCycle(undefined, date(2026, 11, 3));
+  assert.equal(c.hasPayday, false);
+  assert.deepEqual(c.start, date(2026, 11, 1));
+  assert.deepEqual(c.end, date(2026, 12, 1));
+  assert.equal(c.daysToGo, 28);
+});
+
+test('the payday plan counts spending since the last payday, across the month boundary', () => {
+  const plan = computePaydayPlan({ income: 450000, salaryDay: 25 }, [
+    tx({ amount: 100000, date: '28/10/2026' }),
+    tx({ amount: 37600, date: '02/11/2026' }),
+    tx({ amount: 999999, date: '20/10/2026' }),
+  ], date(2026, 11, 3));
+  assert.equal(plan.totalSpend, 137600);
+  assert.equal(plan.left, 312400);
+  assert.equal(plan.safePerDay, 14200);
+  assert.equal(plan.dailySpend, 13760);
+  assert.equal(plan.daysLeft, 22);
+  assert.equal(plan.shortDays, 0);
+  assert.equal(plan.cutPerDay, 0);
+});
+
+test('the payday plan says how short you are and how much to cut', () => {
+  const plan = computePaydayPlan({ income: 450000, salaryDay: 25 }, [tx({ amount: 150000, date: '28/10/2026' })], date(2026, 11, 3));
+  assert.equal(plan.left, 300000);
+  assert.equal(plan.dailySpend, 15000);
+  assert.equal(plan.daysLeft, 20);
+  assert.equal(plan.shortDays, 2);
+  assert.equal(plan.safePerDay, 13636);
+  assert.equal(plan.cutPerDay, 1400);
+});
+
+test('the payday plan is calm when there is nothing to measure', () => {
+  const plan = computePaydayPlan({ income: 450000, salaryDay: 25 }, [], date(2026, 11, 3));
+  assert.equal(plan.daysLeft, null);
+  assert.equal(plan.shortDays, 0);
+  assert.equal(plan.cutPerDay, 0);
+});
+
+test('money in counts this cycle only and excludes savings withdrawals', () => {
+  const plan = computePaydayPlan({ income: 450000, salaryDay: 25 }, [
+    tx({ type: 'credit', cat: 'Income', amount: 450000, date: '25/10/2026' }),
+    tx({ type: 'credit', cat: 'Income', amount: 7000, date: '24/10/2026' }),
+    tx({ type: 'credit', cat: 'Savings', amount: 5000, source: 'push', date: '30/10/2026' }),
+  ], date(2026, 11, 3));
+  assert.equal(plan.moneyIn, 450000);
 });

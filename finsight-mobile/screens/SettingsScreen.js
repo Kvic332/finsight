@@ -11,6 +11,8 @@ import { DARK, LIGHT } from '../constants/theme';
 import BankImportScreen from './BankImportScreen';
 import CloudAccountScreen from './CloudAccountScreen';
 import AdminDashboardScreen from './AdminDashboardScreen';
+import DesignGalleryScreen from './DesignGalleryScreen';
+import { ThemeProvider, ToastProvider } from '../components/ui';
 import { onAuthChange, checkIsAdmin } from '../services/cloudSync';
 import PinScreen from './PinScreen';
 import { scheduleDailyReminder, cancelDailyReminder } from '../services/notificationService';
@@ -267,6 +269,8 @@ export default function SettingsScreen({ theme, toggleTheme, user, setUser }) {
   const [showCloud,        setShowCloud]        = useState(false);
   const [cloudUser,        setCloudUser]        = useState(null);
   const [showAdmin,        setShowAdmin]        = useState(false);
+  const [showGallery,      setShowGallery]      = useState(false);
+  const [galleryScheme,    setGalleryScheme]    = useState('light');
   const [isAdmin,          setIsAdmin]          = useState(false);
 
   const [notifAccessGranted, setNotifAccessGranted] = useState(false);
@@ -653,6 +657,17 @@ export default function SettingsScreen({ theme, toggleTheme, user, setUser }) {
           </>
         )}
 
+        {process.env.EXPO_PUBLIC_DESIGN_PREVIEW === '1' && (
+          <>
+            <SectionHeader T={T} s={s} title="TEST BUILD" />
+            <View style={[s.section, { backgroundColor: T.surface }]}>
+              <SettingRow T={T} s={s} icon="🎨" title="Preview new design"
+                subtitle="Components for the redesign, with sample data"
+                onPress={() => setShowGallery(true)} />
+            </View>
+          </>
+        )}
+
         <SectionHeader T={T} s={s} title="DATA" />
         <View style={[s.section, { backgroundColor: T.surface }]}>
           <SettingRow T={T} s={s} icon="☁️" title="Cloud Account & Backup"
@@ -954,6 +969,18 @@ export default function SettingsScreen({ theme, toggleTheme, user, setUser }) {
       </Modal>
 
       {/* ── ADMIN DASHBOARD ──────────────────────────────────────────────────── */}
+      <Modal visible={showGallery} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowGallery(false)}>
+        <ThemeProvider scheme={galleryScheme}>
+          <ToastProvider>
+            <DesignGalleryScreen
+              scheme={galleryScheme}
+              onToggleScheme={() => setGalleryScheme(g => (g === 'dark' ? 'light' : 'dark'))}
+              onClose={() => setShowGallery(false)}
+            />
+          </ToastProvider>
+        </ThemeProvider>
+      </Modal>
+
       <Modal visible={showAdmin} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowAdmin(false)}>
         <AdminDashboardScreen theme={theme} onBack={() => setShowAdmin(false)} />
       </Modal>

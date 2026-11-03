@@ -191,7 +191,7 @@ export default function AdminDashboardScreen({ theme, onBack }) {
             </View>
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
               <StatCard T={T} icon="📆" label="Active 30 Days"  value={active30d}        />
-              <StatCard T={T} icon="☁️" label="Cloud Backups"   value={usersWithBackup}  color="#818CF8" />
+              <StatCard T={T} icon="☁️" label="Cloud Backups"   value={usersWithBackup}  color="#E0165F" />
               <StatCard T={T} icon="⚡" label="Total XP Earned" value={fmt(xpTotal)}     color="#FBBF24" />
             </View>
 

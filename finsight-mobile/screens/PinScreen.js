@@ -105,8 +105,8 @@ export default function PinScreen({ theme, mode = 'create', onSuccess, onForgot,
 
         {/* Brand */}
         <View style={s.brand}>
-          <View style={[s.brandMark, { backgroundColor: '#13131F', borderWidth: 1, borderColor: '#6366F1' }]}>
-            <Text style={[s.brandLetter, { color: '#818CF8' }]}>f</Text>
+          <View style={[s.brandMark, { backgroundColor: '#3B0B3E', borderWidth: 1, borderColor: '#C4124F' }]}>
+            <Text style={[s.brandLetter, { color: '#E0165F' }]}>f</Text>
           </View>
           <Text style={[s.brandName, { color: T.ink }]}>FinSight</Text>
         </View>

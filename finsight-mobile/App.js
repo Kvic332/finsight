@@ -1,29 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, StatusBar, AppState, Alert, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 
-import DashboardScreen from './screens/DashboardScreen';
-import TransactionsScreen from './screens/TransactionsScreen';
-import SavingsScreen from './screens/SavingsScreen';
-import SMSScreen from './screens/SMSScreen';
-import ARIAScreen from './screens/ARIAScreen';
-import SettingsScreen from './screens/SettingsScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import PinScreen from './screens/PinScreen';
-import InvestmentsScreen from './screens/InvestmentsScreen';
-import BudgetScreen from './screens/BudgetScreen';
 import ErrorBoundary from './components/ErrorBoundary';
+import { ThemeProvider, ToastProvider, useAppFonts } from './components/ui';
+import AppNavigator from './navigation/AppNavigator';
 import { checkAndSendDigests } from './services/notificationService';
 import { drainPendingTransactions } from './services/notificationPermission';
 import { isPickingMedia } from './services/appState';
 
-const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 Notifications.setNotificationHandler({
@@ -112,66 +103,10 @@ export function parseTransactionFromText(text) {
   };
 }
 
-// ── Tab Icon ──────────────────────────────────────────────────────────────────
-function TabIcon({ name, focused, color }) {
-  const map = {
-    Dashboard:    focused ? 'grid'          : 'grid-outline',
-    Transactions: focused ? 'receipt'       : 'receipt-outline',
-    Savings:      focused ? 'wallet'        : 'wallet-outline',
-    Budget:       focused ? 'pie-chart'     : 'pie-chart-outline',
-    Invest:       focused ? 'trending-up'   : 'trending-up-outline',
-    SMS:          focused ? 'chatbubble'    : 'chatbubble-outline',
-    ARIA:         focused ? 'sparkles'      : 'sparkles-outline',
-    Settings:     focused ? 'settings'      : 'settings-outline',
-  };
-  return <Ionicons name={map[name] || 'ellipse-outline'} size={22} color={color} />;
-}
-
-// ── Main Tabs ─────────────────────────────────────────────────────────────────
-function MainTabs({ theme, toggleTheme, user, setUser }) {
-  const T = theme==='dark' ? DARK : LIGHT;
-  const insets = useSafeAreaInsets();
-
-  return (
-    <Tab.Navigator screenOptions={({ route }) => ({
-      headerShown: false,
-      tabBarStyle: {
-        backgroundColor: T.surface,
-        borderTopWidth: 1,
-        borderTopColor: T.line,
-        height: 64 + insets.bottom,
-        paddingBottom: insets.bottom + 6,
-        paddingTop: 10,
-        // Shadow (iOS)
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: theme === 'dark' ? 0.3 : 0.07,
-        shadowRadius: 16,
-        // Elevation (Android)
-        elevation: 24,
-        position: 'absolute',
-        bottom: 0, left: 0, right: 0,
-      },
-      tabBarActiveTintColor: T.lime,
-      tabBarInactiveTintColor: T.mute,
-      tabBarLabelStyle: { fontSize: 10, fontWeight: '700', letterSpacing: 0.2, marginTop: 2 },
-      tabBarIcon: ({ color, focused }) => <TabIcon name={route.name} focused={focused} color={color} />,
-    })}>
-      <Tab.Screen name="Dashboard">{p=><DashboardScreen {...p} theme={theme} toggleTheme={toggleTheme} user={user}/>}</Tab.Screen>
-      <Tab.Screen name="Transactions">{p=><TransactionsScreen {...p} theme={theme} user={user}/>}</Tab.Screen>
-      <Tab.Screen name="Savings">{p=><SavingsScreen {...p} theme={theme} user={user}/>}</Tab.Screen>
-      <Tab.Screen name="Budget">{p=><BudgetScreen {...p} theme={theme} user={user}/>}</Tab.Screen>
-      <Tab.Screen name="Invest">{p=><InvestmentsScreen {...p} theme={theme} user={user}/>}</Tab.Screen>
-      <Tab.Screen name="SMS">{p=><SMSScreen {...p} theme={theme} user={user}/>}</Tab.Screen>
-      <Tab.Screen name="ARIA">{p=><ARIAScreen {...p} theme={theme} user={user}/>}</Tab.Screen>
-      <Tab.Screen name="Settings">{p=><SettingsScreen {...p} theme={theme} toggleTheme={toggleTheme} user={user} setUser={setUser}/>}</Tab.Screen>
-    </Tab.Navigator>
-  );
-}
-
 // ── Root ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [theme, setTheme] = useState('dark');
+  const fontsReady = useAppFonts();
+  const [theme, setTheme] = useState('light');
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [locked, setLocked] = useState(false);
@@ -303,7 +238,7 @@ export default function App() {
 
   const T = theme==='dark' ? DARK : LIGHT;
 
-  if (loading) return (
+  if (loading || !fontsReady) return (
     <View style={{ flex:1, backgroundColor:DARK.bg, justifyContent:'center', alignItems:'center', gap:16 }}>
       <View style={{ width:72, height:72, borderRadius:18, backgroundColor:DARK.surface, justifyContent:'center', alignItems:'center' }}>
         <Text style={{ fontSize:44, color:DARK.lime, fontStyle:'italic' }}>f</Text>
@@ -315,7 +250,9 @@ export default function App() {
   return (
     <ErrorBoundary>
     <SafeAreaProvider>
-      <StatusBar barStyle={theme==='dark'?'light-content':'dark-content'} backgroundColor={T.bg}/>
+      <StatusBar barStyle={theme==='dark'?'light-content':'dark-content'} translucent backgroundColor="transparent"/>
+      <ThemeProvider scheme={theme}>
+      <ToastProvider>
       <NavigationContainer>
         {!user ? (
           <Stack.Navigator screenOptions={{ headerShown:false }}>
@@ -339,9 +276,11 @@ export default function App() {
             ])}
           />
         ) : (
-          <MainTabs theme={theme} toggleTheme={toggleTheme} user={user} setUser={setUser}/>
+          <AppNavigator theme={theme} toggleTheme={toggleTheme} user={user} setUser={setUser}/>
         )}
       </NavigationContainer>
+      </ToastProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
     </ErrorBoundary>
   );

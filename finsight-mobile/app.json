@@ -37,7 +37,8 @@
         }
       ],
       "./plugins/withAndroidExclusion",
-      "./plugins/withNativeBankCapture"
+      "./plugins/withNativeBankCapture",
+      "expo-font"
     ],
     "extra": {
       "eas": {

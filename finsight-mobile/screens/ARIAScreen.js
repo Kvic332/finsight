@@ -12,7 +12,7 @@ import Voice from '@react-native-voice/voice';
 import { DARK, LIGHT } from '../constants/theme';
 import { trackEvent } from '../services/cloudSync';
 import { askAria } from '../services/ariaClient';
-import { computeStats, formatRunway, isSameMonth } from '../services/finance';
+import { computePaydayPlan, formatRunway, isSameMonth } from '../services/finance';
 
 const QUICK_QUESTIONS = [
   'What are my top expenses?',
@@ -109,7 +109,7 @@ export default function ARIAScreen({ theme, user }) {
 
   // ── Rich context for ARIA ──────────────────────────────────────────────────
   function buildContext() {
-    const stats = computeStats(user, transactions);
+    const stats = computePaydayPlan(user, transactions);
 
     const catSummary = Object.entries(stats.categoryTotals)
       .sort((a, b) => b[1] - a[1])
@@ -144,13 +144,14 @@ Name: ${user?.name || 'User'} | Employment: ${user?.employmentType || 'Not speci
 Monthly Income: ₦${stats.income.toLocaleString()} | Salary Day: Day ${user?.salaryDay || 'not set'}
 Banks: ${(user?.banks || []).join(', ') || 'Not specified'}
 
-THIS MONTH (${transactions.length} transactions tracked in total):
-Estimated left this month: ₦${stats.left.toLocaleString()} (an estimate from income and logged transactions, not a bank balance)
+THIS PAY PERIOD (${transactions.length} transactions tracked in total, ${stats.cycle.daysToGo} days until the next payday):
+Estimated left until payday: ₦${stats.left.toLocaleString()} (an estimate from income and logged transactions, not a bank balance)
+Safe to spend per day until payday: ₦${stats.safePerDay.toLocaleString()}
 Spent: ₦${stats.totalSpend.toLocaleString()} | Saved: ₦${stats.totalSaved.toLocaleString()}
 Savings Rate: ${stats.savingsRate}% | Daily spending: ₦${Math.round(stats.dailySpend).toLocaleString()}
 Broke Clock: ${formatRunway(stats.daysLeft)} at current pace
 
-SPENDING BY CATEGORY THIS MONTH: ${catSummary || 'No spending data'}
+SPENDING BY CATEGORY THIS PAY PERIOD: ${catSummary || 'No spending data'}
 RECENT TRANSACTIONS: ${recentTx || 'None recorded yet'}
 SAVINGS GOALS: ${goalsSummary || 'None set'}
 MONTHLY BUDGETS: ${budgetSummary || 'No budgets set'}
@@ -249,7 +250,7 @@ MONTHLY BUDGETS: ${budgetSummary || 'No budgets set'}
         {/* Messages */}
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={{ padding: 16, paddingBottom: 100, gap: 12 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 24, gap: 12 }}
           showsVerticalScrollIndicator={false}
         >
           {messages.map((msg, i) => (
@@ -371,7 +372,7 @@ const styles = (T) => StyleSheet.create({
 
   inputRow: {
     flexDirection: 'row', alignItems: 'flex-end', gap: 8,
-    padding: 12, borderTopWidth: 1, paddingBottom: 90,
+    padding: 12, borderTopWidth: 1, paddingBottom: 16,
   },
   micBtn: {
     width: 44, height: 44, borderRadius: 22,

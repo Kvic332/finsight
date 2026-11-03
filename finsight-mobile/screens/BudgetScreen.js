@@ -108,7 +108,7 @@ function BudgetCard({ T, budget, spent, onEdit, onDelete }) {
   const pct     = budget.limit > 0 ? Math.round((spent / budget.limit) * 100) : 0;
   const over    = spent > budget.limit;
   const warning = pct >= 80 && !over;
-  const color   = over ? '#F87171' : warning ? '#FBBF24' : '#818CF8';
+  const color   = over ? '#F87171' : warning ? '#FBBF24' : '#E0165F';
   const remaining = budget.limit - spent;
 
   return (
@@ -343,7 +343,7 @@ export default function BudgetScreen({ theme, user }) {
   const totalLimit = budgets.reduce((s,b) => s + b.limit, 0);
   const totalSpent = budgets.reduce((s,b) => s + calcSpent(transactions, b), 0);
   const totalPct   = totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : 0;
-  const summaryColor = totalPct >= 100 ? '#F87171' : totalPct >= 80 ? '#FBBF24' : '#818CF8';
+  const summaryColor = totalPct >= 100 ? '#F87171' : totalPct >= 80 ? '#FBBF24' : '#E0165F';
   const monthName = new Date().toLocaleDateString('en-NG', { month:'long', year:'numeric' });
 
   const s = styles(T);

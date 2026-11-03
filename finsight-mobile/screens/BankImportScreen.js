@@ -444,7 +444,7 @@ const styles = (T) => StyleSheet.create({
     backgroundColor: T.lime, borderRadius: 22,
     paddingVertical: 36, paddingHorizontal: 24,
     alignItems:'center', justifyContent:'center',
-    shadowColor: '#6366F1', shadowOffset: {width:0,height:4},
+    shadowColor: '#C4124F', shadowOffset: {width:0,height:4},
     shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
   },
   txRow: {

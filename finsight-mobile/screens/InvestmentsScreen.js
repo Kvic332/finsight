@@ -55,7 +55,7 @@ const INVESTMENTS = [
     return: '17–19%',
     returnLabel: 'p.a (current rates)',
     risk: 'Zero',
-    riskColor: '#E8970A',
+    riskColor: '#B86E00',
     riskBg: 'rgba(232,151,10,0.15)',
     min: '₦5,000',
     lock: '2–3 years',
@@ -64,7 +64,7 @@ const INVESTMENTS = [
     users: 'Government backed',
     url: 'https://dmo.gov.ng/fgn-savings-bond',
     badge: '🏛️ Government Backed',
-    badgeColor: '#E8970A',
+    badgeColor: '#B86E00',
     highlight: false,
     features: ['Zero default risk', 'Quarterly interest', 'Transferable', 'Tax exempt'],
     description: 'Direct obligation of the Federal Government. Highest safety rating possible — your principal is 100% guaranteed by Nigeria\'s sovereign.',
@@ -75,7 +75,7 @@ const INVESTMENTS = [
     return: '10–15%',
     returnLabel: 'p.a in USD',
     risk: 'Medium',
-    riskColor: '#7B7BFF',
+    riskColor: '#C4124F',
     riskBg: 'rgba(123,123,255,0.15)',
     min: '$10',
     lock: '3 months',
@@ -84,7 +84,7 @@ const INVESTMENTS = [
     users: '500K+',
     url: 'https://rise.capital',
     badge: '✅ SEC Regulated',
-    badgeColor: '#7B7BFF',
+    badgeColor: '#C4124F',
     highlight: false,
     features: ['US stocks', 'Real estate', 'Fixed income', 'Dollar returns'],
     description: 'Invest in dollar-denominated assets — US stocks, real estate and fixed income. Returns are in USD, protecting against naira devaluation.',
@@ -95,7 +95,7 @@ const INVESTMENTS = [
     return: '12–22%',
     returnLabel: 'p.a depending on fund',
     risk: 'Low–High',
-    riskColor: '#E8970A',
+    riskColor: '#B86E00',
     riskBg: 'rgba(232,151,10,0.15)',
     min: '₦10,000',
     lock: 'Open-ended',
@@ -104,7 +104,7 @@ const INVESTMENTS = [
     users: 'Institutional',
     url: 'https://www.stanbicibtcassetmanagement.com',
     badge: '🏦 Bank Backed',
-    badgeColor: '#E8970A',
+    badgeColor: '#B86E00',
     highlight: false,
     features: ['Pension management', 'Equity funds', 'Money market', 'Offshore funds'],
     description: 'Part of Standard Bank Group. Offers professional fund management backed by a 30+ year institutional track record in Nigeria.',
@@ -227,9 +227,9 @@ export default function InvestmentsScreen({ theme, user }) {
         </View>
 
         {/* Available to invest card */}
-        <View style={[s.availCard, { backgroundColor: '#13131F', borderWidth: 1, borderColor: '#6366F1' }]}>
+        <View style={[s.availCard, { backgroundColor: '#3B0B3E', borderWidth: 1, borderColor: '#C4124F' }]}>
           <Text style={[s.availLabel, { color: 'rgba(255,255,255,0.5)' }]}>ESTIMATED LEFT THIS MONTH</Text>
-          <Text style={[s.availAmt, { color: '#818CF8' }]}>
+          <Text style={[s.availAmt, { color: '#E0165F' }]}>
             ₦{leftAmount >= 1000000
               ? `${(leftAmount/1000000).toFixed(1)}M`
               : leftAmount >= 1000

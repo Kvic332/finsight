@@ -7,61 +7,23 @@
 //  Base:    Near-black with blue-purple tint
 
 export const DARK = {
-  // Backgrounds
-  bg:       '#0A0A12',
-  bg1:      '#0D0D18',
-  bg2:      '#101020',
-  // Surfaces
-  surface:  '#13131F',
-  surface2: '#1C1C2E',
-  // Borders
-  line:     '#1E1E32',
-  line2:    '#28283C',
-  // Text
-  ink:      '#F0F0FF',
-  ink2:     '#C4C4E8',
-  mute:     '#8080A8',
-  mute2:    '#565678',
-  // Brand accent — indigo
-  lime:     '#818CF8',   // light indigo (tint / icon bg / borders)
-  limeDeep: '#6366F1',   // main indigo (CTAs, active, highlights)
-  // Semantic
-  green:    '#34D399',   // credits / money-in
-  amber:    '#FBBF24',
-  rose:     '#F87171',
-  indigo:   '#6366F1',
-  // Aliases for legacy screens
-  text:     '#F0F0FF',
-  textMuted:'#8080A8',
+  bg: '#150D14', bg1: '#1B1219', bg2: '#21161F',
+  surface: '#221721', surface2: '#2D1F2B',
+  line: '#35262F', line2: '#4C3945',
+  ink: '#F7EFF4', ink2: '#D9CDD5', mute: '#BDB0BA', mute2: '#8F828C',
+  lime: '#FF7AA6', limeDeep: '#FF7AA6',
+  green: '#5CCFA6', amber: '#EDBC63', rose: '#F58B80', indigo: '#FF7AA6',
+  text: '#F7EFF4', textMuted: '#BDB0BA',
 };
 
 export const LIGHT = {
-  // Backgrounds
-  bg:       '#F5F5FF',
-  bg1:      '#EDEDFC',
-  bg2:      '#E8E8F8',
-  // Surfaces
-  surface:  '#FFFFFF',
-  surface2: '#F0F0FB',
-  // Borders
-  line:     '#E0E0F4',
-  line2:    '#CCCCE8',
-  // Text
-  ink:      '#0A0A1E',
-  ink2:     '#25254A',
-  mute:     '#7070A0',
-  mute2:    '#A0A0C0',
-  // Brand accent — indigo
-  lime:     '#818CF8',
-  limeDeep: '#4F52D3',
-  // Semantic
-  green:    '#059669',
-  amber:    '#D97706',
-  rose:     '#DC2626',
-  indigo:   '#4F52D3',
-  // Aliases
-  text:     '#0A0A1E',
-  textMuted:'#7070A0',
+  bg: '#FBF7F9', bg1: '#F6F1F4', bg2: '#F1ECEF',
+  surface: '#FFFFFF', surface2: '#F6F1F4',
+  line: '#F1ECEF', line2: '#DCD3D9',
+  ink: '#241A22', ink2: '#463A44', mute: '#6A606B', mute2: '#8F828C',
+  lime: '#C4124F', limeDeep: '#C4124F',
+  green: '#0A7A4B', amber: '#8A5A00', rose: '#B3261E', indigo: '#C4124F',
+  text: '#241A22', textMuted: '#6A606B',
 };
 
 export const CAT_COLORS = {

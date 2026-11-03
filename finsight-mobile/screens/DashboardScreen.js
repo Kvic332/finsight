@@ -95,7 +95,7 @@ function SpendChart({ data, T }) {
       {data.map((item, i) => {
         const isToday   = i === 6;
         const barH      = item.spend > 0 ? Math.max(6, (item.spend / maxSpend) * CHART_H) : 4;
-        const barColor  = isToday ? '#6366F1' : '#6366F155';
+        const barColor  = isToday ? '#C4124F' : '#C4124F55';
         const labelAmt  = item.spend >= 1000
           ? `${(item.spend / 1000).toFixed(0)}K`
           : item.spend > 0 ? String(item.spend) : '';
@@ -104,7 +104,7 @@ function SpendChart({ data, T }) {
           <View key={i} style={{ flex: 1, alignItems: 'center' }}>
             {/* Amount label above bar */}
             <Text style={{
-              color: isToday ? '#818CF8' : T.mute,
+              color: isToday ? '#E0165F' : T.mute,
               fontSize: 8, fontWeight: '700',
               marginBottom: 3, height: 12,
             }}>
@@ -137,7 +137,7 @@ function FinScoreModal({ visible, onClose, finScore, scoreBreakdown, T }) {
   const { spendScore, saveScore, txScore, investScore } = scoreBreakdown;
 
   const grade = finScore >= 80 ? { label: 'Excellent', emoji: '🏆', color: '#34D399' }
-              : finScore >= 70 ? { label: 'Good',      emoji: '💪', color: '#818CF8' }
+              : finScore >= 70 ? { label: 'Good',      emoji: '💪', color: '#E0165F' }
               : finScore >= 50 ? { label: 'Average',   emoji: '📈', color: '#FBBF24' }
               :                  { label: 'Needs work', emoji: '🔧', color: '#F87171' };
 
@@ -259,7 +259,7 @@ function FinScoreModal({ visible, onClose, finScore, scoreBreakdown, T }) {
             }}>
               <View style={{
                 width: 26, height: 26, borderRadius: 13,
-                backgroundColor: '#6366F1', justifyContent: 'center', alignItems: 'center', flexShrink: 0,
+                backgroundColor: '#C4124F', justifyContent: 'center', alignItems: 'center', flexShrink: 0,
               }}>
                 <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>{i + 1}</Text>
               </View>
@@ -382,13 +382,13 @@ export default function DashboardScreen({ theme, toggleTheme, user }) {
       {/* Achievement popup */}
       {showAchievement && (
         <Animated.View style={[s.achievePopup, {
-          backgroundColor: '#13131F', borderWidth: 1, borderColor: '#6366F1',
+          backgroundColor: '#3B0B3E', borderWidth: 1, borderColor: '#C4124F',
           opacity: achieveAnim,
           transform: [{ translateY: achieveAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }],
         }]}>
           <Text style={{ fontSize: 24 }}>{showAchievement.emoji}</Text>
           <View>
-            <Text style={[s.achieveTitle, { color: '#818CF8' }]}>Achievement Unlocked!</Text>
+            <Text style={[s.achieveTitle, { color: '#E0165F' }]}>Achievement Unlocked!</Text>
             <Text style={[s.achieveSub, { color: 'rgba(255,255,255,0.65)' }]}>{showAchievement.title} — {showAchievement.desc}</Text>
           </View>
         </Animated.View>
@@ -480,7 +480,7 @@ export default function DashboardScreen({ theme, toggleTheme, user }) {
             {/* Level badge */}
             <View style={{
               width: 48, height: 48, borderRadius: 14,
-              backgroundColor: '#6366F1', justifyContent: 'center', alignItems: 'center',
+              backgroundColor: '#C4124F', justifyContent: 'center', alignItems: 'center',
             }}>
               <Text style={{ fontSize: 24 }}>{xpState.current.emoji}</Text>
             </View>
@@ -495,7 +495,7 @@ export default function DashboardScreen({ theme, toggleTheme, user }) {
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{ color: '#818CF8', fontWeight: '800', fontSize: 14 }}>
+                  <Text style={{ color: '#E0165F', fontWeight: '800', fontSize: 14 }}>
                     {xpState.totalXP} XP
                   </Text>
                   {xpState.next && (
@@ -509,7 +509,7 @@ export default function DashboardScreen({ theme, toggleTheme, user }) {
               <View style={{ height: 6, backgroundColor: T.line, borderRadius: 3, overflow: 'hidden' }}>
                 <View style={{
                   width: `${xpState.pct}%`, height: '100%',
-                  backgroundColor: '#6366F1', borderRadius: 3,
+                  backgroundColor: '#C4124F', borderRadius: 3,
                 }} />
               </View>
             </View>
@@ -517,7 +517,7 @@ export default function DashboardScreen({ theme, toggleTheme, user }) {
         </TouchableOpacity>
 
         {/* Broke Clock — always dark indigo card for contrast */}
-        <View style={[s.brokeCard, { backgroundColor: '#1A1A3E' }]}>
+        <View style={[s.brokeCard, { backgroundColor: '#3B0B3E' }]}>
           <View style={{ flex: 1 }}>
             <Text style={[s.brokeLabel, { color: 'rgba(255,255,255,0.5)' }]}>BROKE CLOCK™</Text>
             <Text style={[s.brokeNum, { color: urgencyColor }]}>{daysLeft === null ? '—' : daysLeft >= 365 ? '365+' : daysLeft}</Text>
@@ -737,9 +737,9 @@ export default function DashboardScreen({ theme, toggleTheme, user }) {
       {/* Level-Up Modal */}
       <Modal visible={!!levelUpInfo} transparent animationType="fade" onRequestClose={() => setLevelUpInfo(null)}>
         <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.75)', justifyContent:'center', alignItems:'center', padding:32 }}>
-          <View style={{ backgroundColor:'#13131F', borderRadius:28, padding:32, alignItems:'center', borderWidth:1, borderColor:'#6366F1', width:'100%' }}>
+          <View style={{ backgroundColor:'#3B0B3E', borderRadius:28, padding:32, alignItems:'center', borderWidth:1, borderColor:'#C4124F', width:'100%' }}>
             <Text style={{ fontSize:64, marginBottom:8 }}>{levelUpInfo?.emoji}</Text>
-            <Text style={{ color:'#818CF8', fontSize:11, fontWeight:'700', letterSpacing:3, marginBottom:4 }}>LEVEL UP!</Text>
+            <Text style={{ color:'#E0165F', fontSize:11, fontWeight:'700', letterSpacing:3, marginBottom:4 }}>LEVEL UP!</Text>
             <Text style={{ color:'#F0F0FF', fontSize:28, fontWeight:'900', letterSpacing:-0.5, marginBottom:8 }}>
               {levelUpInfo?.title}
             </Text>
@@ -748,7 +748,7 @@ export default function DashboardScreen({ theme, toggleTheme, user }) {
             </Text>
             <TouchableOpacity
               onPress={() => setLevelUpInfo(null)}
-              style={{ backgroundColor:'#6366F1', borderRadius:16, paddingHorizontal:40, paddingVertical:14 }}>
+              style={{ backgroundColor:'#C4124F', borderRadius:16, paddingHorizontal:40, paddingVertical:14 }}>
               <Text style={{ color:'#fff', fontWeight:'800', fontSize:16 }}>Let's go! 🚀</Text>
             </TouchableOpacity>
           </View>
@@ -763,10 +763,10 @@ export default function DashboardScreen({ theme, toggleTheme, user }) {
           <View ref={shareCardRef} collapsable={false} style={{
             width: 320, borderRadius: 24, overflow:'hidden',
             backgroundColor:'#0A0A12',
-            borderWidth: 1.5, borderColor:'#6366F1',
+            borderWidth: 1.5, borderColor:'#C4124F',
           }}>
             {/* Top accent bar */}
-            <View style={{ height: 4, backgroundColor:'#6366F1' }} />
+            <View style={{ height: 4, backgroundColor:'#C4124F' }} />
 
             {/* Header */}
             <View style={{ padding: 20, paddingBottom: 12, flexDirection:'row', alignItems:'center', justifyContent:'space-between' }}>
@@ -776,14 +776,14 @@ export default function DashboardScreen({ theme, toggleTheme, user }) {
                   {user?.name?.split(' ')[0] || 'FinSight User'}
                 </Text>
               </View>
-              <View style={{ backgroundColor:'#6366F122', borderRadius:10, padding:8 }}>
-                <Text style={{ fontSize: 24, fontStyle:'italic', color:'#818CF8', fontWeight:'900' }}>f</Text>
+              <View style={{ backgroundColor:'#C4124F22', borderRadius:10, padding:8 }}>
+                <Text style={{ fontSize: 24, fontStyle:'italic', color:'#E0165F', fontWeight:'900' }}>f</Text>
               </View>
             </View>
 
             {/* Big score */}
             <View style={{ alignItems:'center', paddingVertical: 20, backgroundColor:'#0D0D1A' }}>
-              <Text style={{ color:'#818CF8', fontSize:72, fontWeight:'900', letterSpacing:-2 }}>{finScore}</Text>
+              <Text style={{ color:'#E0165F', fontSize:72, fontWeight:'900', letterSpacing:-2 }}>{finScore}</Text>
               <Text style={{ color:'rgba(255,255,255,0.4)', fontSize:13, marginTop:-4 }}>out of 100</Text>
               <View style={{ marginTop:10, backgroundColor:
                 finScore >= 80 ? '#34D39920' : finScore >= 70 ? '#FBBF2420' : '#F8717120',
@@ -811,11 +811,11 @@ export default function DashboardScreen({ theme, toggleTheme, user }) {
             {/* XP badge */}
             <View style={{ flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8, paddingBottom:16 }}>
               <Text style={{ fontSize:16 }}>{xpState.current.emoji}</Text>
-              <Text style={{ color:'#818CF8', fontWeight:'700', fontSize:13 }}>{xpState.current.title} · {xpState.totalXP} XP</Text>
+              <Text style={{ color:'#E0165F', fontWeight:'700', fontSize:13 }}>{xpState.current.title} · {xpState.totalXP} XP</Text>
             </View>
 
             {/* Footer */}
-            <View style={{ backgroundColor:'#6366F1', padding:12, alignItems:'center' }}>
+            <View style={{ backgroundColor:'#C4124F', padding:12, alignItems:'center' }}>
               <Text style={{ color:'#fff', fontWeight:'800', fontSize:12, letterSpacing:0.5 }}>
                 Track yours → FinSight App 🚀
               </Text>
@@ -829,7 +829,7 @@ export default function DashboardScreen({ theme, toggleTheme, user }) {
               <Text style={{ color:'#fff', fontWeight:'700' }}>Close</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={handleShare} disabled={sharing}
-              style={{ flex:2, backgroundColor:'#6366F1', borderRadius:14, padding:14, alignItems:'center' }}>
+              style={{ flex:2, backgroundColor:'#C4124F', borderRadius:14, padding:14, alignItems:'center' }}>
               <Text style={{ color:'#fff', fontWeight:'900', fontSize:15 }}>
                 {sharing ? 'Preparing…' : '📤 Share Card'}
               </Text>

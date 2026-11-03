@@ -6,7 +6,7 @@ import { computeStats, savingsFlows } from '../services/finance';
 import { DARK, LIGHT } from '../constants/theme';
 import { trackEvent } from '../services/cloudSync';
 
-const GOAL_COLORS = ['#818CF8', '#6366F1', '#FBBF24', '#F87171', '#34D399'];
+const GOAL_COLORS = ['#E0165F', '#C4124F', '#FBBF24', '#F87171', '#34D399'];
 const GOAL_ICONS = ['🛡️', '💻', '✈️', '🏠', '🎯', '🚗', '💍', '🎓'];
 const GOAL_TARGETS = {
   'Emergency Fund': 500000,
@@ -202,7 +202,7 @@ export default function SavingsScreen({ theme, user }) {
         )}
 
         {/* ARIA Insight */}
-        <View style={[s.ariaCard, { backgroundColor: '#13131F', borderWidth: 1, borderColor: '#6366F1' }]}>
+        <View style={[s.ariaCard, { backgroundColor: '#3B0B3E', borderWidth: 1, borderColor: '#C4124F' }]}>
           <Text style={[s.ariaLabel, { color: 'rgba(255,255,255,0.45)' }]}>ARIA INSIGHT</Text>
           <Text style={[s.ariaText, { color: '#E0E0FF' }]}>
             {savingsRate >= 20

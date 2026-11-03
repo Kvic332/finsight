@@ -66,6 +66,29 @@ export function daysUntilSalary(salaryDay, now = new Date()) {
   return Math.round((next - today) / 86400000);
 }
 
+// The pay period around today: from the last payday up to the next one. With no
+// salary day set, it falls back to the calendar month.
+export function payCycle(salaryDay, now = new Date()) {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const y = today.getFullYear();
+  const m = today.getMonth();
+  const day = parseInt(salaryDay, 10);
+  const hasPayday = day >= 1 && day <= 31;
+  const payday = (year, month) => {
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    return new Date(year, month, Math.min(day, lastDay));
+  };
+  let start = new Date(y, m, 1);
+  let end = new Date(y, m + 1, 1);
+  if (hasPayday) {
+    const thisMonth = payday(y, m);
+    start = today >= thisMonth ? thisMonth : payday(y, m - 1);
+    end = today >= thisMonth ? payday(y, m + 1) : thisMonth;
+  }
+  const days = (a, b) => Math.round((b - a) / 86400000);
+  return { start, end, hasPayday, length: days(start, end), elapsed: days(start, today) + 1, daysToGo: days(today, end) };
+}
+
 export function runwayDays(left, dailySpend) {
   if (!(dailySpend > 0)) return null;
   return Math.min(CAP_DAYS, Math.floor(left / dailySpend));
@@ -77,8 +100,16 @@ export function formatRunway(days) {
   return days >= CAP_DAYS ? `${CAP_DAYS}+ days` : `${days} days`;
 }
 
-export function computeStats(user, transactions, now = new Date()) {
-  const monthTxs = transactions.filter(t => isSameMonth(t.date, now));
+function inPeriod(raw, period) {
+  const d = parseTxDate(raw);
+  return !!d && d >= period.start && d < period.end;
+}
+
+export function computeStats(user, transactions, now = new Date(), period = null) {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const range = period || { start: new Date(today.getFullYear(), today.getMonth(), 1), end: new Date(today.getFullYear(), today.getMonth() + 1, 1) };
+  const monthTxs = transactions.filter(t => inPeriod(t.date, range));
+  const daysSoFar = Math.round((today - range.start) / 86400000) + 1;
   const spending = spendingOf(monthTxs);
   const { contributed, withdrawn, saved: totalSaved } = savingsFlows(monthTxs);
   const totalSpend = sumAmounts(spending);
@@ -89,7 +120,7 @@ export function computeStats(user, transactions, now = new Date()) {
 
   const left = Math.max(0, income - totalSpend - contributed + withdrawn);
 
-  const dailySpend = totalSpend / Math.max(MIN_BURN_WINDOW_DAYS, now.getDate());
+  const dailySpend = totalSpend / Math.max(MIN_BURN_WINDOW_DAYS, daysSoFar);
   const daysLeft = runwayDays(left, dailySpend);
   const daysLeftIfCut20 = runwayDays(left, dailySpend * 0.8);
 
@@ -143,4 +174,17 @@ export function computeStats(user, transactions, now = new Date()) {
     categoryTotals, spendTrend, finScore,
     scoreBreakdown: { spendScore, saveScore, txScore, investScore },
   };
+}
+
+// Everything the Home screen says about reaching the next payday.
+export function computePaydayPlan(user, transactions, now = new Date()) {
+  const cycle = payCycle(user?.salaryDay, now);
+  const stats = computeStats(user, transactions, now, cycle);
+  const { left, dailySpend, daysLeft } = stats;
+  const safePerDay = cycle.daysToGo > 0 ? Math.floor(left / cycle.daysToGo) : left;
+  const shortDays = daysLeft === null ? 0 : Math.max(0, cycle.daysToGo - daysLeft);
+  // Rounded up to the next ₦100, because advice to cut ₦1,089 reads as false precision.
+  const cutPerDay = shortDays > 0 ? Math.ceil((dailySpend - safePerDay) / 100) * 100 : 0;
+  const moneyIn = sumAmounts(transactions.filter(t => t.type === 'credit' && t.cat !== 'Savings' && inPeriod(t.date, cycle)));
+  return { ...stats, cycle, safePerDay, shortDays, cutPerDay, moneyIn };
 }
