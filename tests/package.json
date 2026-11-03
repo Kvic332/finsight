@@ -1,0 +1,17 @@
+{
+  "name": "finsight-backend-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"aria*.test.mjs\"",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-finsight --config ../firebase.json \"node --test rules.test.mjs\""
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
+    "@electric-sql/pglite": "^0.3.16",
+    "@firebase/rules-unit-testing": "^6.0.0",
+    "firebase": "^13.2.0",
+    "firebase-tools": "^15.34.2",
+    "jose": "^6.2.15"
+  }
+}

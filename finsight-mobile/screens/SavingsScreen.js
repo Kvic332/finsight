@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { computeStats, savingsFlows } from '../services/finance';
 import { DARK, LIGHT } from '../constants/theme';
 import { trackEvent } from '../services/cloudSync';
 
@@ -38,41 +39,9 @@ export default function SavingsScreen({ theme, user }) {
   }
 
   // ── Compute savings properly ───────────────────────────────────────────────
-  const income = user?.income || 0;
-
-  // Explicit savings transactions (cat = Savings)
-  const explicitSavings = transactions
-    .filter(t => t.cat === 'Savings' && t.type === 'credit')
-    .reduce((s, t) => s + t.amount, 0);
-
-  // Total income from transactions
-  const totalIncome = transactions
-    .filter(t => t.cat === 'Income' && t.type === 'credit')
-    .reduce((s, t) => s + t.amount, 0);
-
-  // Total spend
-  const totalSpend = transactions
-    .filter(t => t.type === 'debit')
-    .reduce((s, t) => s + t.amount, 0);
-
-  // Effective income — use transaction income if available, else profile income
-  const effectiveIncome = totalIncome > 0 ? totalIncome : income;
-
-  // Total saved — explicit savings first, otherwise net leftover
-  const netLeftover = Math.max(0, effectiveIncome - totalSpend);
-  const totalSaved = explicitSavings > 0 ? explicitSavings : netLeftover;
-
-  // Savings rate
-  const savingsRate = effectiveIncome > 0
-    ? Math.round((totalSaved / effectiveIncome) * 100)
-    : 0;
-
-  // Monthly savings (last 30 days)
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const monthlySaved = transactions
-    .filter(t => t.cat === 'Savings' && t.type === 'credit')
-    .reduce((s, t) => s + t.amount, 0);
+  // Only money actually moved to savings counts. Unspent income isn't savings.
+  const totalSaved = savingsFlows(transactions).saved;
+  const { income: effectiveIncome, savingsRate, totalSpend, totalSaved: savedThisMonth } = computeStats(user, transactions);
 
   // Build goals from user profile.
   // user.goals is an array of objects { id, name, target, saved } (set in SettingsScreen).
@@ -157,11 +126,11 @@ export default function SavingsScreen({ theme, user }) {
             <View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
                 <Text style={[s.barLabel, { color: T.ink2 }]}>Saved</Text>
-                <Text style={[s.barLabel, { color: T.limeDeep, fontWeight: '700' }]}>₦{totalSaved.toLocaleString()}</Text>
+                <Text style={[s.barLabel, { color: T.limeDeep, fontWeight: '700' }]}>₦{savedThisMonth.toLocaleString()}</Text>
               </View>
               <View style={[s.barTrack, { backgroundColor: T.line }]}>
                 <View style={[s.barFill, {
-                  width: effectiveIncome > 0 ? `${Math.min(100, (totalSaved/effectiveIncome)*100)}%` : '0%',
+                  width: effectiveIncome > 0 ? `${Math.min(100, (savedThisMonth/effectiveIncome)*100)}%` : '0%',
                   backgroundColor: T.limeDeep,
                 }]} />
               </View>

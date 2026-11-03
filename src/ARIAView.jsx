@@ -41,10 +41,6 @@ const SAMPLE_CONTEXT = {
   ],
 };
 
-// ── Paste your Anthropic API key here ───────────────────────────────────────
-const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_KEY;
-// ────────────────────────────────────────────────────────────────────────────
-
 function buildSystemPrompt(ctx) {
   const categoryTotals = ctx.transactions
     .filter(t => t.type === "debit")
@@ -93,8 +89,6 @@ async function callARIA(messages, financialContext) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-5",

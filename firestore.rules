@@ -1,0 +1,55 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // Anonymous identities exist only for ARIA's usage limits (ariaClient.js).
+    function hasAccount() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    // Admin access comes from a document only the Firebase console can create,
+    // never from a field on the user's own profile.
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    match /admins/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+
+      allow create: if isOwner(uid) && hasAccount()
+        && request.resource.data.keys().hasOnly([
+          'name', 'email', 'createdAt', 'lastSeen',
+          'analytics', 'finscore', 'xp', 'lastBackup'
+        ]);
+
+      allow update: if isOwner(uid) && hasAccount()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'lastSeen', 'analytics', 'finscore', 'xp', 'lastBackup', 'backup'
+        ])
+        // 'backup' is the old location. It can be removed but never written.
+        && !request.resource.data.diff(resource.data).addedKeys().hasAny(['backup'])
+        && !request.resource.data.diff(resource.data).changedKeys().hasAny(['backup']);
+
+      allow delete: if isOwner(uid) && hasAccount();
+
+      // Backups hold full financial history: the owner only, not even admins.
+      match /private/{document} {
+        allow read, write: if isOwner(uid) && hasAccount();
+      }
+    }
+
+    // Anything not matched above is denied.
+  }
+}

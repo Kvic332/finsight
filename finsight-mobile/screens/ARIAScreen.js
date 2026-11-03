@@ -11,8 +11,8 @@ import * as Speech from 'expo-speech';
 import Voice from '@react-native-voice/voice';
 import { DARK, LIGHT } from '../constants/theme';
 import { trackEvent } from '../services/cloudSync';
-
-const API_KEY = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY || '';
+import { askAria } from '../services/ariaClient';
+import { computeStats, formatRunway, isSameMonth } from '../services/finance';
 
 const QUICK_QUESTIONS = [
   'What are my top expenses?',
@@ -109,36 +109,20 @@ export default function ARIAScreen({ theme, user }) {
 
   // ── Rich context for ARIA ──────────────────────────────────────────────────
   function buildContext() {
-    const income = user?.income || 0;
-    const debits  = transactions.filter(t => t.type === 'debit');
-    const credits = transactions.filter(t => t.type === 'credit');
-    const totalSpend  = debits.reduce((s, t) => s + t.amount, 0);
-    const totalSaved  = credits.filter(t => t.cat === 'Savings').reduce((s, t) => s + t.amount, 0);
-    const totalIncome = credits.filter(t => t.cat === 'Income').reduce((s, t) => s + t.amount, 0);
-    const effectiveIncome = totalIncome > 0 ? totalIncome : income;
-    const balance = effectiveIncome - totalSpend + totalSaved;
-    const dailySpend = totalSpend / 30;
-    const daysLeft = dailySpend > 0 ? Math.round(balance / dailySpend) : 365;
-    const savingsRate = effectiveIncome > 0 ? Math.round((totalSaved / effectiveIncome) * 100) : 0;
+    const stats = computeStats(user, transactions);
 
-    // Category breakdown of spending
-    const catTotals = {};
-    debits.forEach(t => { catTotals[t.cat] = (catTotals[t.cat] || 0) + t.amount; });
-    const catSummary = Object.entries(catTotals)
+    const catSummary = Object.entries(stats.categoryTotals)
       .sort((a, b) => b[1] - a[1])
       .map(([cat, amt]) => `${cat} ₦${amt.toLocaleString()}`)
       .join(', ');
 
     // Budget summary
-    const monthKey = (() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
     const budgetSummary = budgets.map(b => {
       const spent = transactions.filter(t => {
         if (t.type !== 'debit') return false;
-        const parts = (t.date||'').split('/');
-        const txKey = parts.length===3 ? `${parts[2]}-${parts[1].padStart(2,'0')}` : '';
         const catMatch = (t.cat||'').toLowerCase() === (b.cat||'').toLowerCase();
         const kwMatch = (b.keywords||[]).some(k=>(t.desc||'').toLowerCase().includes(k.toLowerCase()));
-        return txKey === monthKey && (catMatch || kwMatch);
+        return isSameMonth(t.date) && (catMatch || kwMatch);
       }).reduce((s,t)=>s+(t.amount||0),0);
       const pct = b.limit>0 ? Math.round(spent/b.limit*100) : 0;
       return `${b.icon}${b.name}: ₦${spent.toLocaleString()}/₦${b.limit.toLocaleString()} (${pct}%${pct>=100?' EXCEEDED':pct>=80?' WARNING':''})`;
@@ -157,17 +141,17 @@ export default function ARIAScreen({ theme, user }) {
     return `
 USER PROFILE:
 Name: ${user?.name || 'User'} | Employment: ${user?.employmentType || 'Not specified'}
-Monthly Income: ₦${effectiveIncome.toLocaleString()} | Salary Day: Day ${user?.salaryDay || 'not set'}
+Monthly Income: ₦${stats.income.toLocaleString()} | Salary Day: Day ${user?.salaryDay || 'not set'}
 Banks: ${(user?.banks || []).join(', ') || 'Not specified'}
 
-FINANCIAL POSITION (${transactions.length} transactions tracked):
-Estimated Balance: ₦${balance.toLocaleString()}
-Total Spent: ₦${totalSpend.toLocaleString()} | Total Saved: ₦${totalSaved.toLocaleString()}
-Savings Rate: ${savingsRate}% | Daily Burn Rate: ₦${Math.round(dailySpend).toLocaleString()}
-Broke Clock: ${daysLeft >= 365 ? '365+ days (healthy)' : `${daysLeft} days at current pace`}
+THIS MONTH (${transactions.length} transactions tracked in total):
+Estimated left this month: ₦${stats.left.toLocaleString()} (an estimate from income and logged transactions, not a bank balance)
+Spent: ₦${stats.totalSpend.toLocaleString()} | Saved: ₦${stats.totalSaved.toLocaleString()}
+Savings Rate: ${stats.savingsRate}% | Daily spending: ₦${Math.round(stats.dailySpend).toLocaleString()}
+Broke Clock: ${formatRunway(stats.daysLeft)} at current pace
 
-SPENDING BY CATEGORY: ${catSummary || 'No spending data'}
-ALL TRANSACTIONS: ${recentTx || 'None recorded yet'}
+SPENDING BY CATEGORY THIS MONTH: ${catSummary || 'No spending data'}
+RECENT TRANSACTIONS: ${recentTx || 'None recorded yet'}
 SAVINGS GOALS: ${goalsSummary || 'None set'}
 MONTHLY BUDGETS: ${budgetSummary || 'No budgets set'}
     `.trim();
@@ -223,29 +207,11 @@ MONTHLY BUDGETS: ${budgetSummary || 'No budgets set'}
     trackEvent('aria_messages').catch(() => {});
 
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': API_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
-          max_tokens: 600,
-          system: `You are ARIA, a brilliant personal finance AI for a Nigerian user. You are direct, warm, confident, and smart — like a trusted financial advisor friend. Always use ₦ for Nigerian amounts. Keep responses concise (3-5 sentences unless asked for detail). Be specific with numbers from the user's actual data. Here is the user's complete financial context:\n\n${buildContext()}`,
-          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-        }),
-      });
-
-      const data  = await response.json();
-      const reply = data.content?.[0]?.text || 'Sorry, I had trouble connecting. Please try again.';
+      const reply = await askAria(newMessages, buildContext());
       setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
       speakText(reply);
     } catch (e) {
-      const errMsg = 'Connection error. Check your internet and try again.';
-      setMessages(prev => [...prev, { role: 'assistant', content: errMsg }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: e.message }]);
     } finally {
       setLoading(false);
       stopPulse();

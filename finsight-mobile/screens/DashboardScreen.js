@@ -11,114 +11,9 @@ import { DARK, LIGHT, CAT_COLORS, CAT_ICONS, INVESTMENTS } from '../constants/th
 import { updateStreak, getStreak, getStreakBadge, checkAchievements } from '../services/notificationService';
 import { awardXP, getXPState, getLevelInfo, LEVELS } from '../services/xpService';
 import { trackEvent, syncFinScore, syncXP } from '../services/cloudSync';
+import { computeStats } from '../services/finance';
 
 const { width } = Dimensions.get('window');
-
-function computeStats(user, transactions) {
-  const income = user?.income || 0;
-  const salaryDay = parseInt(user?.salaryDay) || 25;
-
-  // ── Only use current month's transactions for balance & stats ─────────────
-  const now = new Date();
-  const monthTxs = transactions.filter(t => {
-    // Handle en-NG format "DD/MM/YYYY" and ISO "YYYY-MM-DD"
-    const raw = t.date || '';
-    let d;
-    if (raw.includes('/')) {
-      const [day, month, year] = raw.split('/');
-      d = new Date(`${year}-${month}-${day}`);
-    } else {
-      d = new Date(raw);
-    }
-    return !isNaN(d) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  });
-
-  const debits  = monthTxs.filter(t => t.type === 'debit');
-  const credits = monthTxs.filter(t => t.type === 'credit');
-  const totalSpend  = debits.reduce((s, t) => s + t.amount, 0);
-  const totalSaved  = credits.filter(t => t.cat === 'Savings').reduce((s, t) => s + t.amount, 0);
-  const totalIncome = credits.filter(t => t.cat === 'Income').reduce((s, t) => s + t.amount, 0);
-  // Always use the higher of: user's set monthly income OR credited income transactions.
-  // This prevents a small credit (e.g. ₦4K) from overriding a ₦1.2M income setting.
-  const effectiveIncome = Math.max(income, totalIncome);
-
-  // ── Balance ────────────────────────────────────────────────────────────────
-  const balance = Math.max(0, effectiveIncome - totalSpend + totalSaved);
-
-  // ── Broke Clock ────────────────────────────────────────────────────────────
-  // Use 30-day window for daily burn rate
-  const dailySpend = totalSpend > 0 ? totalSpend / 30 : 0;
-  const daysLeft   = dailySpend > 0 ? Math.min(365, Math.max(0, Math.round(balance / dailySpend))) : 365;
-
-  // Days until next salary for monthly earners
-  const today = new Date().getDate();
-  const daysUntilSalary = salaryDay >= today
-    ? salaryDay - today
-    : (31 - today + salaryDay); // rolls to next month
-  // Projected balance on salary day (will they make it?)
-  const projectedOnPayday = Math.max(0, balance - dailySpend * daysUntilSalary);
-  const willMakePayday   = daysLeft >= daysUntilSalary || daysUntilSalary === 0;
-
-  // ── Savings rate ───────────────────────────────────────────────────────────
-  const savingsRate = effectiveIncome > 0 ? Math.round((totalSaved / effectiveIncome) * 100) : 0;
-
-  // ── FinScore ───────────────────────────────────────────────────────────────
-  // Spend Discipline (0-100):
-  //   ratio=0 → 100, ratio=0.8 → 50, ratio=1.0 → 17, ratio>=1.2 → 0
-  const spendRatio = effectiveIncome > 0 ? totalSpend / effectiveIncome : 1;
-  const spendScore = Math.max(0, Math.min(100, Math.round((1.2 - spendRatio) / 1.2 * 100)));
-
-  // Savings Rate Score (0-100): 20%+ savings = 100
-  const saveScore = Math.min(100, Math.round(savingsRate * 5));
-
-  // Budget Adherence: category diversity + tracking consistency
-  const catTotals = {};
-  debits.forEach(t => { catTotals[t.cat] = (catTotals[t.cat] || 0) + t.amount; });
-  const catValues = Object.values(catTotals);
-  const numCats = catValues.length;
-  const maxCatPct = totalSpend > 0 && catValues.length > 0 ? Math.max(...catValues) / totalSpend : 1;
-  // More categories = better balance; no single category dominating = healthier
-  const diversityPoints = Math.min(40, numCats * 10);
-  const balancePoints   = maxCatPct < 0.5 ? 30 : maxCatPct < 0.7 ? 15 : 0;
-  const trackingPoints  = Math.min(30, transactions.length * 3);
-  const txScore = Math.min(100, diversityPoints + balancePoints + trackingPoints);
-
-  // Investment Activity: goals + savings transactions (not hardcoded)
-  const goals = user?.goals || [];
-  const hasGoals    = goals.length > 0;
-  const hasSavingsTx = transactions.some(t =>
-    t.cat === 'Savings' ||
-    /cowrywise|piggyvest|invest|risevest|bamboo/i.test(t.desc || ''));
-  const investScore = Math.min(100,
-    (hasGoals    ? 35 : 0) +
-    (hasSavingsTx ? 45 : 0) +
-    (savingsRate >= 10 ? 20 : savingsRate >= 5 ? 10 : 0));
-
-  // Weighted composite (spend+save weighted higher than tracking+invest)
-  const finScore = Math.max(10, Math.min(100, Math.round(
-    spendScore * 0.35 + saveScore * 0.35 + txScore * 0.15 + investScore * 0.15
-  )));
-
-  const categoryTotals = catTotals;
-
-  // 7-day trend uses ALL transactions (not just this month) so it works across month boundaries
-  const allDebits = transactions.filter(t => t.type === 'debit');
-  const spendTrend = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (6 - i));
-    const day   = d.toLocaleDateString('en-NG', { weekday: 'short' });
-    const dateStr = d.toLocaleDateString('en-NG');
-    const spend = allDebits.filter(t => t.date === dateStr).reduce((s, t) => s + t.amount, 0);
-    return { day, spend };
-  });
-
-  return {
-    balance, totalSpend, totalSaved, daysLeft, finScore,
-    savingsRate, spendTrend, categoryTotals,
-    income: effectiveIncome,
-    daysUntilSalary, projectedOnPayday, willMakePayday, dailySpend,
-    scoreBreakdown: { spendScore, saveScore, txScore, investScore },
-  };
-}
 
 // ── Category Breakdown ────────────────────────────────────────────────────────
 function CategoryBreakdown({ categoryTotals, totalSpend, T }) {
@@ -473,9 +368,9 @@ export default function DashboardScreen({ theme, toggleTheme, user }) {
   }
 
   const stats = computeStats(user, transactions);
-  const { balance, totalSpend, totalSaved, daysLeft, finScore, categoryTotals, spendTrend, income,
+  const { left, totalSpend, totalSaved, daysLeft, daysLeftIfCut20, finScore, categoryTotals, spendTrend, income,
           daysUntilSalary, projectedOnPayday, willMakePayday } = stats;
-  const urgencyColor = daysLeft < 7 ? T.rose : daysLeft < 20 ? T.amber : T.limeDeep;
+  const urgencyColor = daysLeft === null ? T.mute : daysLeft < 7 ? T.rose : daysLeft < 20 ? T.amber : T.limeDeep;
   const scoreGrade = finScore >= 80 ? 'A · Great' : finScore >= 70 ? 'B+ · Good' : finScore >= 50 ? 'C · Average' : 'D · Needs work';
   const catData = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
   const maxCat = catData.length > 0 ? catData[0][1] : 1;
@@ -547,14 +442,14 @@ export default function DashboardScreen({ theme, toggleTheme, user }) {
 
         {/* Balance Hero Card */}
         <View style={[s.heroCard, { backgroundColor: T.surface }]}>
-          <Text style={[s.heroLabel, { color: T.mute }]}>ESTIMATED BALANCE</Text>
+          <Text style={[s.heroLabel, { color: T.mute }]}>ESTIMATED LEFT THIS MONTH</Text>
           <Text style={[s.heroBalance, { color: T.ink }]}>
             ₦<Text style={{ color: T.limeDeep }}>
-              {balance >= 1000000
-                ? `${(balance / 1000000).toFixed(1)}M`
-                : balance >= 1000
-                ? `${(balance / 1000).toFixed(0)}K`
-                : balance.toLocaleString()}
+              {left >= 1000000
+                ? `${(left / 1000000).toFixed(1)}M`
+                : left >= 1000
+                ? `${(left / 1000).toFixed(0)}K`
+                : left.toLocaleString()}
             </Text>
           </Text>
           <Text style={[s.heroGrade, { color: urgencyColor }]}>
@@ -625,10 +520,10 @@ export default function DashboardScreen({ theme, toggleTheme, user }) {
         <View style={[s.brokeCard, { backgroundColor: '#1A1A3E' }]}>
           <View style={{ flex: 1 }}>
             <Text style={[s.brokeLabel, { color: 'rgba(255,255,255,0.5)' }]}>BROKE CLOCK™</Text>
-            <Text style={[s.brokeNum, { color: urgencyColor }]}>{daysLeft >= 365 ? '∞' : daysLeft}</Text>
-            <Text style={[s.brokeSub, { color: 'rgba(255,255,255,0.45)' }]}>days at current pace</Text>
+            <Text style={[s.brokeNum, { color: urgencyColor }]}>{daysLeft === null ? '—' : daysLeft >= 365 ? '365+' : daysLeft}</Text>
+            <Text style={[s.brokeSub, { color: 'rgba(255,255,255,0.45)' }]}>{daysLeft === null ? 'log some spending to see this' : 'days at current pace'}</Text>
 
-            {user?.salaryDay ? (
+            {daysUntilSalary !== null ? (
               <View style={{ marginTop: 12, gap: 5 }}>
                 <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: '600' }}>
                   📅 Salary in {daysUntilSalary}d (day {user.salaryDay})
@@ -646,10 +541,9 @@ export default function DashboardScreen({ theme, toggleTheme, user }) {
           </View>
           <View style={{ gap: 8 }}>
             {[
-              { l: 'Now',  d: daysLeft,                              c: daysLeft < 7 ? '#F87171' : '#FBBF24' },
-              { l: '−20%', d: Math.min(365, Math.round(daysLeft * 1.25)), c: '#FBBF24' },
-              { l: 'ARIA', d: Math.min(365, Math.round(daysLeft * 1.6)),  c: '#818CF8' },
-            ].map((item, i) => (
+              { l: 'Now',  d: daysLeft,        c: daysLeft < 7 ? '#F87171' : '#FBBF24' },
+              { l: '−20%', d: daysLeftIfCut20, c: '#FBBF24' },
+            ].filter(item => item.d !== null).map((item, i) => (
               <View key={i} style={[s.brokeScenario, { borderColor: 'rgba(255,255,255,0.15)', backgroundColor: 'rgba(255,255,255,0.05)' }]}>
                 <Text style={[s.brokeScenLabel, { color: 'rgba(255,255,255,0.5)' }]}>{item.l}</Text>
                 <Text style={[s.brokeScenVal, { color: item.c }]}>{item.d >= 365 ? '365+' : item.d}d</Text>

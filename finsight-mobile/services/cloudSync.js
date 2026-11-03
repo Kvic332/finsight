@@ -6,16 +6,20 @@ import {
   onAuthStateChanged,
 } from 'firebase/auth';
 import {
-  doc, setDoc, getDoc, updateDoc, serverTimestamp, increment,
+  doc, setDoc, getDoc, updateDoc, serverTimestamp, increment, deleteField,
   collection, onSnapshot, query, orderBy,
 } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, db } from './firebase';
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
+// ARIA signs people in anonymously for its usage limits (see ariaClient.js).
+// That isn't a FinSight account, so everything here treats it as signed out.
+
+const accountUser = user => (user && !user.isAnonymous ? user : null);
 
 export function onAuthChange(callback) {
-  return onAuthStateChanged(auth, callback);
+  return onAuthStateChanged(auth, user => callback(accountUser(user)));
 }
 
 export async function signUp(email, password, name) {
@@ -64,7 +68,7 @@ export async function resetPassword(email) {
 }
 
 export function currentUser() {
-  return auth.currentUser;
+  return accountUser(auth.currentUser);
 }
 
 // ── Analytics tracking ────────────────────────────────────────────────────────
@@ -73,7 +77,7 @@ export function currentUser() {
 
 export async function trackEvent(fieldName) {
   try {
-    const user = auth.currentUser;
+    const user = currentUser();
     if (!user) return;
     await updateDoc(doc(db, 'users', user.uid), {
       [`analytics.${fieldName}`]: increment(1),
@@ -85,7 +89,7 @@ export async function trackEvent(fieldName) {
 // ── FinScore sync ─────────────────────────────────────────────────────────────
 export async function syncFinScore(score) {
   try {
-    const user = auth.currentUser;
+    const user = currentUser();
     if (!user) return;
 
     const ref   = doc(db, 'users', user.uid);
@@ -107,7 +111,7 @@ export async function syncFinScore(score) {
 // ── XP sync ───────────────────────────────────────────────────────────────────
 export async function syncXP(totalXP, level) {
   try {
-    const user = auth.currentUser;
+    const user = currentUser();
     if (!user) return;
     await updateDoc(doc(db, 'users', user.uid), {
       'xp.total': totalXP,
@@ -117,9 +121,11 @@ export async function syncXP(totalXP, level) {
 }
 
 // ── Full backup ───────────────────────────────────────────────────────────────
+const backupDoc = uid => doc(db, 'users', uid, 'private', 'backup');
+
 // Uploads all local AsyncStorage data to Firestore under the user's document.
 export async function backupToCloud() {
-  const user = auth.currentUser;
+  const user = currentUser();
   if (!user) throw new Error('Not signed in');
 
   const keys = [
@@ -138,8 +144,11 @@ export async function backupToCloud() {
     if (v !== null) backup[k] = v; // stored as raw strings
   }
 
+  // Kept apart from the profile so that only the owner can ever read it. Also
+  // clears the copy older versions stored on the profile, which admins can see.
+  await setDoc(backupDoc(user.uid), { data: backup });
   await updateDoc(doc(db, 'users', user.uid), {
-    backup,
+    backup: deleteField(),
     lastBackup: serverTimestamp(),
   });
 
@@ -149,13 +158,15 @@ export async function backupToCloud() {
 // ── Full restore ──────────────────────────────────────────────────────────────
 // Downloads cloud backup and writes it back to AsyncStorage.
 export async function restoreFromCloud() {
-  const user = auth.currentUser;
+  const user = currentUser();
   if (!user) throw new Error('Not signed in');
 
   const snap = await getDoc(doc(db, 'users', user.uid));
   if (!snap.exists()) throw new Error('No cloud data found for this account');
 
-  const { backup, lastBackup } = snap.data();
+  const { backup: legacyBackup, lastBackup } = snap.data();
+  const privateSnap = await getDoc(backupDoc(user.uid));
+  const backup = privateSnap.exists() ? privateSnap.data().data : legacyBackup;
   if (!backup || Object.keys(backup).length === 0) {
     throw new Error('No backup data found. Back up first from your original device.');
   }
@@ -171,7 +182,7 @@ export async function restoreFromCloud() {
 
 // ── Get user profile from Firestore ──────────────────────────────────────────
 export async function getCloudProfile() {
-  const user = auth.currentUser;
+  const user = currentUser();
   if (!user) return null;
   const snap = await getDoc(doc(db, 'users', user.uid));
   return snap.exists() ? snap.data() : null;
@@ -180,8 +191,9 @@ export async function getCloudProfile() {
 // ── Check if current user is admin ───────────────────────────────────────────
 export async function checkIsAdmin() {
   try {
-    const profile = await getCloudProfile();
-    return profile?.isAdmin === true;
+    const user = currentUser();
+    if (!user) return false;
+    return (await getDoc(doc(db, 'admins', user.uid))).exists();
   } catch { return false; }
 }
 
@@ -190,7 +202,10 @@ export async function checkIsAdmin() {
 export function subscribeAllUsers(onChange) {
   const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
   return onSnapshot(q, snap => {
-    const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const users = snap.docs.map(d => {
+      const { backup, ...profile } = d.data();
+      return { id: d.id, ...profile };
+    });
     onChange(users);
   }, () => onChange([]));
 }

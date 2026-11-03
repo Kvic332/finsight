@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { computeStats, formatRunway, parseTxDate, savingsFlows, spendingOf } from './finance';
 
 // ── Permission ────────────────────────────────────────────────────────────────
 export async function requestNotificationPermission() {
@@ -14,26 +15,6 @@ function formatAmount(amount) {
   if (amount >= 1000000) return `₦${(amount / 1000000).toFixed(1)}M`;
   if (amount >= 1000) return `₦${(amount / 1000).toFixed(0)}K`;
   return `₦${amount.toLocaleString()}`;
-}
-
-function computeStats(transactions, income = 0) {
-  const debits = transactions.filter(t => t.type === 'debit');
-  const credits = transactions.filter(t => t.type === 'credit');
-  const totalSpend = debits.reduce((s, t) => s + t.amount, 0);
-  const totalSaved = credits.filter(t => t.cat === 'Savings').reduce((s, t) => s + t.amount, 0);
-  const totalIncome = credits.filter(t => t.cat === 'Income').reduce((s, t) => s + t.amount, 0);
-  const effectiveIncome = totalIncome > 0 ? totalIncome : income;
-  const balance = effectiveIncome - totalSpend + totalSaved;
-  const dailySpend = totalSpend / 30;
-  const daysLeft = dailySpend > 0 ? Math.min(365, Math.round(balance / dailySpend)) : 365;
-  const categoryTotals = {};
-  debits.forEach(t => { categoryTotals[t.cat] = (categoryTotals[t.cat] || 0) + t.amount; });
-  const topCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0];
-  const spendScore = Math.min(100, effectiveIncome > 0 ? Math.round((1 - totalSpend / effectiveIncome) * 100) : 50);
-  const saveScore = Math.min(100, effectiveIncome > 0 ? Math.round((totalSaved / effectiveIncome) * 500) : 0);
-  const txScore = transactions.length > 10 ? 72 : Math.round((transactions.length / 10) * 72);
-  const finScore = Math.max(0, Math.round((spendScore + saveScore + txScore + 30) / 4));
-  return { totalSpend, totalSaved, effectiveIncome, daysLeft, finScore, topCategory, categoryTotals };
 }
 
 // ── Daily Reminder (user-set time) ───────────────────────────────────────────
@@ -89,25 +70,25 @@ export async function sendDailyDigestNow(userName = 'there') {
 
     const today = new Date().toLocaleDateString('en-NG');
     const todayTxs = allTxs.filter(t => t.date === today);
-    const todaySpend = todayTxs.filter(t => t.type === 'debit').reduce((s, t) => s + t.amount, 0);
+    const todaySpend = spendingOf(todayTxs).reduce((s, t) => s + t.amount, 0);
     const todayCredit = todayTxs.filter(t => t.type === 'credit').reduce((s, t) => s + t.amount, 0);
 
     const todayCatMap = {};
-    todayTxs.filter(t => t.type === 'debit').forEach(t => {
+    spendingOf(todayTxs).forEach(t => {
       todayCatMap[t.cat] = (todayCatMap[t.cat] || 0) + t.amount;
     });
     const todayTopCats = Object.entries(todayCatMap).sort((a, b) => b[1] - a[1]).slice(0, 3);
 
-    const stats = computeStats(allTxs, user.income || 0);
+    const stats = computeStats(user, allTxs);
     const weekday = new Date().toLocaleDateString('en-NG', { weekday: 'long' });
     const streakBadge = streak.count >= 7 ? '🔥' : streak.count >= 3 ? '⚡' : '🌱';
 
     let body = '';
     if (todaySpend === 0 && todayCredit === 0) {
-      body = `Nothing logged today. Tracking is the first step to financial freedom 📊\nBroke Clock: ${stats.daysLeft >= 365 ? '365+' : stats.daysLeft}d · Streak: ${streak.count}d ${streakBadge}`;
+      body = `Nothing logged today. Tracking is the first step to financial freedom 📊\nBroke Clock: ${formatRunway(stats.daysLeft)} · Streak: ${streak.count}d ${streakBadge}`;
     } else {
       const catLine = todayTopCats.map(([cat, amt]) => `${cat} ${formatAmount(amt)}`).join(' · ');
-      body = `Spent: ${formatAmount(todaySpend)}${todayCredit > 0 ? ` · Received: ${formatAmount(todayCredit)}` : ''}\n↳ ${catLine}\n\nBroke Clock: ${stats.daysLeft >= 365 ? '365+' : stats.daysLeft}d · Streak: ${streak.count}d ${streakBadge}`;
+      body = `Spent: ${formatAmount(todaySpend)}${todayCredit > 0 ? ` · Received: ${formatAmount(todayCredit)}` : ''}\n↳ ${catLine}\n\nBroke Clock: ${formatRunway(stats.daysLeft)} · Streak: ${streak.count}d ${streakBadge}`;
     }
 
     await Notifications.scheduleNotificationAsync({
@@ -146,19 +127,19 @@ export async function sendWeeklyDigestNow(userName = 'there') {
     // Last 7 days
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const weekTxs = allTxs.filter(t => new Date(t.date) >= sevenDaysAgo);
+    const weekTxs = allTxs.filter(t => { const d = parseTxDate(t.date); return d && d >= sevenDaysAgo; });
 
-    const weekSpend = weekTxs.filter(t => t.type === 'debit').reduce((s, t) => s + t.amount, 0);
-    const weekSaved = weekTxs.filter(t => t.cat === 'Savings').reduce((s, t) => s + t.amount, 0);
+    const weekSpend = spendingOf(weekTxs).reduce((s, t) => s + t.amount, 0);
+    const weekSaved = savingsFlows(weekTxs).saved;
 
     const weekCats = {};
-    weekTxs.filter(t => t.type === 'debit').forEach(t => {
+    spendingOf(weekTxs).forEach(t => {
       weekCats[t.cat] = (weekCats[t.cat] || 0) + t.amount;
     });
     const topCat = Object.entries(weekCats).sort((a, b) => b[1] - a[1])[0];
 
-    const stats = computeStats(allTxs, user.income || 0);
-    const brokeChange = prevStats ? (stats.daysLeft - prevStats.daysLeft) : 0;
+    const stats = computeStats(user, allTxs);
+    const brokeChange = prevStats?.daysLeft != null && stats.daysLeft !== null ? stats.daysLeft - prevStats.daysLeft : 0;
     const brokeArrow = brokeChange > 0 ? `↑ +${brokeChange}d` : brokeChange < 0 ? `↓ ${brokeChange}d` : '→ same';
 
     // Save for next week
@@ -183,7 +164,7 @@ export async function sendWeeklyDigestNow(userName = 'there') {
       `Spent:        ${formatAmount(weekSpend)}\n` +
       `Saved:        ${formatAmount(weekSaved)}\n` +
       `Top category: ${topCat ? `${topCat[0]} ${formatAmount(topCat[1])}` : 'None'}\n` +
-      `Broke Clock:  ${stats.daysLeft >= 365 ? '365+' : stats.daysLeft}d (${brokeArrow})\n` +
+      `Broke Clock:  ${formatRunway(stats.daysLeft)} (${brokeArrow})\n` +
       `Streak:       ${streak.count}d ${streakBadge}\n\n` +
       `ARIA: ${ariaLine}`;
 
@@ -218,19 +199,11 @@ export async function sendMonthlyReportNow(userName = 'there') {
     const user = userRaw ? JSON.parse(userRaw) : {};
     const streak = streakRaw ? JSON.parse(streakRaw) : { count: 0, longest: 0 };
 
-    const now = new Date();
-    const monthTxs = allTxs.filter(t => {
-      const d = new Date(t.date);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    });
-
-    const monthSpend = monthTxs.filter(t => t.type === 'debit').reduce((s, t) => s + t.amount, 0);
-    const monthSaved = monthTxs.filter(t => t.cat === 'Savings').reduce((s, t) => s + t.amount, 0);
-    const monthIncome = monthTxs.filter(t => t.cat === 'Income').reduce((s, t) => s + t.amount, 0);
-    const effectiveIncome = monthIncome > 0 ? monthIncome : (user.income || 0);
-    const savingsRate = effectiveIncome > 0 ? Math.round((monthSaved / effectiveIncome) * 100) : 0;
-
-    const stats = computeStats(allTxs, user.income || 0);
+    // Sent on the 1st, so this reports on the month that just ended.
+    const today = new Date();
+    const now = new Date(today.getFullYear(), today.getMonth(), 0);
+    const stats = computeStats(user, allTxs, now);
+    const { totalSpend: monthSpend, totalSaved: monthSaved, income: effectiveIncome, savingsRate } = stats;
     const grade = stats.finScore >= 90 ? 'A+' : stats.finScore >= 80 ? 'A' : stats.finScore >= 70 ? 'B+' : stats.finScore >= 60 ? 'B' : stats.finScore >= 50 ? 'C' : 'D';
     const gradeEmoji = stats.finScore >= 70 ? '🌟' : stats.finScore >= 50 ? '📈' : '⚠️';
     const monthName = now.toLocaleDateString('en-NG', { month: 'long' });
@@ -240,7 +213,7 @@ export async function sendMonthlyReportNow(userName = 'there') {
       `Income:  ${formatAmount(effectiveIncome)}\n` +
       `Spent:   ${formatAmount(monthSpend)} (${effectiveIncome > 0 ? Math.round((monthSpend/effectiveIncome)*100) : 0}%)\n` +
       `Saved:   ${formatAmount(monthSaved)} (${savingsRate}%)\n` +
-      `Broke Clock: ${stats.daysLeft >= 365 ? '365+' : stats.daysLeft}d\n` +
+      `Broke Clock: ${formatRunway(stats.daysLeft)}\n` +
       `Best streak: ${streak.longest}d\n\n` +
       `${savingsRate >= 20 ? `✅ Hit the 20% savings target!` : `⚠️ Aim for ${formatAmount(Math.round(effectiveIncome * 0.2))} savings next month.`}`;
 

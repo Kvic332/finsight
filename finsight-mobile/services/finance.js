@@ -1,0 +1,146 @@
+// ── Money calculations ────────────────────────────────────────────────────────
+// The single source for every figure shown to the user or sent to ARIA.
+// Pure functions only: no storage or React, so they can be unit tested.
+
+const CAP_DAYS = 365;
+// Early in the month one large payment (rent, school fees) would otherwise look
+// like a daily habit, so the burn rate is never averaged over less than this.
+const MIN_BURN_WINDOW_DAYS = 7;
+
+// Transactions store dates as DD/MM/YYYY (en-NG) or ISO. `new Date()` misreads
+// the first form, so always parse through here. Returns a local date or null.
+export function parseTxDate(raw) {
+  const str = String(raw || '').trim();
+  const dmy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmy) return validDate(+dmy[3], +dmy[2], +dmy[1]);
+  const iso = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return validDate(+iso[1], +iso[2], +iso[3]);
+  return null;
+}
+
+function validDate(year, month, day) {
+  const d = new Date(year, month - 1, day);
+  return d.getMonth() === month - 1 && d.getDate() === day ? d : null;
+}
+
+export function isSameMonth(raw, now = new Date()) {
+  const d = parseTxDate(raw);
+  return !!d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+}
+
+export function isSameDay(raw, day) {
+  const d = parseTxDate(raw);
+  return !!d && d.toDateString() === day.toDateString();
+}
+
+const sumAmounts = list => list.reduce((s, t) => s + (t.amount || 0), 0);
+
+// Spending leaves out money moved into savings: it's still the user's money.
+export function spendingOf(transactions) {
+  return transactions.filter(t => t.type === 'debit' && t.cat !== 'Savings');
+}
+
+// A debit tagged Savings is money moved to savings. A credit tagged Savings is
+// either the user logging a contribution by hand, or an alert showing money
+// coming back out of a savings app, which is a withdrawal.
+export function savingsFlows(transactions) {
+  const tagged = transactions.filter(t => t.cat === 'Savings');
+  const isContribution = t => t.type === 'debit' || (t.type === 'credit' && t.source === 'manual');
+  const contributed = sumAmounts(tagged.filter(isContribution));
+  const withdrawn = sumAmounts(tagged.filter(t => t.type === 'credit' && t.source !== 'manual'));
+  return { contributed, withdrawn, saved: Math.max(0, contributed - withdrawn) };
+}
+
+// Days until the next salary, or null if no salary day is set. Salary day 31 in
+// a 30-day month lands on the last day of that month.
+export function daysUntilSalary(salaryDay, now = new Date()) {
+  const day = parseInt(salaryDay, 10);
+  if (!(day >= 1 && day <= 31)) return null;
+  const payday = (year, month) => {
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    return new Date(year, month, Math.min(day, lastDay));
+  };
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let next = payday(today.getFullYear(), today.getMonth());
+  if (next < today) next = payday(today.getFullYear(), today.getMonth() + 1);
+  return Math.round((next - today) / 86400000);
+}
+
+export function runwayDays(left, dailySpend) {
+  if (!(dailySpend > 0)) return null;
+  return Math.min(CAP_DAYS, Math.floor(left / dailySpend));
+}
+
+// For notifications and ARIA. null means there's no spending to measure yet.
+export function formatRunway(days) {
+  if (days === null || days === undefined) return 'not enough data';
+  return days >= CAP_DAYS ? `${CAP_DAYS}+ days` : `${days} days`;
+}
+
+export function computeStats(user, transactions, now = new Date()) {
+  const monthTxs = transactions.filter(t => isSameMonth(t.date, now));
+  const spending = spendingOf(monthTxs);
+  const { contributed, withdrawn, saved: totalSaved } = savingsFlows(monthTxs);
+  const totalSpend = sumAmounts(spending);
+  const receivedIncome = sumAmounts(monthTxs.filter(t => t.type === 'credit' && t.cat === 'Income'));
+  // The higher of the declared income and what actually arrived, so one small
+  // credit can't replace a monthly salary before it lands.
+  const income = Math.max(user?.income || 0, receivedIncome);
+
+  const left = Math.max(0, income - totalSpend - contributed + withdrawn);
+
+  const dailySpend = totalSpend / Math.max(MIN_BURN_WINDOW_DAYS, now.getDate());
+  const daysLeft = runwayDays(left, dailySpend);
+  const daysLeftIfCut20 = runwayDays(left, dailySpend * 0.8);
+
+  const salaryIn = daysUntilSalary(user?.salaryDay, now);
+  const projectedOnPayday = salaryIn === null ? null : Math.max(0, Math.round(left - dailySpend * salaryIn));
+  const willMakePayday = salaryIn === null ? null : left >= dailySpend * salaryIn;
+
+  const savingsRate = income > 0 ? Math.round((totalSaved / income) * 100) : 0;
+
+  const categoryTotals = {};
+  spending.forEach(t => { categoryTotals[t.cat] = (categoryTotals[t.cat] || 0) + t.amount; });
+
+  // ── FinScore ───────────────────────────────────────────────────────────────
+  // Spend discipline: ratio 0 → 100, ratio 1.0 → 17, ratio ≥ 1.2 → 0
+  const spendRatio = income > 0 ? totalSpend / income : 1;
+  const spendScore = Math.max(0, Math.min(100, Math.round((1.2 - spendRatio) / 1.2 * 100)));
+  // Savings rate: saving 20% or more scores 100
+  const saveScore = Math.min(100, savingsRate * 5);
+  // Budget adherence: more categories, none dominating, and consistent tracking
+  const catValues = Object.values(categoryTotals);
+  const maxCatPct = totalSpend > 0 ? Math.max(...catValues) / totalSpend : 1;
+  const diversityPoints = Math.min(40, catValues.length * 10);
+  const balancePoints = maxCatPct < 0.5 ? 30 : maxCatPct < 0.7 ? 15 : 0;
+  const trackingPoints = Math.min(30, transactions.length * 3);
+  const txScore = Math.min(100, diversityPoints + balancePoints + trackingPoints);
+  // Investment activity: has goals, has savings or investment transactions
+  const hasGoals = (user?.goals || []).length > 0;
+  const hasSavingsTx = transactions.some(t =>
+    t.cat === 'Savings' || /cowrywise|piggyvest|invest|risevest|bamboo/i.test(t.desc || ''));
+  const investScore = Math.min(100,
+    (hasGoals ? 35 : 0) + (hasSavingsTx ? 45 : 0) +
+    (savingsRate >= 10 ? 20 : savingsRate >= 5 ? 10 : 0));
+  const finScore = Math.max(10, Math.min(100, Math.round(
+    spendScore * 0.35 + saveScore * 0.35 + txScore * 0.15 + investScore * 0.15
+  )));
+
+  // Uses all transactions so the week still works across a month boundary.
+  const allSpending = spendingOf(transactions);
+  const spendTrend = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (6 - i));
+    return {
+      day: d.toLocaleDateString('en-NG', { weekday: 'short' }),
+      spend: sumAmounts(allSpending.filter(t => isSameDay(t.date, d))),
+    };
+  });
+
+  return {
+    income, left, totalSpend, totalSaved, savingsRate, dailySpend,
+    daysLeft, daysLeftIfCut20,
+    daysUntilSalary: salaryIn, projectedOnPayday, willMakePayday,
+    categoryTotals, spendTrend, finScore,
+    scoreBreakdown: { spendScore, saveScore, txScore, investScore },
+  };
+}

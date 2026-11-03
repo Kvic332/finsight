@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DARK, LIGHT } from '../constants/theme';
+import { computeStats } from '../services/finance';
 
 const INVESTMENTS = [
   {
@@ -177,19 +178,12 @@ const INVESTMENTS = [
 export default function InvestmentsScreen({ theme, user }) {
   const T = theme === 'dark' ? DARK : LIGHT;
   const [expanded, setExpanded] = useState(null);
-  const [savedAmount, setSavedAmount] = useState(0);
+  const [leftAmount, setLeftAmount] = useState(0);
   const s = styles(T);
 
   React.useEffect(() => {
     AsyncStorage.getItem('finsight_transactions').then(raw => {
-      if (raw) {
-        const txs = JSON.parse(raw);
-        const saved = txs.filter(t => t.cat === 'Savings' && t.type === 'credit').reduce((a, t) => a + t.amount, 0);
-        const income = user?.income || 0;
-        const spend = txs.filter(t => t.type === 'debit').reduce((a, t) => a + t.amount, 0);
-        const net = Math.max(0, income - spend);
-        setSavedAmount(saved > 0 ? saved : net);
-      }
+      setLeftAmount(computeStats(user, raw ? JSON.parse(raw) : []).left);
     });
   }, []);
 
@@ -234,16 +228,16 @@ export default function InvestmentsScreen({ theme, user }) {
 
         {/* Available to invest card */}
         <View style={[s.availCard, { backgroundColor: '#13131F', borderWidth: 1, borderColor: '#6366F1' }]}>
-          <Text style={[s.availLabel, { color: 'rgba(255,255,255,0.5)' }]}>AVAILABLE TO INVEST</Text>
+          <Text style={[s.availLabel, { color: 'rgba(255,255,255,0.5)' }]}>ESTIMATED LEFT THIS MONTH</Text>
           <Text style={[s.availAmt, { color: '#818CF8' }]}>
-            ₦{savedAmount >= 1000000
-              ? `${(savedAmount/1000000).toFixed(1)}M`
-              : savedAmount >= 1000
-              ? `${(savedAmount/1000).toFixed(0)}K`
-              : savedAmount.toLocaleString()}
+            ₦{leftAmount >= 1000000
+              ? `${(leftAmount/1000000).toFixed(1)}M`
+              : leftAmount >= 1000
+              ? `${(leftAmount/1000).toFixed(0)}K`
+              : leftAmount.toLocaleString()}
           </Text>
           <Text style={[s.availSub, { color: 'rgba(255,255,255,0.35)' }]}>
-            Based on your current savings balance
+            Keep enough for bills before investing any of this
           </Text>
         </View>
 
