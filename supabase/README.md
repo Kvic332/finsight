@@ -54,3 +54,22 @@ npm run test:rules
 ```
 
 `test:rules` needs Java and uses the Firestore emulator. App calculations are tested separately with `npm test` in `finsight-mobile`.
+
+## Compare and Grow catalogue
+
+The app reads the `compare_listings` view with the publishable key. Only the service role can write. A product is listed only when all of these are true:
+
+- The product and its provider are both `published`.
+- The product has a rate, and every rate names a source and the date it was checked.
+- The provider's latest check with the right regulator is `verified` and hasn't expired.
+
+| Category | Regulators that count |
+|---|---|
+| `loan` | FCCPC or CBN |
+| `savings` | CBN |
+| `fund` | SEC |
+| `fx` | CBN |
+
+Licence checks and rate history can only be added to. To correct a check, add a new one. If two checks share a timestamp, the one that isn't `verified` wins.
+
+To test the access rules, run `tests/compare_grow.sql` against a database with the migrations applied. It stops with an error if a check fails, and rolls everything back when it finishes.
