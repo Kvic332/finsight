@@ -155,6 +155,27 @@ test('the system prompt fences the user data', () => {
   assert.match(prompt, /<financial_context>\nSpent: ₦500\n<\/financial_context>/);
 });
 
+test('the system prompt asks for plain text, since the app shows replies as they are', () => {
+  assert.match(buildSystemPrompt(''), /Write plain text/);
+});
+
+test('the naira sign survives from request to model', async () => {
+  let sent;
+  const client = new Anthropic({
+    apiKey: 'k', maxRetries: 0,
+    fetch: async (url, init) => {
+      sent = JSON.parse(init.body);
+      return new Response(JSON.stringify(apiMessage({ content: [{ type: 'text', text: 'ok' }] })), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+  const { handler } = harness({ callModel: createModelCaller(client, 'm') });
+  await handler(request({ messages: [{ role: 'user', content: 'Is ₦77 a lot?' }], context: 'Spent: ₦5,000' }));
+  assert.match(sent.system, /Spent: ₦5,000/);
+  assert.equal(sent.messages[0].content, 'Is ₦77 a lot?');
+});
+
 // ── Firebase token verification, with real signatures ─────────────────────────
 const PROJECT = 'finsight-test';
 const { publicKey, privateKey } = await generateKeyPair('RS256');
