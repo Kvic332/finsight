@@ -1,299 +1,240 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, TextInput,
-  StyleSheet, Switch, Alert, Modal, Image, AppState,
+  AppState, Image, Modal, Platform, Pressable, ScrollView, Switch, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as ImagePicker from 'expo-image-picker';
-import { DARK, LIGHT } from '../constants/theme';
+import { radius, space } from '../constants/tokens';
+import {
+  Button, Card, Chip, ConfirmSheet, Icon, IconButton, IconTile, Input, ListRow, Sheet, Text, ThemeProvider,
+  ToastProvider, tapFeedback, useTheme, useToast,
+} from '../components/ui';
 import BankImportScreen from './BankImportScreen';
 import CloudAccountScreen from './CloudAccountScreen';
 import AdminDashboardScreen from './AdminDashboardScreen';
 import DesignGalleryScreen from './DesignGalleryScreen';
-import { ThemeProvider, ToastProvider } from '../components/ui';
-import { onAuthChange, checkIsAdmin } from '../services/cloudSync';
 import PinScreen from './PinScreen';
+import { onAuthChange, checkIsAdmin } from '../services/cloudSync';
 import { scheduleDailyReminder, cancelDailyReminder } from '../services/notificationService';
 import { isNotificationAccessGranted, openNotificationAccessSettings, requestBatteryOptimizationExemption } from '../services/notificationPermission';
 import { setPickingMedia } from '../services/appState';
 import { exportCSV, exportPDF } from '../services/exportService';
+import { formatMoney, parseAmount } from '../services/format';
+import { hasPin as readHasPin, removePin, wipeAllData } from '../services/pinStore';
 
-// ── Module-level constants ─────────────────────────────────────────────────────
 const NIGERIAN_BANKS = [
-  'GTBank','Access Bank','Zenith Bank','First Bank','UBA','Fidelity Bank',
-  'Sterling Bank','Kuda Bank','OPay','PalmPay','Moniepoint','Carbon',
-  'Wema Bank','Stanbic IBTC','Union Bank','Polaris Bank','Providus Bank',
-  'VFD MFB','FCMB','Ecobank','Renmoney','Fairmoney','PiggyVest','Cowrywise',
+  'GTBank', 'Access Bank', 'Zenith Bank', 'First Bank', 'UBA', 'Fidelity Bank',
+  'Sterling Bank', 'Kuda Bank', 'OPay', 'PalmPay', 'Moniepoint', 'Carbon',
+  'Wema Bank', 'Stanbic IBTC', 'Union Bank', 'Polaris Bank', 'Providus Bank',
+  'VFD MFB', 'FCMB', 'Ecobank', 'Renmoney', 'Fairmoney', 'PiggyVest', 'Cowrywise',
 ];
-const EMPLOYMENT_TYPES  = ['Salary Earner','Business Owner','Freelancer','Student','Retired','Other'];
-const SEX_OPTIONS       = ['Male','Female','Prefer not to say'];
-
+const EMPLOYMENT_TYPES = ['Salary Earner', 'Business Owner', 'Freelancer', 'Student', 'Retired', 'Other'];
+const SEX_OPTIONS = ['Male', 'Female', 'Prefer not to say'];
 const LOCK_TIMEOUT_OPTIONS = [
-  { label: 'Immediately',    value: 0  },
-  { label: 'After 1 minute', value: 1  },
-  { label: 'After 5 minutes',value: 5  },
-  { label: 'After 15 minutes',value: 15 },
-  { label: 'After 1 hour',   value: 60 },
-  { label: 'Never',          value: -1 },
+  { label: 'Immediately', value: 0 },
+  { label: 'After 1 minute', value: 1 },
+  { label: 'After 5 minutes', value: 5 },
+  { label: 'After 15 minutes', value: 15 },
+  { label: 'After 1 hour', value: 60 },
+  { label: 'Never', value: -1 },
 ];
-
-// DOB picker constants
-const MONTHS     = ['January','February','March','April','May','June',
-                    'July','August','September','October','November','December'];
+const COMMON_PAYDAYS = ['1', '5', '10', '15', '20', '25', '28', '30'];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const MONTH_VALS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
-const DAYS       = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'));
-const NOW_YEAR   = new Date().getFullYear();
-const YEARS      = Array.from({ length: 80 }, (_, i) => String(NOW_YEAR - i));
+const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'));
+const NOW_YEAR = new Date().getFullYear();
+const YEARS = Array.from({ length: 80 }, (_, i) => String(NOW_YEAR - i));
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+const ITEM_H = 44;
 
-// ── Standalone helpers (OUTSIDE component — prevents re-mount flicker) ─────────
+const clock = (h, m) => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 
-function SettingRow({ T, s, icon, title, subtitle, onPress, right, danger }) {
+function Section({ title, children }) {
   return (
-    <TouchableOpacity style={[s.row, { borderBottomColor: T.line }]} onPress={onPress} activeOpacity={0.7}>
-      <View style={[s.rowIcon, { backgroundColor: danger ? T.rose + '22' : T.surface2 }]}>
-        <Text style={{ fontSize: 18 }}>{icon}</Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[s.rowTitle, { color: danger ? T.rose : T.ink }]}>{title}</Text>
-        {subtitle ? <Text style={[s.rowSub, { color: T.mute }]}>{subtitle}</Text> : null}
-      </View>
-      {right || <Text style={[s.rowArrow, { color: T.mute2 }]}>›</Text>}
-    </TouchableOpacity>
+    <View style={{ gap: space.sm }}>
+      <Text variant="label" family="bold" color="inkMuted" accessibilityRole="header">{title}</Text>
+      <Card padded={false} style={{ overflow: 'hidden' }}>{children}</Card>
+    </View>
   );
 }
 
-function SectionHeader({ T, s, title }) {
-  return <Text style={[s.sectionHeader, { color: T.mute }]}>{title}</Text>;
+function Row({ icon, title, subtitle, onPress, right, danger, last }) {
+  return (
+    <ListRow
+      leading={<IconTile name={icon} size={40} tone={danger ? 'negative' : 'accent'} />}
+      title={title}
+      subtitle={subtitle}
+      value={right}
+      chevron={!right && !!onPress}
+      onPress={onPress}
+      divider={!last}
+      subtitleLines={2}
+    />
+  );
 }
 
-function ModalShell({ T, s, visible, title, onClose, onSave, saveLabel = 'Save', children }) {
+function Toggle({ value, onValueChange, label }) {
+  const { c } = useTheme();
+  return (
+    <Switch
+      value={value}
+      onValueChange={onValueChange}
+      accessibilityLabel={label}
+      trackColor={{ false: c.lineStrong, true: c.accent }}
+      thumbColor="#FFFFFF"
+    />
+  );
+}
+
+// Full-screen form for longer tasks. Short ones use a Sheet.
+function FormModal({ visible, title, onClose, onSave, saveLabel = 'Save', children }) {
+  const { c } = useTheme();
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <SafeAreaView style={[s.safe, { backgroundColor: T.bg }]}>
-        <View style={[s.modalHeader, { borderBottomColor: T.line }]}>
-          <Text style={[s.modalTitle, { color: T.ink }]}>{title}</Text>
-          <TouchableOpacity onPress={onClose}>
-            <Text style={[s.modalClose, { color: T.mute }]}>✕</Text>
-          </TouchableOpacity>
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.surface }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.sm }}>
+          <IconButton icon="close" label="Close" onPress={onClose} />
+          <Text variant="bodyStrong" family="bold" accessibilityRole="header">{title}</Text>
+          <View style={{ width: 44 }} />
         </View>
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.xl, paddingTop: space.md, gap: space.lg }}>
           {children}
         </ScrollView>
-        {onSave && (
-          <View style={[s.modalFooter, { borderTopColor: T.line }]}>
-            <TouchableOpacity style={[s.saveBtn, { backgroundColor: T.lime }]} onPress={onSave}>
-              <Text style={s.saveBtnText}>{saveLabel}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        {onSave ? <View style={{ padding: space.xl, paddingTop: space.sm }}><Button full title={saveLabel} onPress={onSave} /></View> : null}
       </SafeAreaView>
     </Modal>
   );
 }
 
-function Field({ T, s, label, children }) {
+function Choice({ label, selected, onPress }) {
+  const { c } = useTheme();
   return (
-    <View style={{ marginBottom: 16 }}>
-      <Text style={[s.fieldLabel, { color: T.mute }]}>{label}</Text>
-      {children}
-    </View>
-  );
-}
-
-function FInput({ T, s, value, onChangeText, placeholder, keyboard = 'default' }) {
-  return (
-    <TextInput
-      style={[s.input, { backgroundColor: T.surface2, borderColor: T.line, color: T.ink }]}
-      value={value} onChangeText={onChangeText} placeholder={placeholder}
-      placeholderTextColor={T.mute} keyboardType={keyboard}
-      autoCapitalize={keyboard === 'email-address' ? 'none' : 'sentences'}
-    />
-  );
-}
-
-function ChipSelector({ T, s, options, selected, onSelect }) {
-  return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-      {options.map(opt => {
-        const active = selected === opt;
-        return (
-          <TouchableOpacity key={opt} onPress={() => onSelect(active ? '' : opt)}
-            style={[s.chip, { backgroundColor: active ? T.lime : T.surface2, borderColor: active ? T.limeDeep : T.line }]}>
-            <Text style={[s.chipText, { color: active ? '#0E120F' : T.ink }]}>{opt}</Text>
-          </TouchableOpacity>
-        );
+    <Pressable
+      onPress={() => { tapFeedback(); onPress(); }}
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected }}
+      style={({ pressed }) => ({
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 50,
+        paddingHorizontal: space.md + 2, borderRadius: radius.md, borderWidth: selected ? 1.5 : 0, borderColor: c.accent,
+        backgroundColor: selected ? c.accentSoft : pressed ? c.lineStrong : c.sunken,
       })}
+    >
+      <Text variant="bodyStrong" family={selected ? 'semibold' : 'medium'}>{label}</Text>
+      {selected ? <Icon name="checkmark-circle" size={22} color="accent" /> : null}
+    </Pressable>
+  );
+}
+
+function PickerColumn({ title, items, labelOf, selected, onSelect, flex = 1, scrollRef }) {
+  const { c } = useTheme();
+  return (
+    <View style={{ flex, gap: space.xs }}>
+      <Text variant="caption" family="semibold" color="inkMuted" align="center">{title}</Text>
+      <ScrollView
+        ref={scrollRef}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator={false}
+        style={{ height: 190, borderRadius: radius.md, backgroundColor: c.sunken }}
+      >
+        {items.map(item => {
+          const on = selected === item;
+          return (
+            <Pressable
+              key={item}
+              onPress={() => onSelect(item)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              style={{ height: ITEM_H, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? c.accentSoft : 'transparent' }}
+            >
+              <Text variant="bodyStrong" family={on ? 'bold' : 'regular'} color={on ? 'onAccentSoft' : 'ink'} tabular numberOfLines={1}>{labelOf(item)}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }
 
-// ── Date of Birth — 3-column scrollable picker ─────────────────────────────────
-// Stored as "DD/MM/YYYY". Auto-scrolls to current selection on open.
-const ITEM_H = 44; // row height for scroll calculation
-
-function DOBPicker({ T, value, onChange }) {
+// Stored as DD/MM/YYYY.
+function DOBPicker({ value, onChange }) {
   const parts = (value || '').split('/');
-  const [selDay,   setSelDay]   = useState(parts[0] || '');
-  const [selMonth, setSelMonth] = useState(parts[1] || '');
-  const [selYear,  setSelYear]  = useState(parts[2] || '');
-
-  const dayRef   = useRef(null);
+  const [day, setDay] = useState(parts[0] || '');
+  const [month, setMonth] = useState(parts[1] || '');
+  const [year, setYear] = useState(parts[2] || '');
+  const dayRef = useRef(null);
   const monthRef = useRef(null);
-  const yearRef  = useRef(null);
+  const yearRef = useRef(null);
 
-  // Re-sync + auto-scroll when value prop changes (modal re-opened)
   useEffect(() => {
-    const p = (value || '').split('/');
-    const d = p[0] || '';
-    const m = p[1] || '';
-    const y = p[2] || '';
-    setSelDay(d); setSelMonth(m); setSelYear(y);
-
-    // Scroll each column to show the selected item
-    setTimeout(() => {
-      if (d && dayRef.current) {
-        const idx = DAYS.indexOf(d);
-        if (idx >= 0) dayRef.current.scrollTo({ y: idx * ITEM_H, animated: false });
-      }
-      if (m && monthRef.current) {
-        const idx = MONTH_VALS.indexOf(m);
-        if (idx >= 0) monthRef.current.scrollTo({ y: idx * ITEM_H, animated: false });
-      }
-      if (y && yearRef.current) {
-        const idx = YEARS.indexOf(y);
-        if (idx >= 0) yearRef.current.scrollTo({ y: idx * ITEM_H, animated: false });
-      }
-    }, 120); // slight delay so the ScrollView has rendered
+    const [d = '', m = '', y = ''] = (value || '').split('/');
+    setDay(d); setMonth(m); setYear(y);
+    const timer = setTimeout(() => {
+      if (d) dayRef.current?.scrollTo({ y: DAYS.indexOf(d) * ITEM_H, animated: false });
+      if (m) monthRef.current?.scrollTo({ y: MONTH_VALS.indexOf(m) * ITEM_H, animated: false });
+      if (y) yearRef.current?.scrollTo({ y: YEARS.indexOf(y) * ITEM_H, animated: false });
+    }, 120);
+    return () => clearTimeout(timer);
   }, [value]);
 
-  function notify(d, m, y) {
-    if (d && m && y) onChange(`${d}/${m}/${y}`);
-  }
-
-  const colBox = {
-    borderWidth: 1, borderColor: T.line, borderRadius: 12, height: 190,
-    backgroundColor: T.surface,
-  };
-
+  const notify = (d, m, y) => { if (d && m && y) onChange(`${d}/${m}/${y}`); };
   return (
-    <View>
-      {/* Column headers */}
-      <View style={{ flexDirection: 'row', gap: 6, marginBottom: 6 }}>
-        <Text style={{ flex: 1,   fontSize: 10, color: T.mute, fontWeight: '700', letterSpacing: 1, textAlign: 'center' }}>DAY</Text>
-        <Text style={{ flex: 1.7, fontSize: 10, color: T.mute, fontWeight: '700', letterSpacing: 1, textAlign: 'center' }}>MONTH</Text>
-        <Text style={{ flex: 1.1, fontSize: 10, color: T.mute, fontWeight: '700', letterSpacing: 1, textAlign: 'center' }}>YEAR</Text>
-      </View>
-
-      <View style={{ flexDirection: 'row', gap: 6 }}>
-        {/* Day */}
-        <ScrollView ref={dayRef} style={[{ flex: 1 }, colBox]} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-          {DAYS.map(d => (
-            <TouchableOpacity key={d} onPress={() => { setSelDay(d); notify(d, selMonth, selYear); }}
-              style={{ height: ITEM_H, alignItems: 'center', justifyContent: 'center',
-                backgroundColor: selDay === d ? T.limeDeep + '30' : 'transparent' }}>
-              <Text style={{ fontSize: 15, fontWeight: selDay === d ? '800' : '400',
-                color: selDay === d ? T.limeDeep : T.ink }}>
-                {parseInt(d, 10)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Month */}
-        <ScrollView ref={monthRef} style={[{ flex: 1.7 }, colBox]} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-          {MONTH_VALS.map((m, i) => (
-            <TouchableOpacity key={m} onPress={() => { setSelMonth(m); notify(selDay, m, selYear); }}
-              style={{ height: ITEM_H, alignItems: 'center', justifyContent: 'center',
-                backgroundColor: selMonth === m ? T.limeDeep + '30' : 'transparent' }}>
-              <Text style={{ fontSize: 13, fontWeight: selMonth === m ? '800' : '400',
-                color: selMonth === m ? T.limeDeep : T.ink }}>
-                {MONTHS[i]}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Year */}
-        <ScrollView ref={yearRef} style={[{ flex: 1.1 }, colBox]} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-          {YEARS.map(y => (
-            <TouchableOpacity key={y} onPress={() => { setSelYear(y); notify(selDay, selMonth, y); }}
-              style={{ height: ITEM_H, alignItems: 'center', justifyContent: 'center',
-                backgroundColor: selYear === y ? T.limeDeep + '30' : 'transparent' }}>
-              <Text style={{ fontSize: 14, fontWeight: selYear === y ? '800' : '400',
-                color: selYear === y ? T.limeDeep : T.ink }}>
-                {y}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Selected date preview */}
-      <View style={{
-        marginTop: 12, paddingVertical: 10, paddingHorizontal: 16,
-        backgroundColor: (selDay && selMonth && selYear) ? T.limeDeep + '18' : T.surface2,
-        borderRadius: 12, alignItems: 'center',
-      }}>
-        <Text style={{
-          fontSize: 14, fontWeight: '700',
-          color: (selDay && selMonth && selYear) ? T.limeDeep : T.mute,
-        }}>
-          {(selDay && selMonth && selYear)
-            ? `${MONTHS[parseInt(selMonth, 10) - 1]} ${parseInt(selDay, 10)}, ${selYear}`
-            : 'Tap a day, month, and year above'}
-        </Text>
-      </View>
+    <View style={{ flexDirection: 'row', gap: space.sm }}>
+      <PickerColumn title="Day" items={DAYS} labelOf={d => parseInt(d, 10)} selected={day} scrollRef={dayRef} onSelect={d => { setDay(d); notify(d, month, year); }} />
+      <PickerColumn title="Month" flex={1.8} items={MONTH_VALS} labelOf={m => MONTHS[parseInt(m, 10) - 1]} selected={month} scrollRef={monthRef} onSelect={m => { setMonth(m); notify(day, m, year); }} />
+      <PickerColumn title="Year" flex={1.1} items={YEARS} labelOf={y => y} selected={year} scrollRef={yearRef} onSelect={y => { setYear(y); notify(day, month, y); }} />
     </View>
   );
 }
 
-// ── Main screen ───────────────────────────────────────────────────────────────
-
-export default function SettingsScreen({ theme, toggleTheme, user, setUser }) {
-  const T = theme === 'dark' ? DARK : LIGHT;
-  const s = styles(T);
+export default function SettingsScreen({ navigation, theme, toggleTheme, user, setUser }) {
+  const { c } = useTheme();
+  const toast = useToast();
 
   const [showEditProfile, setShowEditProfile] = useState(false);
-  const [showBanks,       setShowBanks]       = useState(false);
-  const [showGoals,       setShowGoals]       = useState(false);
-  const [showIncome,      setShowIncome]      = useState(false);
-  const [showSalaryDay,   setShowSalaryDay]   = useState(false);
-  const [showPinSetup,    setShowPinSetup]    = useState(false);
+  const [showBanks, setShowBanks] = useState(false);
+  const [showIncome, setShowIncome] = useState(false);
+  const [showSalaryDay, setShowSalaryDay] = useState(false);
+  const [showPinSetup, setShowPinSetup] = useState(false);
   const [showLockTimeout, setShowLockTimeout] = useState(false);
-  const [biometricEnabled,  setBiometricEnabled]  = useState(false);
-  const [biometricAvailable,setBiometricAvailable] = useState(false);
-  const [exporting,        setExporting]        = useState(false);
-  const [showBankImport,   setShowBankImport]   = useState(false);
-  const [showCloud,        setShowCloud]        = useState(false);
-  const [cloudUser,        setCloudUser]        = useState(null);
-  const [showAdmin,        setShowAdmin]        = useState(false);
-  const [showGallery,      setShowGallery]      = useState(false);
-  const [galleryScheme,    setGalleryScheme]    = useState('light');
-  const [isAdmin,          setIsAdmin]          = useState(false);
+  const [showBankImport, setShowBankImport] = useState(false);
+  const [showCloud, setShowCloud] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [showGallery, setShowGallery] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showCapture, setShowCapture] = useState(false);
+  const [about, setAbout] = useState(null);
+  const [confirm, setConfirm] = useState(null);
+
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [hasPin, setHasPin] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [cloudUser, setCloudUser] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [galleryScheme, setGalleryScheme] = useState('light');
 
   const [notifAccessGranted, setNotifAccessGranted] = useState(false);
-  const [reminderEnabled,    setReminderEnabled]    = useState(false);
-  const [reminderHour,       setReminderHour]       = useState(21);
-  const [reminderMinute,     setReminderMinute]     = useState(0);
-  const [showTimePicker,     setShowTimePicker]     = useState(false);
-  const [pickerHour,         setPickerHour]         = useState(21);
-  const [pickerMinute,       setPickerMinute]       = useState(0);
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [reminderHour, setReminderHour] = useState(21);
+  const [reminderMinute, setReminderMinute] = useState(0);
+  const [pickerHour, setPickerHour] = useState(21);
+  const [pickerMinute, setPickerMinute] = useState(0);
 
   const [editData, setEditData] = useState({
-    name:'', email:'', phone:'', dob:'', sex:'',
-    nationality:'Nigerian', occupation:'', employmentType:'',
-    income:'', salaryDay:'25', photo: null,
+    name: '', email: '', phone: '', dob: '', sex: '', nationality: 'Nigerian',
+    occupation: '', employmentType: '', photo: null,
   });
-  const [selectedBanks,  setSelectedBanks]  = useState([]);
-  const [goals,          setGoals]          = useState([]);
-  const [newGoalName,    setNewGoalName]    = useState('');
-  const [newGoalTarget,  setNewGoalTarget]  = useState('');
-  const [incomeInput,    setIncomeInput]    = useState('');
+  const [profileError, setProfileError] = useState('');
+  const [selectedBanks, setSelectedBanks] = useState(user?.banks || []);
+  const [incomeInput, setIncomeInput] = useState('');
+  const [incomeError, setIncomeError] = useState('');
   const [salaryDayInput, setSalaryDayInput] = useState('25');
-  const [lockTimeout,    setLockTimeout]    = useState(0);
-  const [tempLockTimeout,setTempLockTimeout]= useState(0);
+  const [salaryError, setSalaryError] = useState('');
+  const [lockTimeout, setLockTimeout] = useState(0);
+  const [tempLockTimeout, setTempLockTimeout] = useState(0);
 
   useEffect(() => {
     checkNotifAccess();
@@ -301,48 +242,37 @@ export default function SettingsScreen({ theme, toggleTheme, user, setUser }) {
     checkBiometricAvailability();
     const unsub = onAuthChange(async u => {
       setCloudUser(u);
-      if (u) { const admin = await checkIsAdmin(); setIsAdmin(admin); }
-      else setIsAdmin(false);
+      setIsAdmin(u ? await checkIsAdmin() : false);
     });
-
-    // Re-check notification access when user returns from Android settings
-    const appStateSub = AppState.addEventListener('change', (next) => {
-      if (next === 'active') checkNotifAccess();
-    });
-
-    return () => { unsub(); appStateSub.remove(); };
+    // Re-check when returning from Android's settings screen.
+    const sub = AppState.addEventListener('change', next => { if (next === 'active') checkNotifAccess(); });
+    return () => { unsub(); sub.remove(); };
   }, []);
 
   async function checkBiometricAvailability() {
     try {
-      const hasHw      = await LocalAuthentication.hasHardwareAsync();
+      const hasHw = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
       setBiometricAvailable(hasHw && isEnrolled);
-      const saved = await AsyncStorage.getItem('finsight_biometric');
-      setBiometricEnabled(saved === 'true');
-    } catch {}
+      setBiometricEnabled((await AsyncStorage.getItem('finsight_biometric')) === 'true');
+    } catch { /* no fingerprint hardware */ }
   }
 
-  async function toggleBiometric(val) {
-    if (!val) {
-      // Turning off — always allowed
+  async function toggleBiometric(on) {
+    if (!on) {
       setBiometricEnabled(false);
       await AsyncStorage.setItem('finsight_biometric', 'false');
       return;
     }
-    const pin = await AsyncStorage.getItem('finsight_pin');
-    if (!pin) {
-      Alert.alert(
-        'PIN Required',
-        'You need to set a PIN before enabling fingerprint unlock.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Set PIN Now', onPress: () => setShowPinSetup(true) },
-        ]
-      );
+    if (!(await readHasPin().catch(() => false))) {
+      setConfirm({
+        title: 'Set a PIN first',
+        body: 'Fingerprint unlock needs a PIN as a backup.',
+        confirmLabel: 'Set PIN',
+        onConfirm: () => setShowPinSetup(true),
+      });
       return;
     }
-    // Verify fingerprint once before enabling
     try {
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: 'Confirm fingerprint to enable unlock',
@@ -351,42 +281,26 @@ export default function SettingsScreen({ theme, toggleTheme, user, setUser }) {
       if (result.success) {
         setBiometricEnabled(true);
         await AsyncStorage.setItem('finsight_biometric', 'true');
-        Alert.alert('✅ Enabled', 'Fingerprint unlock is now active.');
+        toast.show('Fingerprint unlock is on', { tone: 'success' });
       }
     } catch (e) {
-      Alert.alert('Error', 'Could not verify fingerprint. Please try again.');
+      toast.show("Couldn't verify your fingerprint. Try again.", { tone: 'error' });
     }
   }
 
   async function loadSettings() {
-    const raw = await AsyncStorage.getItem('finsight_lock_timeout');
-    if (raw !== null) setLockTimeout(parseInt(raw, 10));
-
-    setEditData({
-      name:           user?.name || '',
-      email:          user?.email || '',
-      phone:          user?.phone || '',
-      dob:            user?.dob || '',
-      sex:            user?.sex || '',
-      nationality:    user?.nationality || 'Nigerian',
-      occupation:     user?.occupation || '',
-      employmentType: user?.employmentType || '',
-      income:         user?.income?.toString() || '',
-      salaryDay:      user?.salaryDay?.toString() || '25',
-      photo:          user?.photo || null,
-    });
-    setSelectedBanks(user?.banks || []);
-    setGoals(user?.goals || []);
-    setIncomeInput(user?.income?.toString() || '');
-    setSalaryDayInput(user?.salaryDay?.toString() || '25');
-
-    // Load saved reminder time
-    const [rh, rm] = await Promise.all([
+    const [lock, rh, rm, re, pinSet] = await Promise.all([
+      AsyncStorage.getItem('finsight_lock_timeout'),
       AsyncStorage.getItem('finsight_reminder_hour'),
       AsyncStorage.getItem('finsight_reminder_minute'),
+      AsyncStorage.getItem('finsight_reminder_enabled'),
+      readHasPin().catch(() => true),
     ]);
+    if (lock !== null) setLockTimeout(parseInt(lock, 10));
     if (rh !== null) setReminderHour(parseInt(rh, 10));
     if (rm !== null) setReminderMinute(parseInt(rm, 10));
+    setReminderEnabled(re === 'true');
+    setHasPin(pinSet);
   }
 
   async function checkNotifAccess() {
@@ -401,32 +315,29 @@ export default function SettingsScreen({ theme, toggleTheme, user, setUser }) {
     setUser(updated);
   }
 
-  // Open Edit Profile — always reset form fields from the current saved user data
   function openEditProfile() {
     setEditData({
-      name:           user?.name || '',
-      email:          user?.email || '',
-      phone:          user?.phone || '',
-      dob:            user?.dob || '',
-      sex:            user?.sex || '',
-      nationality:    user?.nationality || 'Nigerian',
-      occupation:     user?.occupation || '',
+      name: user?.name || '',
+      email: user?.email || '',
+      phone: user?.phone || '',
+      dob: user?.dob || '',
+      sex: user?.sex || '',
+      nationality: user?.nationality || 'Nigerian',
+      occupation: user?.occupation || '',
       employmentType: user?.employmentType || '',
-      income:         user?.income?.toString() || '',
-      salaryDay:      user?.salaryDay?.toString() || '25',
-      photo:          user?.photo || null,
+      photo: user?.photo || null,
     });
+    setProfileError('');
     setShowEditProfile(true);
   }
 
-  // ── Photo picker — suppress app-lock while the system picker is open ──────────
   async function pickPhoto() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow access to your photos to set a profile picture.');
+      toast.show('Allow photo access in your phone settings to add a picture.', { tone: 'error' });
       return;
     }
-    // Tell App.js not to lock when the picker backgrounds the app
+    // The picker backgrounds the app, which must not trigger the PIN lock.
     setPickingMedia(true);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -437,62 +348,73 @@ export default function SettingsScreen({ theme, toggleTheme, user, setUser }) {
         setEditData(d => ({ ...d, photo: `data:image/jpeg;base64,${result.assets[0].base64}` }));
       }
     } finally {
-      // Always re-enable lock (even if picker was cancelled)
       setPickingMedia(false);
     }
   }
 
   async function saveProfile() {
-    if (!editData.name.trim()) { Alert.alert('Required', 'Please enter your full name.'); return; }
-    await saveUser({ ...editData, income: parseInt(editData.income.replace(/,/g,'')) || user?.income || 0 });
+    if (!editData.name.trim()) { setProfileError('Enter your name'); return; }
+    await saveUser({ ...editData, name: editData.name.trim() });
     setShowEditProfile(false);
-    Alert.alert('✅ Saved', 'Profile updated successfully.');
+    toast.show('Profile updated', { tone: 'success' });
   }
 
   async function saveBanks() {
     await saveUser({ banks: selectedBanks });
     setShowBanks(false);
-    Alert.alert('✅ Saved', `${selectedBanks.length} bank(s) saved.`);
-  }
-
-  async function addGoal() {
-    if (!newGoalName.trim() || !newGoalTarget.trim()) {
-      Alert.alert('Required', 'Enter goal name and target amount.'); return;
-    }
-    const updated = [...goals, { id: Date.now().toString(), name: newGoalName, target: parseInt(newGoalTarget.replace(/,/g,'')), saved: 0 }];
-    setGoals(updated);
-    setNewGoalName(''); setNewGoalTarget('');
-    await saveUser({ goals: updated });
-  }
-
-  async function deleteGoal(id) {
-    const updated = goals.filter(g => g.id !== id);
-    setGoals(updated);
-    await saveUser({ goals: updated });
+    toast.show(`${selectedBanks.length} ${selectedBanks.length === 1 ? 'bank' : 'banks'} saved`, { tone: 'success' });
   }
 
   async function saveIncome() {
-    const val = parseInt(incomeInput.replace(/,/g,''));
-    if (!val || val < 1) { Alert.alert('Invalid', 'Enter a valid income amount.'); return; }
-    await saveUser({ income: val });
+    const value = parseAmount(incomeInput);
+    if (!value) { setIncomeError('Enter your monthly income, like 450,000'); return; }
+    await saveUser({ income: value });
     setShowIncome(false);
-    Alert.alert('✅ Saved', `Monthly income set to ₦${val.toLocaleString()}`);
+    toast.show(`Monthly income set to ${formatMoney(value)}`, { tone: 'success' });
   }
 
   async function saveSalaryDay() {
-    const day = parseInt(salaryDayInput);
-    if (!day || day < 1 || day > 31) { Alert.alert('Invalid', 'Enter a day between 1 and 31.'); return; }
-    await saveUser({ salaryDay: day.toString() });
+    const day = parseInt(salaryDayInput, 10);
+    if (!(day >= 1 && day <= 31)) { setSalaryError('Enter a day from 1 to 31'); return; }
+    await saveUser({ salaryDay: String(day) });
     setShowSalaryDay(false);
-    Alert.alert('✅ Saved', `Salary day set to day ${day}`);
+    toast.show(`Payday set to day ${day}`, { tone: 'success' });
+  }
+
+  async function clearSalaryDay() {
+    await saveUser({ salaryDay: '' });
+    setShowSalaryDay(false);
+    toast.show('Payday removed. Figures now follow the calendar month.');
   }
 
   async function saveLockTimeout() {
-    await AsyncStorage.setItem('finsight_lock_timeout', tempLockTimeout.toString());
+    await AsyncStorage.setItem('finsight_lock_timeout', String(tempLockTimeout));
     setLockTimeout(tempLockTimeout);
     setShowLockTimeout(false);
-    const label = LOCK_TIMEOUT_OPTIONS.find(o => o.value === tempLockTimeout)?.label || 'Immediately';
-    Alert.alert('✅ Saved', `App will lock: ${label}`);
+    toast.show('Auto-lock updated', { tone: 'success' });
+  }
+
+  async function setReminder(on) {
+    setReminderEnabled(on);
+    await AsyncStorage.setItem('finsight_reminder_enabled', String(on));
+    if (on) {
+      await scheduleDailyReminder(reminderHour, reminderMinute, firstName);
+      toast.show(`Daily reminder set for ${clock(reminderHour, reminderMinute)}`, { tone: 'success' });
+    } else {
+      await cancelDailyReminder();
+    }
+  }
+
+  async function saveReminderTime() {
+    setReminderHour(pickerHour);
+    setReminderMinute(pickerMinute);
+    setShowTimePicker(false);
+    await AsyncStorage.multiSet([
+      ['finsight_reminder_hour', String(pickerHour)],
+      ['finsight_reminder_minute', String(pickerMinute)],
+    ]);
+    if (reminderEnabled) await scheduleDailyReminder(pickerHour, pickerMinute, firstName);
+    toast.show(`Reminder time set to ${clock(pickerHour, pickerMinute)}`, { tone: 'success' });
   }
 
   async function handleExport(format) {
@@ -501,474 +423,305 @@ export default function SettingsScreen({ theme, toggleTheme, user, setUser }) {
       setExporting(true);
       const raw = await AsyncStorage.getItem('finsight_transactions');
       const transactions = raw ? JSON.parse(raw) : [];
-      if (!transactions.length) {
-        Alert.alert('No Data', 'You have no transactions to export yet.'); return;
-      }
-      if (format === 'csv') {
-        await exportCSV(transactions);
-      } else {
-        await exportPDF(transactions, user);
-      }
+      if (!transactions.length) { toast.show('You have no transactions to export yet.'); return; }
+      if (format === 'csv') await exportCSV(transactions);
+      else await exportPDF(transactions, user);
     } catch (e) {
-      Alert.alert('Export Failed', e.message || 'Something went wrong. Please try again.');
+      toast.show("Couldn't create the export. Try again.", { tone: 'error' });
     } finally {
       setExporting(false);
     }
   }
 
-  async function removePin() {
-    Alert.alert('Remove PIN', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: async () => {
-        await AsyncStorage.removeItem('finsight_pin');
-        Alert.alert('Done', 'PIN removed.');
-      }},
-    ]);
+  async function openCapture() {
+    const granted = await isNotificationAccessGranted();
+    setNotifAccessGranted(granted);
+    if (granted) toast.show('Bank alert capture is already on', { tone: 'success' });
+    else setShowCapture(true);
   }
 
-  async function clearAllData() {
-    Alert.alert('Clear All Data', 'This will delete everything and cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Clear Everything', style: 'destructive', onPress: async () => {
-        await AsyncStorage.multiRemove(['finsight_transactions','finsight_user','finsight_pin','finsight_theme','finsight_lock_timeout']);
+  async function enableCapture() {
+    setShowCapture(false);
+    await openNotificationAccessSettings();
+    setTimeout(async () => {
+      const granted = await isNotificationAccessGranted();
+      setNotifAccessGranted(granted);
+      if (granted) {
+        requestBatteryOptimizationExemption();
+        toast.show('Bank alert capture is on', { tone: 'success' });
+      }
+    }, 3000);
+  }
+
+  function askRemovePin() {
+    setConfirm({
+      title: 'Remove your PIN?',
+      body: 'Anyone holding your unlocked phone could open FinSight.',
+      confirmLabel: 'Remove PIN',
+      destructive: true,
+      onConfirm: async () => {
+        await removePin();
+        setHasPin(false);
+        setBiometricEnabled(false);
+        toast.show('PIN removed');
+      },
+    });
+  }
+
+  function askClearTransactions() {
+    setConfirm({
+      title: 'Clear all transactions?',
+      body: "This removes your whole transaction history from this phone. It can't be undone.",
+      confirmLabel: 'Clear transactions',
+      destructive: true,
+      onConfirm: async () => {
+        await AsyncStorage.removeItem('finsight_transactions');
+        toast.show('Transactions cleared');
+      },
+    });
+  }
+
+  function askDeleteEverything() {
+    setConfirm({
+      title: 'Delete everything on this phone?',
+      body: "This removes your profile, transactions, budgets, goals and PIN from this phone. It can't be undone. A cloud backup, if you made one, isn't affected.",
+      confirmLabel: 'Delete everything',
+      destructive: true,
+      onConfirm: async () => {
+        await cancelDailyReminder().catch(() => {});
+        await wipeAllData();
         setUser(null);
-      }},
-    ]);
+      },
+    });
   }
 
-  const firstName = user?.name?.split(' ')[0] || 'User';
-  const initial   = firstName[0]?.toUpperCase() || 'U';
+  const firstName = user?.name?.split(' ')[0] || 'there';
   const lockLabel = LOCK_TIMEOUT_OPTIONS.find(o => o.value === lockTimeout)?.label || 'Immediately';
+  const goalCount = (user?.goals || []).length;
+  const bankSummary = selectedBanks.length
+    ? selectedBanks.slice(0, 3).join(', ') + (selectedBanks.length > 3 ? ` +${selectedBanks.length - 3} more` : '')
+    : 'None added';
 
   return (
-    <SafeAreaView style={[s.safe, { backgroundColor: T.bg }]} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-
-        <View style={s.header}>
-          <Text style={[s.eyebrow, { color: T.mute }]}>PREFERENCES</Text>
-          <Text style={[s.title, { color: T.ink }]}>Settings</Text>
-        </View>
-
-        {/* Profile Card */}
-        <TouchableOpacity style={[s.profileCard, { backgroundColor: T.surface, borderColor: T.line }]}
-          onPress={openEditProfile} activeOpacity={0.8}>
-          <View style={[s.avatar, { backgroundColor: T.ink }]}>
-            {user?.photo
-              ? <Image source={{ uri: user.photo }} style={s.avatarImg} />
-              : <Text style={[s.avatarText, { color: T.lime }]}>{initial}</Text>}
+    <View style={{ flex: 1, backgroundColor: c.canvas }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: space.xl, paddingTop: space.sm, paddingBottom: space.huge, gap: space.xl }}>
+        <Card onPress={openEditProfile} accessibilityLabel="Edit your profile" style={{ padding: space.lg }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md + 2 }}>
+            <View style={{ width: 60, height: 60, borderRadius: 30, overflow: 'hidden', backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
+              {user?.photo
+                ? <Image source={{ uri: user.photo }} accessibilityIgnoresInvertColors style={{ width: 60, height: 60 }} />
+                : <Text variant="title" family="bold" color="onAccentSoft">{firstName[0]?.toUpperCase()}</Text>}
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text variant="heading" family="bold" numberOfLines={1}>{user?.name || 'Set up your profile'}</Text>
+              <Text variant="label" family="regular" color="inkMuted" numberOfLines={1}>{user?.employmentType || user?.email || 'Add your details'}</Text>
+            </View>
+            <Icon name="chevron-forward" size={18} color="inkSubtle" />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.profileName, { color: T.ink }]}>{user?.name || 'Tap to set up profile'}</Text>
-            <Text style={[s.profileEmail, { color: T.mute }]}>
-              {user?.employmentType || user?.email || 'No email set'}
-            </Text>
-            {user?.nationality ? <Text style={[s.profileEmail, { color: T.mute }]}>{user.nationality}</Text> : null}
-            <View style={[s.profileBadge, { backgroundColor: T.lime + '22', borderColor: T.limeDeep }]}>
-              <Text style={[s.profileBadgeText, { color: T.limeDeep }]}>Edit profile →</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
+        </Card>
 
-        <SectionHeader T={T} s={s} title="APPEARANCE" />
-        <View style={[s.section, { backgroundColor: T.surface }]}>
-          <SettingRow T={T} s={s} icon={theme==='dark'?'🌙':'☀️'} title="Theme"
-            subtitle={theme==='dark'?'Dark mode active':'Light mode active'}
-            right={<Switch value={theme==='dark'} onValueChange={toggleTheme}
-              trackColor={{ false: T.line2, true: T.limeDeep }} thumbColor={T.surface} />} />
-        </View>
+        <Section title="Your money">
+          <Row icon="cash-outline" title="Monthly income" subtitle={user?.income ? formatMoney(Number(user.income)) : 'Not set'}
+            onPress={() => { setIncomeInput(user?.income ? String(user.income) : ''); setIncomeError(''); setShowIncome(true); }} />
+          <Row icon="calendar-outline" title="Payday" subtitle={user?.salaryDay ? `Day ${user.salaryDay} of every month` : 'Not set'}
+            onPress={() => { setSalaryDayInput(user?.salaryDay || '25'); setSalaryError(''); setShowSalaryDay(true); }} />
+          <Row icon="flag-outline" title="Savings goals" subtitle={goalCount ? `${goalCount} ${goalCount === 1 ? 'goal' : 'goals'}` : 'None yet'}
+            onPress={() => navigation?.navigate('Main', { screen: 'Plan', params: { view: 'Savings' } })} />
+          <Row icon="business-outline" title="My banks" subtitle={bankSummary} onPress={() => setShowBanks(true)} last />
+        </Section>
 
-        <SectionHeader T={T} s={s} title="SECURITY" />
-        <View style={[s.section, { backgroundColor: T.surface }]}>
-          <SettingRow T={T} s={s} icon="🔐" title="Set / Change PIN" subtitle="6-digit PIN to protect your data" onPress={() => setShowPinSetup(true)} />
-          {biometricAvailable && (
-            <SettingRow T={T} s={s} icon="🫆" title="Fingerprint unlock"
-              subtitle={biometricEnabled ? 'Active — tap fingerprint to unlock' : 'Use fingerprint instead of PIN'}
-              right={<Switch value={biometricEnabled} onValueChange={toggleBiometric}
-                trackColor={{ false: T.line2, true: T.limeDeep }} thumbColor={T.surface} />} />
-          )}
-          <SettingRow T={T} s={s} icon="⏱️" title="Auto-lock timer" subtitle={lockLabel}
-            onPress={() => { setTempLockTimeout(lockTimeout); setShowLockTimeout(true); }} />
-          <SettingRow T={T} s={s} icon="🗑️" title="Remove PIN" subtitle="Disable PIN protection" onPress={removePin} />
-        </View>
+        <Section title="Alerts and reminders">
+          <Row
+            icon={notifAccessGranted ? 'checkmark-circle-outline' : 'notifications-outline'}
+            title="Capture bank alerts"
+            subtitle={notifAccessGranted ? 'On. Adds transactions from your bank notifications' : 'Add transactions from your bank notifications'}
+            onPress={openCapture}
+          />
+          <Row icon="alarm-outline" title="Daily reminder" subtitle={reminderEnabled ? `Every day at ${clock(reminderHour, reminderMinute)}` : 'A nudge to log your spending'}
+            right={<Toggle value={reminderEnabled} onValueChange={setReminder} label="Daily reminder" />} />
+          <Row icon="time-outline" title="Reminder time" subtitle={clock(reminderHour, reminderMinute)}
+            onPress={() => { setPickerHour(reminderHour); setPickerMinute(reminderMinute); setShowTimePicker(true); }} last />
+        </Section>
 
-        <SectionHeader T={T} s={s} title="NOTIFICATIONS & REMINDERS" />
-        <View style={[s.section, { backgroundColor: T.surface }]}>
-          <SettingRow T={T} s={s}
-            icon={notifAccessGranted ? '✅' : '🔔'}
-            title="Auto-capture bank alerts"
-            subtitle={notifAccessGranted ? 'Active — capturing GTBank, OPay, PalmPay etc.' : 'Tap to enable automatic detection'}
-            onPress={async () => {
-              const granted = await isNotificationAccessGranted();
-              setNotifAccessGranted(granted);
-              if (granted) {
-                Alert.alert('✅ Already Active', 'FinSight is capturing bank notifications automatically.', [{ text: 'Great!' }]);
-              } else {
-                Alert.alert('🔔 Enable Bank Alert Capture',
-                  'Allow FinSight to read bank notifications.\n\n1. Tap "Enable Now"\n2. Find FinSight\n3. Toggle ON',
-                  [{ text: 'Cancel', style: 'cancel' },
-                  { text: 'Enable Now →', onPress: async () => {
-                    await openNotificationAccessSettings();
-                    setTimeout(async () => {
-                      const g = await isNotificationAccessGranted();
-                      setNotifAccessGranted(g);
-                      if (g) { requestBatteryOptimizationExemption(); Alert.alert('🎉 Activated!', 'FinSight will now capture all bank alerts!'); }
-                    }, 3000);
-                  }}]);
-              }
-            }} />
-          <SettingRow T={T} s={s} icon="⏰" title="Daily reminder"
-            subtitle={reminderEnabled ? `ARIA reminds you at ${String(reminderHour).padStart(2,'0')}:${String(reminderMinute).padStart(2,'0')} daily` : 'Get daily nudge to log expenses'}
-            right={<Switch value={reminderEnabled} onValueChange={async val => {
-              setReminderEnabled(val);
-              if (val) {
-                await scheduleDailyReminder(reminderHour, reminderMinute, firstName);
-                Alert.alert('Reminder set!', `ARIA will remind you at ${String(reminderHour).padStart(2,'0')}:${String(reminderMinute).padStart(2,'0')}`);
-              } else await cancelDailyReminder();
-            }} trackColor={{ false: T.line2, true: T.limeDeep }} thumbColor={T.surface} />} />
-          <SettingRow T={T} s={s} icon="🕘" title="Reminder time"
-            subtitle={`Currently: ${String(reminderHour).padStart(2,'0')}:${String(reminderMinute).padStart(2,'0')}`}
-            onPress={() => { setPickerHour(reminderHour); setPickerMinute(reminderMinute); setShowTimePicker(true); }} />
-        </View>
+        <Section title="Security">
+          <Row icon="keypad-outline" title={hasPin ? 'Change PIN' : 'Set a PIN'} subtitle="6 digits to protect your data" onPress={() => setShowPinSetup(true)} last={!biometricAvailable && !hasPin} />
+          {biometricAvailable ? (
+            <Row icon="finger-print-outline" title="Fingerprint unlock" subtitle={biometricEnabled ? 'On' : 'Unlock without typing your PIN'}
+              right={<Toggle value={biometricEnabled} onValueChange={toggleBiometric} label="Fingerprint unlock" />} last={!hasPin} />
+          ) : null}
+          {hasPin ? (
+            <>
+              <Row icon="lock-closed-outline" title="Auto-lock" subtitle={lockLabel} onPress={() => { setTempLockTimeout(lockTimeout); setShowLockTimeout(true); }} />
+              <Row icon="lock-open-outline" title="Remove PIN" subtitle="Turn off PIN protection" onPress={askRemovePin} last />
+            </>
+          ) : null}
+        </Section>
 
-        <SectionHeader T={T} s={s} title="FINANCIAL PROFILE" />
-        <View style={[s.section, { backgroundColor: T.surface }]}>
-          <SettingRow T={T} s={s} icon="🏦" title="My Banks"
-            subtitle={selectedBanks.length ? selectedBanks.slice(0,3).join(', ')+(selectedBanks.length>3?` +${selectedBanks.length-3} more`:'') : 'No banks added'}
-            onPress={() => setShowBanks(true)} />
-          <SettingRow T={T} s={s} icon="🎯" title="Savings Goals"
-            subtitle={`${goals.length} goal${goals.length!==1?'s':''} active`}
-            onPress={() => setShowGoals(true)} />
-          <SettingRow T={T} s={s} icon="💰" title="Monthly Income"
-            subtitle={user?.income ? `₦${Number(user.income).toLocaleString()}` : 'Not set'}
-            onPress={() => setShowIncome(true)} />
-          <SettingRow T={T} s={s} icon="📅" title="Salary Day"
-            subtitle={user?.salaryDay ? `Day ${user.salaryDay} of every month` : 'Not set'}
-            onPress={() => setShowSalaryDay(true)} />
-        </View>
+        <Section title="Appearance">
+          <Row icon={theme === 'dark' ? 'moon-outline' : 'sunny-outline'} title="Dark mode" subtitle={theme === 'dark' ? 'On' : 'Off'}
+            right={<Toggle value={theme === 'dark'} onValueChange={toggleTheme} label="Dark mode" />} last />
+        </Section>
 
-        {isAdmin && (
-          <>
-            <SectionHeader T={T} s={s} title="ADMIN" />
-            <View style={[s.section, { backgroundColor: T.surface }]}>
-              <SettingRow T={T} s={s} icon="📡" title="Live Analytics Dashboard"
-                subtitle="Real-time stats across all users"
-                onPress={() => setShowAdmin(true)} />
-            </View>
-          </>
-        )}
+        <Section title="Your data">
+          <Row icon="cloud-outline" title="Cloud backup" subtitle={cloudUser ? `Signed in as ${cloudUser.email}` : 'Back up and restore your data'} onPress={() => setShowCloud(true)} />
+          <Row icon="document-text-outline" title="Import a statement" subtitle="Excel or CSV from your bank" onPress={() => setShowBankImport(true)} />
+          <Row icon="grid-outline" title="Export as CSV" subtitle={exporting ? 'Preparing your file' : 'Opens in Excel and Google Sheets'} onPress={() => handleExport('csv')} />
+          <Row icon="document-outline" title="Export as PDF" subtitle={exporting ? 'Preparing your file' : 'A statement to share or save'} onPress={() => handleExport('pdf')} />
+          <Row icon="trash-outline" title="Clear transactions" subtitle="Remove your transaction history" onPress={askClearTransactions} />
+          <Row icon="warning-outline" title="Delete everything" subtitle="Remove all your data from this phone" onPress={askDeleteEverything} danger last />
+        </Section>
 
-        {process.env.EXPO_PUBLIC_DESIGN_PREVIEW === '1' && (
-          <>
-            <SectionHeader T={T} s={s} title="TEST BUILD" />
-            <View style={[s.section, { backgroundColor: T.surface }]}>
-              <SettingRow T={T} s={s} icon="🎨" title="Preview new design"
-                subtitle="Components for the redesign, with sample data"
-                onPress={() => setShowGallery(true)} />
-            </View>
-          </>
-        )}
+        {isAdmin ? (
+          <Section title="Admin">
+            <Row icon="pulse-outline" title="Live analytics" subtitle="Stats across all users" onPress={() => setShowAdmin(true)} last />
+          </Section>
+        ) : null}
 
-        <SectionHeader T={T} s={s} title="DATA" />
-        <View style={[s.section, { backgroundColor: T.surface }]}>
-          <SettingRow T={T} s={s} icon="☁️" title="Cloud Account & Backup"
-            subtitle={cloudUser ? `Signed in as ${cloudUser.email}` : 'Back up & restore your data'}
-            onPress={() => setShowCloud(true)} />
-          <SettingRow T={T} s={s} icon="📊" title="Export as CSV"
-            subtitle={exporting ? 'Preparing export…' : 'Spreadsheet · opens in Excel, Google Sheets'}
-            onPress={() => handleExport('csv')} />
-          <SettingRow T={T} s={s} icon="📄" title="Export as PDF"
-            subtitle={exporting ? 'Preparing export…' : 'Formatted statement · share or save to Drive'}
-            onPress={() => handleExport('pdf')} />
-          <SettingRow T={T} s={s} icon="📂" title="Import Bank Statement"
-            subtitle="Upload CSV from GTBank, Kuda, PalmPay & more"
-            onPress={() => setShowBankImport(true)} />
-          <SettingRow T={T} s={s} icon="🔄" title="Clear Transactions" subtitle="Remove all transaction history"
-            onPress={() => Alert.alert('Clear Transactions', 'Delete all transactions?', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Clear', style: 'destructive', onPress: async () => {
-                await AsyncStorage.removeItem('finsight_transactions');
-                Alert.alert('Done', 'All transactions cleared.');
-              }},
-            ])} />
-          <SettingRow T={T} s={s} icon="🗑️" title="Delete Account" subtitle="Clear all data and start over" onPress={clearAllData} danger />
-        </View>
+        {process.env.EXPO_PUBLIC_DESIGN_PREVIEW === '1' ? (
+          <Section title="Test build">
+            <Row icon="color-palette-outline" title="Component gallery" subtitle="Shared components, with sample data" onPress={() => setShowGallery(true)} last />
+          </Section>
+        ) : null}
 
-        <SectionHeader T={T} s={s} title="ABOUT" />
-        <View style={[s.section, { backgroundColor: T.surface }]}>
-          <SettingRow T={T} s={s} icon="📖" title="How FinSight works" subtitle="Learn about FinScore, Broke Clock & ARIA"
-            onPress={() => Alert.alert('FinSight', 'FinSight is a personal finance OS built for Nigerians.\n\n• FinScore: Composite health score\n• Broke Clock™: Predicts days until broke\n• ARIA: AI finance advisor powered by Claude')} />
-          <SettingRow T={T} s={s} icon="🛡️" title="Privacy Policy" subtitle="How we handle your data"
-            onPress={() => Alert.alert('Privacy', 'All data is stored locally on your device. We never sell your data.')} />
-          <SettingRow T={T} s={s} icon="ℹ️" title="Version" subtitle="FinSight v1.0.0 · Built with ❤️ in Lagos" onPress={() => {}} />
-        </View>
+        <Section title="About">
+          <Row icon="help-circle-outline" title="How FinSight works" subtitle="FinScore, Broke Clock and ARIA"
+            onPress={() => setAbout({
+              title: 'How FinSight works',
+              body: 'Left until payday is an estimate: your income, minus what you\'ve logged or imported since your last payday. It isn\'t your bank balance.\n\nBroke Clock shows how long your money lasts at your current spending.\n\nFinScore rates your spending, saving and tracking habits out of 100.\n\nARIA answers questions about your money using Claude, an AI model. It can make mistakes, and it isn\'t financial advice.',
+            })} />
+          <Row icon="shield-checkmark-outline" title="Your privacy" subtitle="Where your data goes"
+            onPress={() => setAbout({
+              title: 'Your privacy',
+              body: 'Your transactions are stored on this phone.\n\nWhen you ask ARIA a question, a summary of your finances goes through our server to Anthropic, the AI provider, to get an answer.\n\nIf you create a cloud account, your backup and basic usage figures are stored with Google Firebase. Backups are only readable by your account.\n\nWe don\'t sell your data.',
+            })} />
+          <ListRow leading={<IconTile name="information-circle-outline" size={40} tone="accent" />} title="Version" subtitle="FinSight 1.0.0" divider={false} />
+        </Section>
       </ScrollView>
 
-      {/* ── EDIT PROFILE ──────────────────────────────────────────────────────── */}
-      <ModalShell T={T} s={s} visible={showEditProfile} title="Edit Profile"
-        onClose={() => setShowEditProfile(false)} onSave={saveProfile} saveLabel="Save Profile">
-
-        {/* Photo */}
-        <View style={{ alignItems: 'center', marginBottom: 24 }}>
-          <TouchableOpacity onPress={pickPhoto} activeOpacity={0.8}>
-            <View style={[s.photoPicker, { backgroundColor: T.surface2, borderColor: T.line }]}>
+      <FormModal visible={showEditProfile} title="Edit profile" onClose={() => setShowEditProfile(false)} onSave={saveProfile} saveLabel="Save profile">
+        <View style={{ alignItems: 'center' }}>
+          <Pressable onPress={pickPhoto} accessibilityRole="button" accessibilityLabel={editData.photo ? 'Change photo' : 'Add a photo'}>
+            <View style={{ width: 92, height: 92, borderRadius: 46, overflow: 'hidden', backgroundColor: c.sunken, alignItems: 'center', justifyContent: 'center' }}>
               {editData.photo
-                ? <Image source={{ uri: editData.photo }} style={s.photoImg} />
-                : <View style={{ alignItems: 'center', gap: 6 }}>
-                    <Text style={{ fontSize: 36 }}>📷</Text>
-                    <Text style={[s.photoLabel, { color: T.mute }]}>Add photo</Text>
-                  </View>}
+                ? <Image source={{ uri: editData.photo }} accessibilityIgnoresInvertColors style={{ width: 92, height: 92 }} />
+                : <Icon name="camera-outline" size={30} color="inkMuted" />}
             </View>
-            <View style={[s.photoEdit, { backgroundColor: T.lime }]}>
-              <Text style={{ fontSize: 12 }}>✏️</Text>
-            </View>
-          </TouchableOpacity>
+          </Pressable>
+          <Text variant="label" family="semibold" color="accent" style={{ marginTop: space.sm }}>{editData.photo ? 'Change photo' : 'Add a photo'}</Text>
         </View>
-
-        <Text style={[s.groupLabel, { color: T.mute }]}>PERSONAL INFORMATION</Text>
-        <Field T={T} s={s} label="FULL NAME *">
-          <FInput T={T} s={s} value={editData.name} onChangeText={v => setEditData(d=>({...d,name:v}))} placeholder="Your full name" />
-        </Field>
-
-        {/* DOB — 3-column wheel picker */}
-        <Field T={T} s={s} label="DATE OF BIRTH">
-          <DOBPicker T={T} value={editData.dob} onChange={v => setEditData(d => ({ ...d, dob: v }))} />
-        </Field>
-
-        <Field T={T} s={s} label="SEX">
-          <ChipSelector T={T} s={s} options={SEX_OPTIONS} selected={editData.sex} onSelect={v => setEditData(d=>({...d,sex:v}))} />
-        </Field>
-        <Field T={T} s={s} label="NATIONALITY">
-          <FInput T={T} s={s} value={editData.nationality} onChangeText={v => setEditData(d=>({...d,nationality:v}))} placeholder="e.g. Nigerian" />
-        </Field>
-
-        <Text style={[s.groupLabel, { color: T.mute, marginTop: 8 }]}>CONTACT</Text>
-        <Field T={T} s={s} label="EMAIL">
-          <FInput T={T} s={s} value={editData.email} onChangeText={v => setEditData(d=>({...d,email:v}))} placeholder="you@example.com" keyboard="email-address" />
-        </Field>
-        <Field T={T} s={s} label="PHONE NUMBER">
-          <FInput T={T} s={s} value={editData.phone} onChangeText={v => setEditData(d=>({...d,phone:v}))} placeholder="+234 800 000 0000" keyboard="phone-pad" />
-        </Field>
-
-        <Text style={[s.groupLabel, { color: T.mute, marginTop: 8 }]}>EMPLOYMENT</Text>
-        <Field T={T} s={s} label="EMPLOYMENT TYPE">
-          <ChipSelector T={T} s={s} options={EMPLOYMENT_TYPES} selected={editData.employmentType} onSelect={v => setEditData(d=>({...d,employmentType:v}))} />
-        </Field>
-        <Field T={T} s={s} label="OCCUPATION / JOB TITLE">
-          <FInput T={T} s={s} value={editData.occupation} onChangeText={v => setEditData(d=>({...d,occupation:v}))} placeholder="e.g. Software Engineer" />
-        </Field>
-
-        <Text style={[s.groupLabel, { color: T.mute, marginTop: 8 }]}>FINANCIAL</Text>
-        <Field T={T} s={s} label="MONTHLY INCOME (₦)">
-          <FInput T={T} s={s} value={editData.income} onChangeText={v => setEditData(d=>({...d,income:v}))} placeholder="e.g. 450000" keyboard="numeric" />
-        </Field>
-        <Field T={T} s={s} label="SALARY DAY (day of month)">
-          <FInput T={T} s={s} value={editData.salaryDay} onChangeText={v => setEditData(d=>({...d,salaryDay:v}))} placeholder="e.g. 25" keyboard="numeric" />
-        </Field>
-      </ModalShell>
-
-      {/* ── MY BANKS ──────────────────────────────────────────────────────────── */}
-      <ModalShell T={T} s={s} visible={showBanks} title="My Banks"
-        onClose={() => setShowBanks(false)} onSave={saveBanks} saveLabel="Save Banks">
-        <Text style={[s.modalHint, { color: T.mute, marginBottom: 16 }]}>Select all banks you use:</Text>
-        <View style={{ gap: 10 }}>
-          {NIGERIAN_BANKS.map(bank => {
-            const active = selectedBanks.includes(bank);
-            return (
-              <TouchableOpacity key={bank} activeOpacity={0.7}
-                style={[s.bankRow, { backgroundColor: active ? T.lime+'22' : T.surface2, borderColor: active ? T.limeDeep : T.line }]}
-                onPress={() => setSelectedBanks(prev => active ? prev.filter(b=>b!==bank) : [...prev,bank])}>
-                <Text style={[s.bankName, { color: T.ink }]}>{bank}</Text>
-                <Text style={{ fontSize: 18 }}>{active ? '✅' : '○'}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ModalShell>
-
-      {/* ── SAVINGS GOALS ─────────────────────────────────────────────────────── */}
-      <ModalShell T={T} s={s} visible={showGoals} title="Savings Goals" onClose={() => setShowGoals(false)}>
-        <Text style={[s.groupLabel, { color: T.mute }]}>ADD NEW GOAL</Text>
-        <TextInput style={[s.input, { backgroundColor: T.surface2, borderColor: T.line, color: T.ink, marginBottom: 10 }]}
-          placeholder="Goal name (e.g. New Laptop)" placeholderTextColor={T.mute}
-          value={newGoalName} onChangeText={setNewGoalName} />
-        <TextInput style={[s.input, { backgroundColor: T.surface2, borderColor: T.line, color: T.ink, marginBottom: 12 }]}
-          placeholder="Target amount (₦)" placeholderTextColor={T.mute} keyboardType="numeric"
-          value={newGoalTarget} onChangeText={setNewGoalTarget} />
-        <TouchableOpacity style={[s.saveBtn, { backgroundColor: T.lime, marginBottom: 28 }]} onPress={addGoal}>
-          <Text style={s.saveBtnText}>+ Add Goal</Text>
-        </TouchableOpacity>
-        {goals.length > 0 && <>
-          <Text style={[s.groupLabel, { color: T.mute }]}>YOUR GOALS</Text>
-          {goals.map(g => (
-            <View key={g.id} style={[s.goalCard, { backgroundColor: T.surface2, borderColor: T.line }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={[s.goalName, { color: T.ink }]}>{g.name}</Text>
-                <Text style={[s.goalTarget, { color: T.mute }]}>Target: ₦{Number(g.target).toLocaleString()}</Text>
-              </View>
-              <TouchableOpacity onPress={() => Alert.alert('Delete Goal', `Delete "${g.name}"?`, [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Delete', style: 'destructive', onPress: () => deleteGoal(g.id) },
-              ])}>
-                <Text style={{ fontSize: 20 }}>🗑️</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </>}
-        {goals.length === 0 && (
-          <Text style={[s.modalHint, { color: T.mute, textAlign: 'center', marginTop: 20 }]}>No goals yet. Add one above!</Text>
-        )}
-      </ModalShell>
-
-      {/* ── MONTHLY INCOME ────────────────────────────────────────────────────── */}
-      <ModalShell T={T} s={s} visible={showIncome} title="Monthly Income"
-        onClose={() => setShowIncome(false)} onSave={saveIncome} saveLabel="Save Income">
-        <Text style={[s.modalHint, { color: T.mute, marginBottom: 20 }]}>
-          Used to calculate your FinScore, Broke Clock, and savings rate.
-        </Text>
-        <Field T={T} s={s} label="MONTHLY INCOME (₦)">
-          <FInput T={T} s={s} value={incomeInput} onChangeText={setIncomeInput} placeholder="e.g. 450000" keyboard="numeric" />
-        </Field>
-        {incomeInput ? (
-          <Text style={[s.modalHint, { color: T.limeDeep, marginTop: 4 }]}>
-            = ₦{parseInt(incomeInput.replace(/,/g,'')||0).toLocaleString()} / month
-          </Text>
-        ) : null}
-      </ModalShell>
-
-      {/* ── SALARY DAY ────────────────────────────────────────────────────────── */}
-      <ModalShell T={T} s={s} visible={showSalaryDay} title="Salary Day"
-        onClose={() => setShowSalaryDay(false)} onSave={saveSalaryDay} saveLabel="Save">
-        <Text style={[s.modalHint, { color: T.mute, marginBottom: 20 }]}>
-          Which day of the month do you receive your salary or main income?
-        </Text>
-        <Field T={T} s={s} label="DAY OF MONTH (1 – 31)">
-          <FInput T={T} s={s} value={salaryDayInput} onChangeText={setSalaryDayInput} placeholder="e.g. 25" keyboard="numeric" />
-        </Field>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-          {[1,5,10,15,20,25,28,30].map(d => (
-            <TouchableOpacity key={d} onPress={() => setSalaryDayInput(d.toString())}
-              style={[s.chip, { backgroundColor: salaryDayInput===d.toString() ? T.lime : T.surface2, borderColor: salaryDayInput===d.toString() ? T.limeDeep : T.line }]}>
-              <Text style={[s.chipText, { color: salaryDayInput===d.toString() ? '#0E120F' : T.ink }]}>Day {d}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </ModalShell>
-
-      {/* ── AUTO-LOCK TIMER ───────────────────────────────────────────────────── */}
-      <ModalShell T={T} s={s} visible={showLockTimeout} title="Auto-lock Timer"
-        onClose={() => setShowLockTimeout(false)} onSave={saveLockTimeout} saveLabel="Save">
-        <Text style={[s.modalHint, { color: T.mute, marginBottom: 20 }]}>
-          How long should the app wait before asking for your PIN when you leave?
-        </Text>
-        <View style={{ gap: 10 }}>
-          {LOCK_TIMEOUT_OPTIONS.map(opt => {
-            const active = tempLockTimeout === opt.value;
-            return (
-              <TouchableOpacity key={opt.value} activeOpacity={0.7}
-                style={[s.bankRow, { backgroundColor: active ? T.lime+'22' : T.surface2, borderColor: active ? T.limeDeep : T.line }]}
-                onPress={() => setTempLockTimeout(opt.value)}>
-                <Text style={[s.bankName, { color: T.ink }]}>{opt.label}</Text>
-                <Text style={{ fontSize: 18 }}>{active ? '✅' : '○'}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ModalShell>
-
-      {/* ── TIME PICKER MODAL ─────────────────────────────────────────────────── */}
-      <Modal visible={showTimePicker} transparent animationType="fade" onRequestClose={() => setShowTimePicker(false)}>
-        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.6)', justifyContent:'center', alignItems:'center' }}>
-          <View style={{ backgroundColor:T.surface, borderRadius:20, padding:24, width:'85%' }}>
-            <Text style={{ color:T.text, fontSize:18, fontWeight:'800', marginBottom:20, textAlign:'center' }}>Set Reminder Time</Text>
-
-            {/* Hour + Minute selectors */}
-            <View style={{ flexDirection:'row', justifyContent:'center', alignItems:'flex-start', gap:16 }}>
-              {/* Hours */}
-              <View style={{ alignItems:'center', flex:1 }}>
-                <Text style={{ color:T.textMuted, fontSize:11, fontWeight:'700', letterSpacing:1.5, marginBottom:8 }}>HOUR</Text>
-                <View style={{ height:200, overflow:'hidden', borderRadius:12, backgroundColor:T.bg }}>
-                  <ScrollView showsVerticalScrollIndicator={false} snapToInterval={44} decelerationRate="fast">
-                    {Array.from({length:24},(_,i)=>i).map(h => (
-                      <TouchableOpacity key={h} onPress={() => setPickerHour(h)}
-                        style={{ height:44, justifyContent:'center', alignItems:'center',
-                          backgroundColor: pickerHour===h ? T.lime+'33' : 'transparent',
-                          borderRadius:8, marginHorizontal:4 }}>
-                        <Text style={{ color: pickerHour===h ? T.lime : T.text, fontSize:20, fontWeight: pickerHour===h?'800':'400' }}>
-                          {String(h).padStart(2,'0')}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              </View>
-
-              <Text style={{ color:T.text, fontSize:28, fontWeight:'800', marginTop:90 }}>:</Text>
-
-              {/* Minutes */}
-              <View style={{ alignItems:'center', flex:1 }}>
-                <Text style={{ color:T.textMuted, fontSize:11, fontWeight:'700', letterSpacing:1.5, marginBottom:8 }}>MINUTE</Text>
-                <View style={{ height:200, overflow:'hidden', borderRadius:12, backgroundColor:T.bg }}>
-                  <ScrollView showsVerticalScrollIndicator={false} snapToInterval={44} decelerationRate="fast">
-                    {[0,5,10,15,20,25,30,35,40,45,50,55].map(m => (
-                      <TouchableOpacity key={m} onPress={() => setPickerMinute(m)}
-                        style={{ height:44, justifyContent:'center', alignItems:'center',
-                          backgroundColor: pickerMinute===m ? T.lime+'33' : 'transparent',
-                          borderRadius:8, marginHorizontal:4 }}>
-                        <Text style={{ color: pickerMinute===m ? T.lime : T.text, fontSize:20, fontWeight: pickerMinute===m?'800':'400' }}>
-                          {String(m).padStart(2,'0')}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              </View>
-            </View>
-
-            {/* Preview */}
-            <Text style={{ color:T.textMuted, textAlign:'center', marginTop:16, fontSize:13 }}>
-              Reminder at{' '}
-              <Text style={{ color:T.lime, fontWeight:'800', fontSize:16 }}>
-                {String(pickerHour).padStart(2,'0')}:{String(pickerMinute).padStart(2,'0')}
-              </Text>
-              {' '}({pickerHour<12 ? 'AM' : 'PM'})
-            </Text>
-
-            {/* Buttons */}
-            <View style={{ flexDirection:'row', gap:12, marginTop:20 }}>
-              <TouchableOpacity onPress={() => setShowTimePicker(false)}
-                style={{ flex:1, padding:14, borderRadius:12, borderWidth:1, borderColor:T.line2, alignItems:'center' }}>
-                <Text style={{ color:T.textMuted, fontWeight:'700' }}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={async () => {
-                  setReminderHour(pickerHour);
-                  setReminderMinute(pickerMinute);
-                  setShowTimePicker(false);
-                  await AsyncStorage.setItem('finsight_reminder_hour', String(pickerHour));
-                  await AsyncStorage.setItem('finsight_reminder_minute', String(pickerMinute));
-                  if (reminderEnabled) {
-                    await scheduleDailyReminder(pickerHour, pickerMinute, firstName);
-                    Alert.alert('Reminder updated!', `ARIA will remind you at ${String(pickerHour).padStart(2,'0')}:${String(pickerMinute).padStart(2,'0')}`);
-                  }
-                }}
-                style={{ flex:1, padding:14, borderRadius:12, backgroundColor:T.lime, alignItems:'center' }}>
-                <Text style={{ color:'#0E120F', fontWeight:'800' }}>Set Time</Text>
-              </TouchableOpacity>
-            </View>
+        <Input label="Full name" placeholder="Your name" value={editData.name} error={profileError} onChangeText={v => { setEditData(d => ({ ...d, name: v })); setProfileError(''); }} />
+        <Input label="Email" placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" value={editData.email} onChangeText={v => setEditData(d => ({ ...d, email: v }))} />
+        <Input label="Phone number" placeholder="0800 000 0000" keyboardType="phone-pad" value={editData.phone} onChangeText={v => setEditData(d => ({ ...d, phone: v }))} />
+        <View style={{ gap: space.sm }}>
+          <Text variant="label">Employment</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+            {EMPLOYMENT_TYPES.map(o => <Chip key={o} label={o} selected={editData.employmentType === o} onPress={() => setEditData(d => ({ ...d, employmentType: d.employmentType === o ? '' : o }))} />)}
           </View>
         </View>
-      </Modal>
+        <Input label="Job title" placeholder="Software engineer" value={editData.occupation} onChangeText={v => setEditData(d => ({ ...d, occupation: v }))} />
+        <View style={{ gap: space.sm }}>
+          <Text variant="label">Date of birth</Text>
+          <DOBPicker value={editData.dob} onChange={v => setEditData(d => ({ ...d, dob: v }))} />
+        </View>
+        <View style={{ gap: space.sm }}>
+          <Text variant="label">Sex</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+            {SEX_OPTIONS.map(o => <Chip key={o} label={o} selected={editData.sex === o} onPress={() => setEditData(d => ({ ...d, sex: d.sex === o ? '' : o }))} />)}
+          </View>
+        </View>
+        <Input label="Nationality" placeholder="Nigerian" value={editData.nationality} onChangeText={v => setEditData(d => ({ ...d, nationality: v }))} />
+      </FormModal>
 
-      {/* ── BANK IMPORT ───────────────────────────────────────────────────────── */}
+      <FormModal visible={showBanks} title="My banks" onClose={() => setShowBanks(false)} onSave={saveBanks} saveLabel="Save banks">
+        <Text color="inkMuted">Choose every bank you use. This helps recognise your alerts and gives ARIA better answers.</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+          {NIGERIAN_BANKS.map(bank => (
+            <Chip key={bank} label={bank} selected={selectedBanks.includes(bank)} onPress={() => setSelectedBanks(prev => (prev.includes(bank) ? prev.filter(b => b !== bank) : [...prev, bank]))} />
+          ))}
+        </View>
+      </FormModal>
+
+      <Sheet visible={showIncome} onClose={() => setShowIncome(false)} title="Monthly income" footer={<Button full title="Save income" onPress={saveIncome} />}>
+        <View style={{ gap: space.md }}>
+          <Text color="inkMuted">FinSight uses this to work out what you can safely spend.</Text>
+          <Input label="Amount" prefix="₦" placeholder="450,000" keyboardType="numeric" value={incomeInput} error={incomeError} onChangeText={v => { setIncomeInput(v); setIncomeError(''); }} />
+        </View>
+      </Sheet>
+
+      <Sheet
+        visible={showSalaryDay}
+        onClose={() => setShowSalaryDay(false)}
+        title="Payday"
+        footer={(
+          <>
+            <Button full title="Save payday" onPress={saveSalaryDay} />
+            {user?.salaryDay ? <Button full title="I don't have a fixed payday" variant="ghost" onPress={clearSalaryDay} /> : null}
+          </>
+        )}
+      >
+        <View style={{ gap: space.md }}>
+          <Input label="Day of the month" placeholder="25" keyboardType="numeric" value={salaryDayInput} error={salaryError} hint="In shorter months, day 31 counts as the last day" onChangeText={v => { setSalaryDayInput(v); setSalaryError(''); }} />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+            {COMMON_PAYDAYS.map(d => <Chip key={d} label={`Day ${d}`} selected={salaryDayInput === d} onPress={() => { setSalaryDayInput(d); setSalaryError(''); }} />)}
+          </View>
+        </View>
+      </Sheet>
+
+      <Sheet visible={showLockTimeout} onClose={() => setShowLockTimeout(false)} title="Auto-lock" footer={<Button full title="Save" onPress={saveLockTimeout} />}>
+        <View accessibilityRole="radiogroup" style={{ gap: space.sm }}>
+          <Text color="inkMuted">How long FinSight waits before asking for your PIN after you leave.</Text>
+          {LOCK_TIMEOUT_OPTIONS.map(o => <Choice key={o.value} label={o.label} selected={tempLockTimeout === o.value} onPress={() => setTempLockTimeout(o.value)} />)}
+        </View>
+      </Sheet>
+
+      <Sheet visible={showTimePicker} onClose={() => setShowTimePicker(false)} title="Reminder time" footer={<Button full title={`Set to ${clock(pickerHour, pickerMinute)}`} onPress={saveReminderTime} />}>
+        <View style={{ flexDirection: 'row', gap: space.md }}>
+          <PickerColumn title="Hour" items={HOURS} labelOf={h => String(h).padStart(2, '0')} selected={pickerHour} onSelect={setPickerHour} />
+          <PickerColumn title="Minute" items={MINUTES} labelOf={m => String(m).padStart(2, '0')} selected={pickerMinute} onSelect={setPickerMinute} />
+        </View>
+      </Sheet>
+
+      <Sheet
+        visible={showCapture}
+        onClose={() => setShowCapture(false)}
+        title="Capture bank alerts"
+        footer={<Button full title="Open phone settings" onPress={enableCapture} />}
+      >
+        <View style={{ gap: space.sm }}>
+          <Text color="inkMuted">FinSight can add transactions from your bank's notifications, so you don't have to type them.</Text>
+          {['Tap Open phone settings', 'Find FinSight in the list', 'Turn it on, then come back'].map((step, i) => (
+            <View key={step} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+              <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
+                <Text variant="label" family="bold" color="onAccentSoft">{i + 1}</Text>
+              </View>
+              <Text style={{ flex: 1 }}>{step}</Text>
+            </View>
+          ))}
+        </View>
+      </Sheet>
+
+      <Sheet visible={!!about} onClose={() => setAbout(null)} title={about?.title} footer={<Button full title="Done" variant="secondary" onPress={() => setAbout(null)} />}>
+        <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+          <Text color="inkMuted">{about?.body}</Text>
+        </ScrollView>
+      </Sheet>
+
+      <ConfirmSheet
+        visible={!!confirm}
+        destructive={confirm?.destructive}
+        title={confirm?.title}
+        body={confirm?.body}
+        confirmLabel={confirm?.confirmLabel || ''}
+        onConfirm={() => { const run = confirm.onConfirm; setConfirm(null); run(); }}
+        onCancel={() => setConfirm(null)}
+      />
+
       <Modal visible={showBankImport} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowBankImport(false)}>
         <BankImportScreen theme={theme} onClose={() => setShowBankImport(false)} />
       </Modal>
-
-      {/* ── CLOUD ACCOUNT ────────────────────────────────────────────────────── */}
       <Modal visible={showCloud} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowCloud(false)}>
         <CloudAccountScreen theme={theme} onBack={() => setShowCloud(false)} />
       </Modal>
-
-      {/* ── ADMIN DASHBOARD ──────────────────────────────────────────────────── */}
       <Modal visible={showGallery} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowGallery(false)}>
         <ThemeProvider scheme={galleryScheme}>
           <ToastProvider>
@@ -980,83 +733,16 @@ export default function SettingsScreen({ theme, toggleTheme, user, setUser }) {
           </ToastProvider>
         </ThemeProvider>
       </Modal>
-
       <Modal visible={showAdmin} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowAdmin(false)}>
         <AdminDashboardScreen theme={theme} onBack={() => setShowAdmin(false)} />
       </Modal>
-
-      {/* ── PIN SETUP ─────────────────────────────────────────────────────────── */}
-      {showPinSetup && (
-        <View style={StyleSheet.absoluteFill}>
-          <PinScreen theme={theme} mode="create"
-            onSuccess={() => { setShowPinSetup(false); Alert.alert('PIN Set', 'Your PIN has been saved.'); }} />
-        </View>
-      )}
-    </SafeAreaView>
+      <Modal visible={showPinSetup} animationType="slide" statusBarTranslucent onRequestClose={() => setShowPinSetup(false)}>
+        <PinScreen
+          mode="create"
+          onCancel={() => setShowPinSetup(false)}
+          onSuccess={() => { setShowPinSetup(false); setHasPin(true); toast.show('PIN saved', { tone: 'success' }); }}
+        />
+      </Modal>
+    </View>
   );
 }
-
-const styles = (T) => StyleSheet.create({
-  safe:             { flex: 1 },
-  header:           { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 8 },
-  eyebrow:          { fontSize: 9, letterSpacing: 2.5, fontWeight: '700', marginBottom: 4 },
-  title:            { fontSize: 32, fontWeight: '800', letterSpacing: -0.8 },
-
-  // Profile card — more premium
-  profileCard: {
-    margin: 16, borderRadius: 22, padding: 20,
-    flexDirection: 'row', alignItems: 'center', gap: 16,
-    borderWidth: 1,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
-  },
-  avatar:           { width: 66, height: 66, borderRadius: 33, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-  avatarImg:        { width: 66, height: 66, borderRadius: 33 },
-  avatarText:       { fontSize: 25, fontWeight: '800' },
-  profileName:      { fontSize: 18, fontWeight: '800', marginBottom: 2, letterSpacing: -0.3 },
-  profileEmail:     { fontSize: 12, marginBottom: 6, fontWeight: '500' },
-  profileBadge:     { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
-  profileBadgeText: { fontSize: 11, fontWeight: '700' },
-
-  // Section groupings
-  sectionHeader: {
-    fontSize: 9, letterSpacing: 2.5, fontWeight: '700',
-    paddingHorizontal: 20, paddingTop: 22, paddingBottom: 10,
-  },
-  section: {
-    marginHorizontal: 16, borderRadius: 18, overflow: 'hidden',
-    borderWidth: 1, borderColor: T.line,
-  },
-  row:      { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 15, borderBottomWidth: 1 },
-  rowIcon:  { width: 38, height: 38, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
-  rowTitle: { fontSize: 15, fontWeight: '600', letterSpacing: -0.1 },
-  rowSub:   { fontSize: 12, marginTop: 2, lineHeight: 16 },
-  rowArrow: { fontSize: 20, fontWeight: '300', opacity: 0.5 },
-
-  // Modals
-  modalHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 18, borderBottomWidth: 1,
-  },
-  modalTitle:   { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
-  modalClose:   { fontSize: 20, padding: 4 },
-  modalHint:    { fontSize: 13, lineHeight: 21 },
-  modalFooter:  { padding: 20, borderTopWidth: 1 },
-  saveBtn:      { borderRadius: 16, padding: 17, alignItems: 'center' },
-  saveBtnText:  { color: '#0E120F', fontWeight: '800', fontSize: 16 },
-  fieldLabel:   { fontSize: 9, letterSpacing: 2.5, fontWeight: '700', marginBottom: 8 },
-  groupLabel:   { fontSize: 9, letterSpacing: 2.5, fontWeight: '700', marginBottom: 12 },
-  input:        { borderWidth: 1, borderRadius: 14, padding: 16, fontSize: 16, fontWeight: '500' },
-  chip:         { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12, borderWidth: 1 },
-  chipText:     { fontSize: 13, fontWeight: '600' },
-
-  photoPicker:  { width: 100, height: 100, borderRadius: 50, borderWidth: 2, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-  photoImg:     { width: 100, height: 100, borderRadius: 50 },
-  photoLabel:   { fontSize: 11, fontWeight: '500' },
-  photoEdit:    { position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  bankRow:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderRadius: 14, borderWidth: 1 },
-  bankName:     { fontSize: 15, fontWeight: '600' },
-  goalCard:     { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 10 },
-  goalName:     { fontSize: 15, fontWeight: '700', marginBottom: 2, letterSpacing: -0.2 },
-  goalTarget:   { fontSize: 12 },
-});

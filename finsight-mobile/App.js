@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, StatusBar, AppState, Alert, Platform } from 'react-native';
+import { View, StatusBar, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
@@ -11,6 +11,9 @@ import PinScreen from './screens/PinScreen';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ThemeProvider, ToastProvider, useAppFonts } from './components/ui';
 import AppNavigator from './navigation/AppNavigator';
+import { hasPin, wipeAllData } from './services/pinStore';
+import { LinearGradient } from 'expo-linear-gradient';
+import { gradients } from './constants/tokens';
 import { checkAndSendDigests } from './services/notificationService';
 import { drainPendingTransactions } from './services/notificationPermission';
 import { isPickingMedia } from './services/appState';
@@ -124,15 +127,16 @@ export default function App() {
 
   async function initApp() {
     try {
-      const [u, pin, th, bio] = await Promise.all([
+      // If the PIN can't be read, stay locked: a storage error must not open the app.
+      const pinSet = await hasPin().catch(() => true);
+      const [u, th, bio] = await Promise.all([
         AsyncStorage.getItem('finsight_user'),
-        AsyncStorage.getItem('finsight_pin'),
         AsyncStorage.getItem('finsight_theme'),
         AsyncStorage.getItem('finsight_biometric'),
       ]);
       if (th) setTheme(th);
       if (bio === 'true') setBiometricEnabled(true);
-      if (pin) setLocked(true);
+      if (pinSet) setLocked(true);
       if (u) { const p=JSON.parse(u); if (p?.setupComplete) setUser(p); }
   
       // Use u directly — no second fetch needed
@@ -216,11 +220,11 @@ export default function App() {
   //  -1  → Never (until next cold open)
   async function checkLockTimeout(elapsedMs) {
     try {
-      const [pin, raw] = await Promise.all([
-        AsyncStorage.getItem('finsight_pin'),
+      const [pinSet, raw] = await Promise.all([
+        hasPin().catch(() => true),
         AsyncStorage.getItem('finsight_lock_timeout'),
       ]);
-      if (!pin) return;
+      if (!pinSet) return;
       const minutes = raw !== null ? parseInt(raw, 10) : 0;
       if (minutes === -1) return;                        // Never
       // Require at least 5 seconds in background to avoid locking on tab switches
@@ -236,15 +240,8 @@ export default function App() {
     await AsyncStorage.setItem('finsight_theme', next);
   };
 
-  const T = theme==='dark' ? DARK : LIGHT;
-
   if (loading || !fontsReady) return (
-    <View style={{ flex:1, backgroundColor:DARK.bg, justifyContent:'center', alignItems:'center', gap:16 }}>
-      <View style={{ width:72, height:72, borderRadius:18, backgroundColor:DARK.surface, justifyContent:'center', alignItems:'center' }}>
-        <Text style={{ fontSize:44, color:DARK.lime, fontStyle:'italic' }}>f</Text>
-      </View>
-      <Text style={{ fontSize:11, color:DARK.mute, letterSpacing:4, textTransform:'uppercase' }}>Loading</Text>
-    </View>
+    <LinearGradient colors={gradients.warm} start={{ x:0, y:0 }} end={{ x:1, y:1 }} style={{ flex:1 }} />
   );
 
   return (
@@ -257,23 +254,20 @@ export default function App() {
         {!user ? (
           <Stack.Navigator screenOptions={{ headerShown:false }}>
             <Stack.Screen name="Onboarding">
-              {p=><OnboardingScreen {...p} theme={theme} onComplete={async(ud)=>{
+              {p=><OnboardingScreen {...p} onComplete={async(ud)=>{
                 await AsyncStorage.setItem('finsight_user', JSON.stringify(ud));
                 setUser(ud); setLocked(false);
               }}/>}
             </Stack.Screen>
           </Stack.Navigator>
         ) : locked ? (
-          <PinScreen theme={theme} mode="unlock"
+          <PinScreen mode="unlock"
             biometricEnabled={biometricEnabled}
             onSuccess={()=>setLocked(false)}
-            onForgot={()=>Alert.alert('Reset PIN','This will log you out. Continue?',[
-              {text:'Cancel',style:'cancel'},
-              {text:'Reset',style:'destructive',onPress:async()=>{
-                await AsyncStorage.multiRemove(['finsight_pin','finsight_user']);
-                setUser(null); setLocked(false);
-              }},
-            ])}
+            onForgot={async()=>{
+              await wipeAllData();
+              setUser(null); setLocked(false);
+            }}
           />
         ) : (
           <AppNavigator theme={theme} toggleTheme={toggleTheme} user={user} setUser={setUser}/>

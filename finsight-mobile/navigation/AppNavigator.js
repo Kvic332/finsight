@@ -1,20 +1,21 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Pressable, StatusBar, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { space } from '../constants/tokens';
 import {
-  Gradient, Icon, IconButton, SegmentedControl, Text, tapFeedback, useTheme,
+  Gradient, Icon, IconButton, Text, tapFeedback, useTheme,
 } from '../components/ui';
 import HomeScreen from '../screens/HomeScreen';
 import ActivityScreen from '../screens/ActivityScreen';
 import AddTransactionScreen from '../screens/AddTransactionScreen';
 import GrowPreviewScreen from '../screens/GrowPreviewScreen';
-import {
-  ARIAScreen, BankImportScreen, BudgetScreen, DashboardScreen, InvestmentsScreen, SavingsScreen,
-  SettingsScreen, SMSScreen,
-} from './legacyScreens';
+import PlanScreen from '../screens/PlanScreen';
+import ARIAScreen from '../screens/ARIAScreen';
+import DashboardScreen from '../screens/DashboardScreen';
+import SettingsScreen from '../screens/SettingsScreen';
+import { BankImportScreen, InvestmentsScreen, SMSScreen } from './legacyScreens';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -102,34 +103,12 @@ function WithBack({ navigation, title, children }) {
   );
 }
 
-function PlanScreen({ theme, user }) {
-  const { c, scheme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const [view, setView] = useState('Budget');
-  const Screen = view === 'Budget' ? BudgetScreen : SavingsScreen;
-  return (
-    <View style={{ flex: 1, backgroundColor: c.canvas }}>
-      <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
-      <View style={{ paddingTop: insets.top + space.sm, paddingHorizontal: space.xl, paddingBottom: space.xs }}>
-        <SegmentedControl
-          value={view}
-          onChange={setView}
-          options={[{ value: 'Budget', label: 'Budget' }, { value: 'Savings', label: 'Savings' }]}
-        />
-      </View>
-      <SafeAreaProvider style={{ flex: 1 }}>
-        <Screen theme={theme} user={user} />
-      </SafeAreaProvider>
-    </View>
-  );
-}
-
-function MainTabs({ theme, user }) {
+function MainTabs({ theme, user, setUser }) {
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={props => <AppTabBar {...props} />}>
       <Tab.Screen name="Home">{p => <HomeScreen {...p} user={user} />}</Tab.Screen>
       <Tab.Screen name="Activity">{p => <ActivityScreen {...p} user={user} />}</Tab.Screen>
-      <Tab.Screen name="Plan">{() => <PlanScreen theme={theme} user={user} />}</Tab.Screen>
+      <Tab.Screen name="Plan">{p => <PlanScreen {...p} user={user} setUser={setUser} />}</Tab.Screen>
       <Tab.Screen name="Grow">
         {p => (SHOW_GROW_PREVIEW ? <GrowPreviewScreen {...p} /> : <InvestmentsScreen {...p} theme={theme} user={user} />)}
       </Tab.Screen>
@@ -141,12 +120,12 @@ export default function AppNavigator({ theme, toggleTheme, user, setUser }) {
   const back = (title, render) => p => <WithBack navigation={p.navigation} title={title}>{render(p)}</WithBack>;
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Main">{() => <MainTabs theme={theme} user={user} />}</Stack.Screen>
+      <Stack.Screen name="Main">{() => <MainTabs theme={theme} user={user} setUser={setUser} />}</Stack.Screen>
       <Stack.Screen name="Add" options={{ presentation: 'modal', animation: 'slide_from_bottom' }}>
         {p => <AddTransactionScreen {...p} user={user} />}
       </Stack.Screen>
-      <Stack.Screen name="ARIA">{back('Ask ARIA', p => <ARIAScreen {...p} theme={theme} user={user} />)}</Stack.Screen>
-      <Stack.Screen name="Insights">{back('Insights', p => <DashboardScreen {...p} theme={theme} toggleTheme={toggleTheme} user={user} />)}</Stack.Screen>
+      <Stack.Screen name="ARIA">{p => <ARIAScreen {...p} user={user} />}</Stack.Screen>
+      <Stack.Screen name="Insights">{back('Insights', p => <DashboardScreen {...p} user={user} />)}</Stack.Screen>
       <Stack.Screen name="Settings">{back('Settings', p => <SettingsScreen {...p} theme={theme} toggleTheme={toggleTheme} user={user} setUser={setUser} />)}</Stack.Screen>
       <Stack.Screen name="ImportSMS">{back('Import bank SMS', p => <SMSScreen {...p} theme={theme} user={user} />)}</Stack.Screen>
       <Stack.Screen name="ImportStatement">

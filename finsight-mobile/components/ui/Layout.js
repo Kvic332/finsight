@@ -67,7 +67,7 @@ export function SectionHeader({ title, actionLabel, onAction }) {
 
 // Flat rows with hairlines for lists. Use inside <Card padded={false}>.
 export function ListRow({
-  leading, title, subtitle, value, valueSubtitle, chevron, onPress, divider = true, accessibilityLabel,
+  leading, title, subtitle, subtitleLines = 1, value, valueSubtitle, chevron, onPress, divider = true, accessibilityLabel,
 }) {
   const { c } = useTheme();
   const content = (
@@ -77,8 +77,8 @@ export function ListRow({
     }}>
       {leading}
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text variant="bodyStrong" numberOfLines={1}>{title}</Text>
-        {subtitle ? <Text variant="label" family="regular" color="inkMuted" numberOfLines={1}>{subtitle}</Text> : null}
+        <Text variant="bodyStrong" family="semibold" numberOfLines={1}>{title}</Text>
+        {subtitle ? <Text variant="label" family="regular" color="inkMuted" numberOfLines={subtitleLines}>{subtitle}</Text> : null}
       </View>
       {value || valueSubtitle ? (
         <View style={{ alignItems: 'flex-end', flexShrink: 0, maxWidth: '50%' }}>

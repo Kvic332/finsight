@@ -1,60 +1,92 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, TextInput,
-  StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
-  Animated, Alert,
+  ActivityIndicator, Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar,
+  TextInput, View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
-import Voice from '@react-native-voice/voice';
-import { DARK, LIGHT } from '../constants/theme';
+import { fontFamily, radius, space, type } from '../constants/tokens';
+import {
+  Chip, Gradient, Icon, IconButton, Text, tapFeedback, useTheme, useToast,
+} from '../components/ui';
+import Voice from '../services/voice';
 import { trackEvent } from '../services/cloudSync';
 import { askAria } from '../services/ariaClient';
 import { computePaydayPlan, formatRunway, isSameMonth } from '../services/finance';
 
 const QUICK_QUESTIONS = [
   'What are my top expenses?',
-  'Am I on track with savings?',
+  'Will my money reach payday?',
   'Where can I cut spending?',
-  'How long will my money last?',
-  'Best investment for me now?',
+  'Am I on track with savings?',
   'How do I improve my FinScore?',
+  'How do I start investing?',
 ];
 
-// ── Voice helpers (module-level so they don't re-create) ──────────────────────
-const VOICE_OPTIONS = { language: 'en-US', pitch: 0.82, rate: 0.92 };
+const VOICE_OPTIONS = { language: 'en-US', pitch: 1, rate: 0.95 };
 
 function cleanForSpeech(text) {
-  return text
-    .replace(/\*\*/g, '').replace(/\*/g, '').replace(/#/g, '')
-    .replace(/₦/g, 'naira ').replace(/→/g, '').replace(/•/g, '')
-    .replace(/\n+/g, ' ').trim();
+  return text.replace(/[*#•→]/g, '').replace(/₦/g, 'naira ').replace(/\n+/g, ' ').trim();
 }
 
-export default function ARIAScreen({ theme, user }) {
-  const T = theme === 'dark' ? DARK : LIGHT;
-  const s = styles(T);
+function AriaMark({ size = 32 }) {
+  return (
+    <Gradient style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center' }}>
+      <Icon name="sparkles" size={Math.round(size * 0.5)} color="#FFFFFF" />
+    </Gradient>
+  );
+}
+
+function Bubble({ role, children }) {
+  const { c } = useTheme();
+  const shape = {
+    maxWidth: '82%', paddingHorizontal: space.lg - 2, paddingVertical: space.md - 1, borderRadius: 20,
+    overflow: 'hidden',
+  };
+  if (role === 'user') {
+    return (
+      <View style={{ alignSelf: 'flex-end', ...shape, borderBottomRightRadius: 6 }}>
+        <Gradient fill />
+        <Text color="#FFFFFF" selectable>{children}</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.sm }}>
+      <AriaMark size={28} />
+      <View style={{ ...shape, flexShrink: 1, backgroundColor: c.surface, borderBottomLeftRadius: 6, borderWidth: 1, borderColor: c.line }}>
+        <Text selectable>{children}</Text>
+      </View>
+    </View>
+  );
+}
+
+export default function ARIAScreen({ navigation, user }) {
+  const { c } = useTheme();
+  const insets = useSafeAreaInsets();
+  const toast = useToast();
+  const firstName = user?.name?.split(' ')[0];
 
   const [messages, setMessages] = useState([{
     role: 'assistant',
-    content: `Hey ${user?.name?.split(' ')[0] || 'there'} 👋 I'm ARIA — your personal finance AI. I can see your spending patterns, predict cash flow, and give you honest advice. Ask me anything or tap the mic to speak.`,
+    content: `Hi${firstName ? ` ${firstName}` : ''}, I'm ARIA. I can see your spending and budgets, so ask me anything about your money.`,
   }]);
-  const [input,       setInput]       = useState('');
-  const [loading,     setLoading]     = useState(false);
-  const [transactions,setTransactions]= useState([]);
-  const [budgets,     setBudgets]     = useState([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [transactions, setTransactions] = useState([]);
+  const [budgets, setBudgets] = useState([]);
   const [isListening, setIsListening] = useState(false);
-  const [isSpeaking,  setIsSpeaking]  = useState(false);
-  const [autoSpeak,   setAutoSpeak]   = useState(true);
-  const [voiceReady,  setVoiceReady]  = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  // Off by default: reading someone's money out loud shouldn't happen unasked.
+  const [autoSpeak, setAutoSpeak] = useState(false);
+  const [voiceReady, setVoiceReady] = useState(false);
 
-  const scrollRef  = useRef(null);
-  const pulseAnim  = useRef(new Animated.Value(1)).current;
-  const micAnim    = useRef(new Animated.Value(1)).current;
+  const scrollRef = useRef(null);
+  const micScale = useRef(new Animated.Value(1)).current;
+  const sendRef = useRef(null);
 
-  // ── Load transactions whenever screen is focused ───────────────────────────
   useFocusEffect(useCallback(() => {
     Promise.all([
       AsyncStorage.getItem('finsight_transactions'),
@@ -65,21 +97,15 @@ export default function ARIAScreen({ theme, user }) {
     });
   }, []));
 
-  // ── Voice (STT) setup ──────────────────────────────────────────────────────
   useEffect(() => {
-    Voice.onSpeechStart   = () => { setIsListening(true); startMicPulse(); };
-    Voice.onSpeechEnd     = () => { setIsListening(false); stopMicPulse(); };
-    Voice.onSpeechError   = () => { setIsListening(false); stopMicPulse(); };
-    Voice.onSpeechResults = (e) => {
+    Voice.onSpeechStart = () => { setIsListening(true); pulseMic(); };
+    Voice.onSpeechEnd = () => { setIsListening(false); stopMic(); };
+    Voice.onSpeechError = () => { setIsListening(false); stopMic(); };
+    Voice.onSpeechResults = e => {
       const text = e.value?.[0] || '';
-      if (text) {
-        setInput(text);
-        send(text);
-      }
+      if (text) { setInput(text); sendRef.current?.(text); }
     };
-
     Voice.isAvailable().then(avail => setVoiceReady(!!avail)).catch(() => setVoiceReady(false));
-
     return () => {
       Voice.destroy().then(Voice.removeAllListeners).catch(() => {});
       Speech.stop();
@@ -87,53 +113,37 @@ export default function ARIAScreen({ theme, user }) {
   }, []);
 
   useEffect(() => {
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
-  }, [messages]);
+    const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    return () => clearTimeout(timer);
+  }, [messages, loading]);
 
-  // ── Animations ─────────────────────────────────────────────────────────────
-  function startPulse() {
+  function pulseMic() {
     Animated.loop(Animated.sequence([
-      Animated.timing(pulseAnim, { toValue: 1.15, duration: 600, useNativeDriver: true }),
-      Animated.timing(pulseAnim, { toValue: 1,    duration: 600, useNativeDriver: true }),
+      Animated.timing(micScale, { toValue: 1.15, duration: 400, useNativeDriver: true }),
+      Animated.timing(micScale, { toValue: 1, duration: 400, useNativeDriver: true }),
     ])).start();
   }
-  function stopPulse() { pulseAnim.stopAnimation(); pulseAnim.setValue(1); }
+  function stopMic() { micScale.stopAnimation(); micScale.setValue(1); }
 
-  function startMicPulse() {
-    Animated.loop(Animated.sequence([
-      Animated.timing(micAnim, { toValue: 1.3, duration: 400, useNativeDriver: true }),
-      Animated.timing(micAnim, { toValue: 1,   duration: 400, useNativeDriver: true }),
-    ])).start();
-  }
-  function stopMicPulse() { micAnim.stopAnimation(); micAnim.setValue(1); }
-
-  // ── Rich context for ARIA ──────────────────────────────────────────────────
   function buildContext() {
     const stats = computePaydayPlan(user, transactions);
-
     const catSummary = Object.entries(stats.categoryTotals)
       .sort((a, b) => b[1] - a[1])
       .map(([cat, amt]) => `${cat} ₦${amt.toLocaleString()}`)
       .join(', ');
-
-    // Budget summary
     const budgetSummary = budgets.map(b => {
       const spent = transactions.filter(t => {
         if (t.type !== 'debit') return false;
-        const catMatch = (t.cat||'').toLowerCase() === (b.cat||'').toLowerCase();
-        const kwMatch = (b.keywords||[]).some(k=>(t.desc||'').toLowerCase().includes(k.toLowerCase()));
+        const catMatch = (t.cat || '').toLowerCase() === (b.cat || '').toLowerCase();
+        const kwMatch = (b.keywords || []).some(k => (t.desc || '').toLowerCase().includes(k.toLowerCase()));
         return isSameMonth(t.date) && (catMatch || kwMatch);
-      }).reduce((s,t)=>s+(t.amount||0),0);
-      const pct = b.limit>0 ? Math.round(spent/b.limit*100) : 0;
-      return `${b.icon}${b.name}: ₦${spent.toLocaleString()}/₦${b.limit.toLocaleString()} (${pct}%${pct>=100?' EXCEEDED':pct>=80?' WARNING':''})`;
+      }).reduce((s, t) => s + (t.amount || 0), 0);
+      const pct = b.limit > 0 ? Math.round(spent / b.limit * 100) : 0;
+      return `${b.name}: ₦${spent.toLocaleString()}/₦${b.limit.toLocaleString()} (${pct}%${pct >= 100 ? ' EXCEEDED' : pct >= 80 ? ' WARNING' : ''})`;
     }).join(' | ');
-
-    // Goals (handle object array from SettingsScreen)
     const goalsSummary = (user?.goals || [])
-      .map(g => typeof g === 'object' ? `${g.name} (target ₦${(g.target || 0).toLocaleString()})` : String(g))
+      .map(g => (typeof g === 'object' ? `${g.name} (₦${(g.saved || 0).toLocaleString()} saved of ₦${(g.target || 0).toLocaleString()})` : String(g)))
       .join(', ');
-
-    // All transactions summary
     const recentTx = transactions.slice(0, 15)
       .map(t => `${t.type === 'debit' ? '-' : '+'}₦${t.amount.toLocaleString()} ${t.desc} [${t.cat}]`)
       .join('; ');
@@ -158,12 +168,12 @@ MONTHLY BUDGETS: ${budgetSummary || 'No budgets set'}
     `.trim();
   }
 
-  // ── Voice input (STT) ──────────────────────────────────────────────────────
   async function toggleMic() {
+    tapFeedback();
     if (isListening) {
-      try { await Voice.stop(); } catch (e) {}
+      try { await Voice.stop(); } catch (e) { /* already stopped */ }
       setIsListening(false);
-      stopMicPulse();
+      stopMic();
       return;
     }
     if (isSpeaking) { Speech.stop(); setIsSpeaking(false); }
@@ -171,220 +181,152 @@ MONTHLY BUDGETS: ${budgetSummary || 'No budgets set'}
       setInput('');
       await Voice.start('en-US');
     } catch (e) {
-      Alert.alert('Voice unavailable', 'Speech recognition is not available on this device. Please type your question instead.');
+      toast.show("Voice isn't available on this phone. Type your question instead.", { tone: 'error' });
     }
   }
 
-  // ── Voice output (TTS) ────────────────────────────────────────────────────
-  function speakText(text) {
+  function speak(text) {
     if (!autoSpeak) return;
-    if (isSpeaking) Speech.stop();
-    const clean = cleanForSpeech(text);
+    Speech.stop();
     setIsSpeaking(true);
-    Speech.speak(clean, {
+    Speech.speak(cleanForSpeech(text), {
       ...VOICE_OPTIONS,
-      onDone:  () => setIsSpeaking(false),
+      onDone: () => setIsSpeaking(false),
       onError: () => setIsSpeaking(false),
     });
   }
 
   function toggleSpeak() {
     if (isSpeaking) { Speech.stop(); setIsSpeaking(false); }
-    setAutoSpeak(prev => !prev);
+    toast.show(autoSpeak ? 'ARIA will stop reading replies aloud' : 'ARIA will read replies aloud');
+    setAutoSpeak(on => !on);
   }
 
-  // ── Send message to ARIA ───────────────────────────────────────────────────
   async function send(text) {
     const msg = (text || input).trim();
-    if (!msg) return;
-    if (isListening) { try { await Voice.stop(); } catch (e) {} }
+    if (!msg || loading) return;
+    if (isListening) { try { await Voice.stop(); } catch (e) { /* already stopped */ } }
     setInput('');
     setLoading(true);
-    startPulse();
-
-    const userMsg   = { role: 'user', content: msg };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
+    const next = [...messages, { role: 'user', content: msg }];
+    setMessages(next);
     trackEvent('aria_messages').catch(() => {});
-
     try {
-      const reply = await askAria(newMessages, buildContext());
+      const reply = await askAria(next, buildContext());
       setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
-      speakText(reply);
+      speak(reply);
     } catch (e) {
       setMessages(prev => [...prev, { role: 'assistant', content: e.message }]);
     } finally {
       setLoading(false);
-      stopPulse();
     }
   }
+  sendRef.current = send;
 
-  const isBusy = loading || isListening;
+  const status = loading ? 'Thinking' : isListening ? 'Listening' : isSpeaking ? 'Speaking' : 'Your money assistant';
+  const canSend = !!input.trim() && !loading && !isListening;
 
   return (
-    <SafeAreaView style={[s.safe, { backgroundColor: T.bg }]} edges={['top']}>
-
-      {/* Header */}
-      <View style={[s.header, { borderBottomColor: T.line }]}>
-        <Animated.View style={[s.ariaAvatar, { backgroundColor: T.ink, transform: [{ scale: pulseAnim }] }]}>
-          <Text style={{ fontSize: 20 }}>🤖</Text>
-        </Animated.View>
-        <View style={{ flex: 1 }}>
-          <Text style={[s.headerTitle, { color: T.ink }]}>ARIA</Text>
-          <Text style={[s.headerSub, { color: loading ? T.limeDeep : isListening ? T.amber : T.mute }]}>
-            {loading ? 'Thinking...' : isListening ? 'Listening...' : isSpeaking ? 'Speaking...' : 'Your AI Finance Advisor'}
-          </Text>
+    <View style={{ flex: 1, backgroundColor: c.canvas }}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <Gradient style={{
+        paddingTop: insets.top + space.xs, paddingBottom: space.md, paddingHorizontal: space.sm,
+        flexDirection: 'row', alignItems: 'center', gap: space.xs,
+      }}>
+        <IconButton icon="arrow-back" label="Back" color="#FFFFFF" onPress={() => navigation?.goBack()} />
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="sparkles" size={20} color="#FFFFFF" />
         </View>
-        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-          {/* Speaker toggle */}
-          <TouchableOpacity onPress={toggleSpeak}
-            style={[s.iconBtn, { backgroundColor: T.surface2 }]}>
-            <Text style={{ fontSize: 16 }}>{autoSpeak ? (isSpeaking ? '🔊' : '🔈') : '🔇'}</Text>
-          </TouchableOpacity>
-          <View style={[s.statusDot, { backgroundColor: loading ? T.amber : '#34D399' }]} />
+        <View style={{ flex: 1, marginLeft: space.xs }}>
+          <Text variant="heading" family="bold" color="#FFFFFF" accessibilityRole="header">ARIA</Text>
+          <Text variant="caption" color="#FFFFFF" accessibilityLiveRegion="polite">{status}</Text>
         </View>
-      </View>
+        <IconButton
+          icon={autoSpeak ? 'volume-high-outline' : 'volume-mute-outline'}
+          label={autoSpeak ? 'Stop reading replies aloud' : 'Read replies aloud'}
+          color="#FFFFFF"
+          onPress={toggleSpeak}
+        />
+      </Gradient>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} keyboardVerticalOffset={90}>
-
-        {/* Messages */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={{ padding: 16, paddingBottom: 24, gap: 12 }}
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ padding: space.lg, gap: space.md }}
         >
-          {messages.map((msg, i) => (
-            <View key={i} style={[s.msgWrap, msg.role === 'user' ? s.userWrap : s.ariaWrap]}>
-              {msg.role === 'assistant' && (
-                <View style={s.msgAvatar}>
-                  <Text style={{ fontSize: 14 }}>🤖</Text>
-                </View>
-              )}
-              <View style={[
-                s.bubble,
-                msg.role === 'user'
-                  ? { backgroundColor: T.limeDeep, borderBottomRightRadius: 4 }
-                  : { backgroundColor: T.surface, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: T.line },
-              ]}>
-                <Text style={[s.msgText, { color: msg.role === 'user' ? '#FFFFFF' : T.ink }]}>
-                  {msg.content}
-                </Text>
+          {messages.map((m, i) => <Bubble key={i} role={m.role}>{m.content}</Bubble>)}
+          {loading ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+              <AriaMark size={28} />
+              <View style={{ paddingHorizontal: space.lg, paddingVertical: space.md, borderRadius: 20, borderBottomLeftRadius: 6, backgroundColor: c.surface, borderWidth: 1, borderColor: c.line }}>
+                <ActivityIndicator size="small" color={c.accent} />
               </View>
             </View>
-          ))}
-
-          {loading && (
-            <View style={s.ariaWrap}>
-              <View style={s.msgAvatar}>
-                <Text style={{ fontSize: 14 }}>🤖</Text>
-              </View>
-              <View style={[s.bubble, { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line }]}>
-                <ActivityIndicator size="small" color={T.limeDeep} />
+          ) : null}
+          {messages.length === 1 ? (
+            <View style={{ gap: space.sm, marginTop: space.sm }}>
+              <Text variant="label" family="semibold" color="inkMuted">Try asking</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+                {QUICK_QUESTIONS.map(q => <Chip key={q} label={q} onPress={() => send(q)} />)}
               </View>
             </View>
-          )}
-
-          {/* Quick questions — shown only on fresh conversation */}
-          {messages.length === 1 && (
-            <View style={{ gap: 8, marginTop: 8 }}>
-              <Text style={[s.quickLabel, { color: T.mute }]}>QUICK QUESTIONS</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {QUICK_QUESTIONS.map((q, i) => (
-                  <TouchableOpacity key={i} style={[s.quickPill, { backgroundColor: T.surface, borderColor: T.line }]}
-                    onPress={() => send(q)}>
-                    <Text style={[s.quickText, { color: T.ink2 }]}>{q}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
+          ) : null}
         </ScrollView>
 
-        {/* Input row */}
-        <View style={[s.inputRow, { backgroundColor: T.bg, borderTopColor: T.line }]}>
-
-          {/* Mic button */}
-          <Animated.View style={{ transform: [{ scale: micAnim }] }}>
-            <TouchableOpacity
-              style={[s.micBtn, {
-                backgroundColor: isListening ? T.rose : T.surface2,
-                borderColor: isListening ? T.rose : T.line,
-              }]}
-              onPress={toggleMic}
-              disabled={loading}
-            >
-              <Text style={{ fontSize: 20 }}>{isListening ? '⏹' : '🎙️'}</Text>
-            </TouchableOpacity>
-          </Animated.View>
-
+        <View style={{
+          flexDirection: 'row', alignItems: 'flex-end', gap: space.sm, backgroundColor: c.surface,
+          paddingHorizontal: space.md, paddingTop: space.sm + 2, paddingBottom: space.xs,
+          borderTopWidth: 1, borderTopColor: c.line,
+        }}>
+          {voiceReady ? (
+            <Animated.View style={{ transform: [{ scale: micScale }] }}>
+              <Pressable
+                onPress={toggleMic}
+                disabled={loading}
+                accessibilityRole="button"
+                accessibilityLabel={isListening ? 'Stop listening' : 'Ask by voice'}
+                style={{
+                  width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: isListening ? c.negativeSoft : c.sunken,
+                }}
+              >
+                <Icon name={isListening ? 'stop' : 'mic-outline'} size={22} color={isListening ? 'negative' : 'ink'} />
+              </Pressable>
+            </Animated.View>
+          ) : null}
           <TextInput
-            style={[s.input, { backgroundColor: T.surface, borderColor: T.line, color: T.ink }]}
-            placeholder={isListening ? 'Listening...' : 'Ask ARIA anything...'}
-            placeholderTextColor={T.mute}
+            accessibilityLabel="Ask ARIA a question"
             value={input}
             onChangeText={setInput}
+            placeholder={isListening ? 'Listening' : 'Ask about your money'}
+            placeholderTextColor={c.inkSubtle}
             multiline
             maxLength={500}
             editable={!isListening}
+            style={{
+              flex: 1, minHeight: 44, maxHeight: 120, paddingHorizontal: space.lg, paddingTop: space.md - 1, paddingBottom: space.md - 1,
+              borderRadius: radius.lg - 2, backgroundColor: c.sunken, color: c.ink,
+              fontFamily: fontFamily.regular, fontSize: type.body.fontSize, outlineStyle: 'none',
+            }}
           />
-
-          <TouchableOpacity
-            style={[s.sendBtn, { backgroundColor: input.trim() ? T.lime : T.surface2 }]}
-            onPress={() => send()}
-            disabled={isBusy || !input.trim()}
+          <Pressable
+            onPress={() => { tapFeedback(); send(); }}
+            disabled={!canSend}
+            accessibilityRole="button"
+            accessibilityLabel="Send"
+            accessibilityState={{ disabled: !canSend }}
+            style={{ width: 44, height: 44, borderRadius: 22, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: c.sunken }}
           >
-            <Text style={{ fontSize: 18 }}>→</Text>
-          </TouchableOpacity>
+            {canSend ? <Gradient fill /> : null}
+            <Icon name="arrow-up" size={22} color={canSend ? '#FFFFFF' : 'inkSubtle'} />
+          </Pressable>
+        </View>
+        <View style={{ backgroundColor: c.surface, paddingBottom: Math.max(insets.bottom, space.xs), paddingHorizontal: space.md }}>
+          <Text variant="caption" color="inkSubtle" align="center">ARIA can make mistakes. General information, not financial advice.</Text>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
-
-const styles = (T) => StyleSheet.create({
-  safe: { flex: 1 },
-  header: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    padding: 16, borderBottomWidth: 1,
-  },
-  ariaAvatar: {
-    width: 44, height: 44, borderRadius: 22,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  headerTitle: { fontSize: 16, fontWeight: '800' },
-  headerSub:   { fontSize: 12, marginTop: 1 },
-  statusDot:   { width: 8, height: 8, borderRadius: 4 },
-  iconBtn:     { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center' },
-
-  msgWrap:  { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
-  userWrap: { justifyContent: 'flex-end' },
-  ariaWrap: { justifyContent: 'flex-start' },
-  msgAvatar: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: T.surface2, justifyContent: 'center', alignItems: 'center',
-  },
-  bubble:  { maxWidth: '80%', borderRadius: 18, padding: 14 },
-  msgText: { fontSize: 14, lineHeight: 20 },
-
-  quickLabel: { fontSize: 10, letterSpacing: 2, fontWeight: '600' },
-  quickPill:  { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
-  quickText:  { fontSize: 12, fontWeight: '500' },
-
-  inputRow: {
-    flexDirection: 'row', alignItems: 'flex-end', gap: 8,
-    padding: 12, borderTopWidth: 1, paddingBottom: 16,
-  },
-  micBtn: {
-    width: 44, height: 44, borderRadius: 22,
-    justifyContent: 'center', alignItems: 'center', borderWidth: 1,
-  },
-  input: {
-    flex: 1, borderWidth: 1, borderRadius: 20,
-    paddingHorizontal: 16, paddingVertical: 10,
-    fontSize: 14, maxHeight: 120,
-  },
-  sendBtn: {
-    width: 44, height: 44, borderRadius: 22,
-    justifyContent: 'center', alignItems: 'center',
-  },
-});

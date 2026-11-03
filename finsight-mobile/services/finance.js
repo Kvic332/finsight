@@ -12,7 +12,11 @@ const MIN_BURN_WINDOW_DAYS = 7;
 export function parseTxDate(raw) {
   const str = String(raw || '').trim();
   const dmy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (dmy) return validDate(+dmy[3], +dmy[2], +dmy[1]);
+  if (dmy) {
+    // Normally day first. A "month" over 12 means this one was written month first.
+    const [day, month] = +dmy[2] > 12 ? [+dmy[2], +dmy[1]] : [+dmy[1], +dmy[2]];
+    return validDate(+dmy[3], month, day);
+  }
   const iso = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (iso) return validDate(+iso[1], +iso[2], +iso[3]);
   return null;

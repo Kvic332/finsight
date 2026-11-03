@@ -6,10 +6,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from './constants/tokens';
 import { Icon, ThemeProvider, ToastProvider, useAppFonts } from './components/ui';
 import AppNavigator from './navigation/AppNavigator';
+import OnboardingScreen from './screens/OnboardingScreen';
+import PinScreen from './screens/PinScreen';
 
 // The web build only previews the design while building it. It runs the real
 // screens on made-up data; bank capture, voice and biometrics stay in App.js.
-const USER = { name: 'Ada Obi', income: 450000, salaryDay: 25, goals: [], setupComplete: true };
+const INITIAL_USER = { name: 'Ada Obi', income: 450000, salaryDay: 25, goals: [{ id: 'g1', name: 'Emergency Fund', target: 500000, saved: 185000 }, { id: 'g2', name: 'New Laptop', target: 350000, saved: 350000 }], setupComplete: true };
 
 function dayString(daysAgo) {
   const d = new Date();
@@ -31,10 +33,20 @@ export default function WebPreview() {
   const fontsReady = useAppFonts();
   const [scheme, setScheme] = useState('light');
   const [seeded, setSeeded] = useState(false);
+  const [user, setUser] = useState(INITIAL_USER);
+  // Preview a single screen with ?view=onboarding or ?view=pin.
+  const view = new URLSearchParams(window.location.search).get('view');
   const c = colors[scheme];
 
   useEffect(() => {
-    AsyncStorage.setItem('finsight_transactions', JSON.stringify(SAMPLE)).finally(() => setSeeded(true));
+    AsyncStorage.multiSet([
+      ['finsight_transactions', JSON.stringify(SAMPLE)],
+      ['finsight_budgets', JSON.stringify([
+        { id: 'b1', name: 'Food', cat: 'Food', limit: 60000, keywords: [] },
+        { id: 'b2', name: 'Transport', cat: 'Transport', limit: 3500, keywords: [] },
+        { id: 'b3', name: 'Netflix', cat: 'Entertainment', limit: 7000, keywords: ['netflix'] },
+      ])],
+    ]).finally(() => setSeeded(true));
   }, []);
 
   if (!fontsReady || !seeded) {
@@ -52,12 +64,16 @@ export default function WebPreview() {
           <View style={{ flex: 1, width: '100%', maxWidth: 420, overflow: 'hidden' }}>
             <ToastProvider>
               <NavigationContainer>
-                <AppNavigator
-                  theme={scheme}
-                  toggleTheme={() => setScheme(s => (s === 'dark' ? 'light' : 'dark'))}
-                  user={USER}
-                  setUser={() => {}}
-                />
+                {view === 'onboarding' ? <OnboardingScreen onComplete={() => {}} />
+                  : view === 'pin' ? <PinScreen mode="unlock" onSuccess={() => {}} onForgot={() => {}} />
+                  : (
+                    <AppNavigator
+                      theme={scheme}
+                      toggleTheme={() => setScheme(s => (s === 'dark' ? 'light' : 'dark'))}
+                      user={user}
+                      setUser={setUser}
+                    />
+                  )}
               </NavigationContainer>
             </ToastProvider>
             <Pressable

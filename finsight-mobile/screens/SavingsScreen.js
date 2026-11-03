@@ -1,261 +1,233 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useCallback, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { space } from '../constants/tokens';
+import {
+  Badge, Button, Card, ConfirmSheet, EmptyState, Gradient, Icon, IconTile, Input, Money, ProgressBar, Sheet,
+  Text, useTheme, useToast,
+} from '../components/ui';
 import { computeStats, savingsFlows } from '../services/finance';
-import { DARK, LIGHT } from '../constants/theme';
+import { formatMoney, parseAmount } from '../services/format';
+import { addToGoal, goalProgress, normalizeGoals } from '../services/plans';
+import { addTransaction, loadTransactions } from '../services/transactions';
+import { awardXP } from '../services/xpService';
 import { trackEvent } from '../services/cloudSync';
+import { TransactionRow } from './HomeScreen';
 
-const GOAL_COLORS = ['#E0165F', '#C4124F', '#FBBF24', '#F87171', '#34D399'];
-const GOAL_ICONS = ['🛡️', '💻', '✈️', '🏠', '🎯', '🚗', '💍', '🎓'];
-const GOAL_TARGETS = {
-  'Emergency Fund': 500000,
-  'New Laptop': 350000,
-  'Travel': 200000,
-  'House': 5000000,
-  'Car': 2000000,
-  'Business': 1000000,
-  'Wedding': 1500000,
-  'Education': 800000,
-};
+const TARGET_RATE = 20;
 
-export default function SavingsScreen({ theme, user }) {
-  const T = theme === 'dark' ? DARK : LIGHT;
-  const [transactions, setTransactions] = useState([]);
-  const [refreshing, setRefreshing] = useState(false);
-  const s = styles(T);
-
-  async function load() {
-    const raw = await AsyncStorage.getItem('finsight_transactions');
-    if (raw) setTransactions(JSON.parse(raw));
-  }
-
-  useEffect(() => { load(); trackEvent('savings_interactions').catch(() => {}); }, []);
-
-  async function onRefresh() {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  }
-
-  // ── Compute savings properly ───────────────────────────────────────────────
-  // Only money actually moved to savings counts. Unspent income isn't savings.
-  const totalSaved = savingsFlows(transactions).saved;
-  const { income: effectiveIncome, savingsRate, totalSpend, totalSaved: savedThisMonth } = computeStats(user, transactions);
-
-  // Build goals from user profile.
-  // user.goals is an array of objects { id, name, target, saved } (set in SettingsScreen).
-  // Guard against the old string-array format for backwards compatibility.
-  const rawGoals = user?.goals || [];
-  const perGoalSaved = rawGoals.length > 0
-    ? Math.floor(totalSaved / rawGoals.length)
-    : 0;
-
-  const goals = rawGoals.map((item, i) => {
-    const isObj = item && typeof item === 'object';
-    const name   = isObj ? (item.name || 'Goal') : String(item);
-    const target = isObj
-      ? (item.target || GOAL_TARGETS[item.name] || 500000)
-      : (GOAL_TARGETS[item] || 500000);
-    return {
-      name,
-      saved: perGoalSaved,
-      target,
-      icon:  GOAL_ICONS[i % GOAL_ICONS.length],
-      color: GOAL_COLORS[i % GOAL_COLORS.length],
-    };
-  });
-
-  // Savings transactions list
-  const savingsTxs = transactions
-    .filter(t => t.cat === 'Savings' || (t.type === 'credit' && t.cat === 'Income'))
-    .slice(0, 5);
-
+function SnapshotRow({ label, value, of, tone }) {
   return (
-    <SafeAreaView style={[s.safe, { backgroundColor: T.bg }]} edges={['top']}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={T.lime} />}
-      >
-        <Text style={[s.eyebrow, { color: T.mute }]}>GOALS & PROGRESS</Text>
-        <Text style={[s.title, { color: T.ink }]}>Savings</Text>
-
-        {/* Stats Row */}
-        <View style={s.statsRow}>
-          {[
-            { label: 'TOTAL SAVED', value: `₦${totalSaved >= 1000 ? (totalSaved/1000).toFixed(0)+'K' : totalSaved.toLocaleString()}`, color: T.limeDeep },
-            { label: 'SAVINGS RATE', value: `${savingsRate}%`, color: savingsRate >= 20 ? T.limeDeep : savingsRate >= 10 ? T.amber : T.rose },
-            { label: 'ACTIVE GOALS', value: `${goals.length}`, color: T.indigo },
-          ].map((stat, i) => (
-            <View key={i} style={[s.statCard, { backgroundColor: T.surface }]}>
-              <Text style={[s.statLabel, { color: T.mute }]}>{stat.label}</Text>
-              <Text style={[s.statVal, { color: stat.color }]}>{stat.value}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Target vs Actual */}
-        <View style={[s.summaryCard, { backgroundColor: T.surface }]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
-            <Text style={[s.cardTitle, { color: T.ink }]}>Monthly snapshot</Text>
-            <Text style={[s.cardSub, { color: T.mute }]}>Target: 20%</Text>
-          </View>
-          <View style={{ gap: 12 }}>
-            <View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
-                <Text style={[s.barLabel, { color: T.ink2 }]}>Income</Text>
-                <Text style={[s.barLabel, { color: T.limeDeep, fontWeight: '700' }]}>₦{effectiveIncome.toLocaleString()}</Text>
-              </View>
-              <View style={[s.barTrack, { backgroundColor: T.line }]}>
-                <View style={[s.barFill, { width: '100%', backgroundColor: T.limeDeep }]} />
-              </View>
-            </View>
-            <View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
-                <Text style={[s.barLabel, { color: T.ink2 }]}>Spent</Text>
-                <Text style={[s.barLabel, { color: T.rose, fontWeight: '700' }]}>₦{totalSpend.toLocaleString()}</Text>
-              </View>
-              <View style={[s.barTrack, { backgroundColor: T.line }]}>
-                <View style={[s.barFill, {
-                  width: effectiveIncome > 0 ? `${Math.min(100, (totalSpend/effectiveIncome)*100)}%` : '0%',
-                  backgroundColor: T.rose,
-                }]} />
-              </View>
-            </View>
-            <View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
-                <Text style={[s.barLabel, { color: T.ink2 }]}>Saved</Text>
-                <Text style={[s.barLabel, { color: T.limeDeep, fontWeight: '700' }]}>₦{savedThisMonth.toLocaleString()}</Text>
-              </View>
-              <View style={[s.barTrack, { backgroundColor: T.line }]}>
-                <View style={[s.barFill, {
-                  width: effectiveIncome > 0 ? `${Math.min(100, (savedThisMonth/effectiveIncome)*100)}%` : '0%',
-                  backgroundColor: T.limeDeep,
-                }]} />
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Goals */}
-        {goals.length === 0 ? (
-          <View style={[s.emptyCard, { backgroundColor: T.surface }]}>
-            <Text style={{ fontSize: 40, marginBottom: 12 }}>🎯</Text>
-            <Text style={[s.emptyText, { color: T.mute }]}>
-              No savings goals yet.{'\n'}Go to Settings → Financial Profile to add goals.
-            </Text>
-          </View>
-        ) : (
-          <View style={{ gap: 12 }}>
-            <Text style={[s.sectionTitle, { color: T.ink }]}>Your Goals</Text>
-            {goals.map((g, i) => {
-              const pct = g.target > 0 ? Math.min(100, Math.round((g.saved / g.target) * 100)) : 0;
-              return (
-                <View key={i} style={[s.goalCard, { backgroundColor: T.surface }]}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <View style={[s.goalIconWrap, { backgroundColor: g.color + '22' }]}>
-                        <Text style={{ fontSize: 20 }}>{g.icon}</Text>
-                      </View>
-                      <View>
-                        <Text style={[s.goalName, { color: T.ink }]}>{g.name}</Text>
-                        <Text style={[s.goalTarget, { color: T.mute }]}>Target ₦{g.target.toLocaleString()}</Text>
-                      </View>
-                    </View>
-                    <View style={[s.pctBadge, { backgroundColor: g.color + '22' }]}>
-                      <Text style={[s.pctText, { color: g.color }]}>{pct}%</Text>
-                    </View>
-                  </View>
-                  <View style={[s.barTrack, { backgroundColor: T.line, height: 8 }]}>
-                    <View style={[s.barFill, { width: `${pct}%`, backgroundColor: g.color, height: 8, borderRadius: 4 }]} />
-                  </View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
-                    <Text style={[s.goalSub, { color: T.mute }]}>₦{g.saved.toLocaleString()} saved</Text>
-                    <Text style={[s.goalSub, { color: T.mute }]}>₦{(g.target - g.saved).toLocaleString()} to go</Text>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        {/* Recent savings transactions */}
-        {savingsTxs.length > 0 && (
-          <View style={{ marginTop: 16 }}>
-            <Text style={[s.sectionTitle, { color: T.ink, marginBottom: 12 }]}>Recent Credits</Text>
-            <View style={[s.txList, { backgroundColor: T.surface }]}>
-              {savingsTxs.map((tx, i) => (
-                <View key={tx.id || i} style={[s.txRow, { borderBottomColor: T.line, borderBottomWidth: i < savingsTxs.length - 1 ? 1 : 0 }]}>
-                  <View style={[s.txDot, { backgroundColor: T.limeDeep + '22' }]}>
-                    <Text style={{ fontSize: 16 }}>💰</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[s.txName, { color: T.ink }]} numberOfLines={1}>{tx.desc}</Text>
-                    <Text style={[s.txDate, { color: T.mute }]}>{tx.date}</Text>
-                  </View>
-                  <Text style={[s.txAmt, { color: T.limeDeep }]}>+₦{tx.amount.toLocaleString()}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* ARIA Insight */}
-        <View style={[s.ariaCard, { backgroundColor: '#3B0B3E', borderWidth: 1, borderColor: '#C4124F' }]}>
-          <Text style={[s.ariaLabel, { color: 'rgba(255,255,255,0.45)' }]}>ARIA INSIGHT</Text>
-          <Text style={[s.ariaText, { color: '#E0E0FF' }]}>
-            {savingsRate >= 20
-              ? `Excellent! You're saving ${savingsRate}% of income — above the recommended 20%. Keep it up, ${user?.name?.split(' ')[0] || 'there'}.`
-              : savingsRate >= 10
-              ? `You're saving ${savingsRate}% — halfway to the 20% target. Try saving ₦${Math.round(effectiveIncome * 0.2).toLocaleString()} per month to hit the goal.`
-              : `You're saving ${savingsRate}% of income. To reach 20%, automate a ₦${Math.round(effectiveIncome * 0.2).toLocaleString()} transfer on salary day ${user?.salaryDay || '25'} before spending.`}
-          </Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+    <View style={{ gap: space.xs }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text variant="label" family="medium" color="inkMuted">{label}</Text>
+        <Money value={value} variant="label" family="bold" />
+      </View>
+      <ProgressBar value={of > 0 ? value / of : 0} tone={tone} label={`${label}: ${formatMoney(value)}`} />
+    </View>
   );
 }
 
-const styles = (T) => StyleSheet.create({
-  safe: { flex: 1 },
-  eyebrow: { fontSize: 10, letterSpacing: 2, fontWeight: '600', marginBottom: 4 },
-  title: { fontSize: 32, fontWeight: '800', letterSpacing: -0.5, marginBottom: 20 },
+export default function SavingsScreen({ user, setUser }) {
+  const { c } = useTheme();
+  const toast = useToast();
+  const [transactions, setTransactions] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [adding, setAdding] = useState(null);
+  const [amount, setAmount] = useState('');
+  const [amountError, setAmountError] = useState('');
+  const [showNew, setShowNew] = useState(false);
+  const [goalName, setGoalName] = useState('');
+  const [goalTarget, setGoalTarget] = useState('');
+  const [goalErrors, setGoalErrors] = useState({});
+  const [deleting, setDeleting] = useState(null);
 
-  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  statCard: { flex: 1, borderRadius: 16, padding: 14, alignItems: 'center' },
-  statLabel: { fontSize: 9, letterSpacing: 1.5, fontWeight: '600', marginBottom: 8, textAlign: 'center' },
-  statVal: { fontSize: 20, fontWeight: '800' },
+  const goals = normalizeGoals(user?.goals);
 
-  summaryCard: { borderRadius: 18, padding: 18, marginBottom: 20 },
-  cardTitle: { fontSize: 15, fontWeight: '700' },
-  cardSub: { fontSize: 12 },
+  async function load() {
+    setTransactions(await loadTransactions());
+  }
 
-  sectionTitle: { fontSize: 17, fontWeight: '700', marginBottom: 4 },
+  useFocusEffect(useCallback(() => {
+    load().catch(() => {});
+    trackEvent('savings_interactions').catch(() => {});
+  }, []));
 
-  barLabel: { fontSize: 13, fontWeight: '500' },
-  barTrack: { height: 5, borderRadius: 3, overflow: 'hidden' },
-  barFill: { height: '100%', borderRadius: 3 },
+  async function saveGoals(next) {
+    const updated = { ...user, goals: next };
+    await AsyncStorage.setItem('finsight_user', JSON.stringify(updated));
+    setUser?.(updated);
+  }
 
-  emptyCard: { borderRadius: 20, padding: 40, alignItems: 'center', marginTop: 8 },
-  emptyText: { textAlign: 'center', fontSize: 14, lineHeight: 22 },
+  async function onRefresh() {
+    setRefreshing(true);
+    await load().catch(() => {});
+    setRefreshing(false);
+  }
 
-  goalCard: { borderRadius: 18, padding: 18 },
-  goalIconWrap: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  goalName: { fontSize: 15, fontWeight: '700' },
-  goalTarget: { fontSize: 11, marginTop: 2 },
-  pctBadge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 },
-  pctText: { fontSize: 13, fontWeight: '800' },
-  goalSub: { fontSize: 12 },
+  async function saveContribution() {
+    const value = parseAmount(amount);
+    if (!value) { setAmountError('Enter an amount, like 5,000'); return; }
+    // Recorded as a transaction too, so it comes out of what's left until payday.
+    await addTransaction({ desc: `Saved to ${adding.name}`, amount: value, type: 'debit', cat: 'Savings' });
+    const updated = addToGoal(goals, adding.id, value);
+    await saveGoals(updated);
+    awardXP('tx_log');
+    const reached = goalProgress(updated.find(g => g.id === adding.id)).done && !goalProgress(adding).done;
+    if (reached) awardXP('goal_complete');
+    toast.show(reached ? `Goal reached: ${adding.name}` : `${formatMoney(value)} added to ${adding.name}`, { tone: 'success' });
+    setAdding(null);
+    await load();
+  }
 
-  txList: { borderRadius: 18, paddingHorizontal: 16 },
-  txRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },
-  txDot: { width: 38, height: 38, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
-  txName: { fontSize: 13, fontWeight: '500' },
-  txDate: { fontSize: 11, marginTop: 2 },
-  txAmt: { fontSize: 14, fontWeight: '700' },
+  async function createGoal() {
+    const target = parseAmount(goalTarget);
+    const errors = {
+      ...(goalName.trim() ? null : { name: 'Name your goal' }),
+      ...(target ? null : { target: 'Enter a target, like 500,000' }),
+    };
+    setGoalErrors(errors);
+    if (Object.keys(errors).length) return;
+    await saveGoals([...goals, { id: Date.now().toString(), name: goalName.trim(), target, saved: 0 }]);
+    setShowNew(false);
+    toast.show('Goal added', { tone: 'success' });
+  }
 
-  ariaCard: { borderRadius: 18, padding: 20, marginTop: 16 },
-  ariaLabel: { fontSize: 10, letterSpacing: 2, fontWeight: '700', marginBottom: 10 },
-  ariaText: { fontSize: 14, lineHeight: 22 },
-});
+  async function removeGoal() {
+    await saveGoals(goals.filter(g => g.id !== deleting.id));
+    setDeleting(null);
+    toast.show('Goal deleted');
+  }
+
+  const totalSaved = savingsFlows(transactions).saved;
+  const { income, savingsRate, totalSpend, totalSaved: savedThisMonth } = computeStats(user, transactions);
+  const recent = transactions.filter(t => t.cat === 'Savings').slice(0, 4);
+  const toTarget = Math.max(0, Math.round(income * (TARGET_RATE / 100)) - savedThisMonth);
+
+  let insight = `You're saving ${savingsRate}% of your income. Moving ${formatMoney(toTarget)} more this month would reach ${TARGET_RATE}%.`;
+  if (savingsRate >= TARGET_RATE) insight = `You're saving ${savingsRate}% of your income, above the ${TARGET_RATE}% many people aim for.`;
+  else if (income === 0) insight = 'Add your monthly income in Settings to see your savings rate.';
+
+  return (
+    <>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: space.xl, paddingBottom: space.xxxl, gap: space.md + 2 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} colors={[c.accent]} />}
+      >
+        <Card style={{ padding: space.xl }}>
+          <Text variant="label" family="medium" color="inkMuted">Total saved</Text>
+          <Money value={totalSaved} variant="display" family="bold" adjustsFontSizeToFit style={{ fontSize: 36, lineHeight: 46, letterSpacing: -0.8 }} />
+          <Text variant="label" family="medium" color="inkMuted" style={{ marginBottom: space.lg }}>
+            {savingsRate}% of this month's income · aiming for {TARGET_RATE}%
+          </Text>
+          <View style={{ gap: space.md }}>
+            <SnapshotRow label="Income this month" value={income} of={income} tone="positive" />
+            <SnapshotRow label="Spent" value={totalSpend} of={income} tone="negative" />
+            <SnapshotRow label="Saved" value={savedThisMonth} of={income} tone="accent" />
+          </View>
+        </Card>
+
+        <Gradient name="plum" style={{ borderRadius: 22, padding: space.lg + 2, flexDirection: 'row', gap: space.md }}>
+          <Icon name="sparkles" size={20} color="#FFD9E8" />
+          <Text variant="label" color="#FFFFFF" style={{ flex: 1, lineHeight: 20 }}>{insight}</Text>
+        </Gradient>
+
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: space.xs }}>
+          <Text variant="heading" family="bold" accessibilityRole="header">Your goals</Text>
+          {goals.length ? (
+            <Pressable onPress={() => { setGoalName(''); setGoalTarget(''); setGoalErrors({}); setShowNew(true); }} accessibilityRole="button" hitSlop={10}>
+              <Text variant="label" family="semibold" color="accent">Add goal</Text>
+            </Pressable>
+          ) : null}
+        </View>
+
+        {goals.length === 0 ? (
+          <EmptyState
+            icon="flag-outline"
+            title="Set a savings goal"
+            body="Name something you're saving for and track your progress towards it."
+            action={<Button title="Add goal" onPress={() => { setGoalName(''); setGoalTarget(''); setGoalErrors({}); setShowNew(true); }} />}
+          />
+        ) : goals.map(goal => {
+          const { used, percent, toGo, done } = goalProgress(goal);
+          return (
+            <Card key={goal.id} style={{ padding: space.lg }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.md }}>
+                <IconTile name={done ? 'trophy-outline' : 'flag-outline'} tone={done ? 'positive' : 'accent'} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text variant="bodyStrong" family="bold" numberOfLines={1}>{goal.name}</Text>
+                  <Text variant="label" family="regular" color="inkMuted" tabular numberOfLines={1}>
+                    {formatMoney(goal.saved)} of {formatMoney(goal.target)}
+                  </Text>
+                </View>
+                {done ? <Badge label="Reached" tone="positive" /> : <Text variant="bodyStrong" family="bold" color="accent" tabular>{percent}%</Text>}
+              </View>
+              <ProgressBar value={used} tone={done ? 'positive' : 'accent'} height={8} label={`${percent}% of ${goal.name}`} />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: space.md }}>
+                <Text variant="label" color="inkMuted" tabular style={{ flex: 1 }}>{done ? 'Well done' : `${formatMoney(toGo)} to go`}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.lg }}>
+                  <Pressable onPress={() => setDeleting(goal)} accessibilityRole="button" accessibilityLabel={`Delete ${goal.name}`} hitSlop={10}>
+                    <Icon name="trash-outline" size={18} color="inkMuted" />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => { setAmount(''); setAmountError(''); setAdding(goal); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Add money to ${goal.name}`}
+                    hitSlop={10}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}
+                  >
+                    <Icon name="add-circle" size={18} color="accent" />
+                    <Text variant="label" family="semibold" color="accent">Add money</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </Card>
+          );
+        })}
+
+        {recent.length ? (
+          <View style={{ marginTop: space.xs }}>
+            <Text variant="heading" family="bold" accessibilityRole="header">Recent savings</Text>
+            {recent.map(tx => <TransactionRow key={tx.id} tx={tx} />)}
+          </View>
+        ) : null}
+      </ScrollView>
+
+      <Sheet
+        visible={!!adding}
+        onClose={() => setAdding(null)}
+        title={adding ? `Add money to ${adding.name}` : ''}
+        footer={<Button full title="Add money" onPress={saveContribution} />}
+      >
+        <View style={{ gap: space.md }}>
+          <Text color="inkMuted">Record money you've moved to savings. It comes out of what's left until payday.</Text>
+          <Input label="Amount" prefix="₦" keyboardType="numeric" placeholder="5,000" autoFocus value={amount} error={amountError} onChangeText={v => { setAmount(v); setAmountError(''); }} />
+        </View>
+      </Sheet>
+
+      <Sheet
+        visible={showNew}
+        onClose={() => setShowNew(false)}
+        title="Add a savings goal"
+        footer={<Button full title="Save goal" onPress={createGoal} />}
+      >
+        <View style={{ gap: space.md }}>
+          <Input label="Goal name" placeholder="New laptop" value={goalName} error={goalErrors.name} onChangeText={setGoalName} />
+          <Input label="Target amount" prefix="₦" keyboardType="numeric" placeholder="500,000" value={goalTarget} error={goalErrors.target} onChangeText={setGoalTarget} />
+        </View>
+      </Sheet>
+
+      <ConfirmSheet
+        visible={!!deleting}
+        destructive
+        title={deleting ? `Delete ${deleting.name}?` : ''}
+        body="Your transactions stay. Only this goal is removed."
+        confirmLabel="Delete goal"
+        onConfirm={removeGoal}
+        onCancel={() => setDeleting(null)}
+      />
+    </>
+  );
+}

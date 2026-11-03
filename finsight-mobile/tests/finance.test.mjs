@@ -242,3 +242,9 @@ test('money in counts this cycle only and excludes savings withdrawals', () => {
   ], date(2026, 11, 3));
   assert.equal(plan.moneyIn, 450000);
 });
+
+test('parseTxDate reads a month-first date when the day first reading is impossible', () => {
+  assert.deepEqual(parseTxDate('5/18/2026'), date(2026, 5, 18));
+  assert.deepEqual(parseTxDate('05/06/2026'), date(2026, 6, 5));
+  assert.equal(parseTxDate('13/13/2026'), null);
+});

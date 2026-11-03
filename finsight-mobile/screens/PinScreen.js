@@ -1,39 +1,64 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Vibration } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Platform, Pressable, StatusBar, Vibration, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { DARK, LIGHT } from '../constants/theme';
+import { space } from '../constants/tokens';
+import { ConfirmSheet, Gradient, Icon, Text, tapFeedback } from '../components/ui';
+import { checkPin, lockWaitSeconds, savePin } from '../services/pinStore';
+import { formatWait } from '../services/pinPolicy';
 
 const PIN_LENGTH = 6;
+const KEYS = [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], ['bio', '0', 'del']];
 
-export default function PinScreen({ theme, mode = 'create', onSuccess, onForgot, biometricEnabled = false }) {
-  const T = theme === 'dark' ? DARK : LIGHT;
-  const [pin, setPin]             = useState('');
+function Key({ children, onPress, label }) {
+  return (
+    <Pressable
+      onPress={() => { tapFeedback(); onPress(); }}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => ({
+        width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center',
+        backgroundColor: pressed ? 'rgba(255,255,255,0.32)' : 'rgba(255,255,255,0.14)',
+      })}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+export default function PinScreen({ mode = 'create', onSuccess, onForgot, onCancel, biometricEnabled = false }) {
+  const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
-  const [stage, setStage]         = useState(mode === 'create' ? 'create' : 'enter');
-  const [error, setError]         = useState('');
+  const [stage, setStage] = useState(mode === 'create' ? 'create' : 'enter');
+  const [error, setError] = useState('');
   const [bioAvailable, setBioAvailable] = useState(false);
+  const [confirmForgot, setConfirmForgot] = useState(false);
+  const [wait, setWait] = useState(0);
   const shakeAnim = useRef(new Animated.Value(0)).current;
-  const s = styles(T);
 
   useEffect(() => {
     checkBiometric();
+    if (mode !== 'create') lockWaitSeconds().then(setWait).catch(() => {});
   }, []);
 
-  // Auto-attempt biometric when unlocking (not creating PIN)
+  // Counts down the lock after too many wrong tries.
   useEffect(() => {
-    if (stage === 'enter' && biometricEnabled && bioAvailable) {
-      tryBiometric();
-    }
+    if (wait <= 0) return undefined;
+    const timer = setTimeout(() => setWait(w => w - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [wait]);
+
+  // Offer fingerprint straight away when unlocking.
+  useEffect(() => {
+    if (stage === 'enter' && biometricEnabled && bioAvailable) tryBiometric();
   }, [bioAvailable]);
 
   async function checkBiometric() {
     try {
-      const hasHw      = await LocalAuthentication.hasHardwareAsync();
+      const hasHw = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
       setBioAvailable(hasHw && isEnrolled);
-    } catch {}
+    } catch { /* no fingerprint hardware */ }
   }
 
   async function tryBiometric() {
@@ -45,151 +70,158 @@ export default function PinScreen({ theme, mode = 'create', onSuccess, onForgot,
         disableDeviceFallback: false,
       });
       if (result.success) onSuccess();
-    } catch {}
+    } catch { /* they can use the PIN instead */ }
   }
 
   function shake() {
-    Vibration.vibrate(200);
+    if (Platform.OS !== 'web') Vibration.vibrate(200);
     Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 10,  duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 10, duration: 60, useNativeDriver: true }),
       Animated.timing(shakeAnim, { toValue: -10, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 10,  duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0,   duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 10, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
     ]).start();
   }
 
-  async function handlePress(digit) {
+  function handlePress(digit) {
+    if (pin.length >= PIN_LENGTH || wait > 0) return;
     setError('');
-    const newPin = pin + digit;
-    setPin(newPin);
-    if (newPin.length < PIN_LENGTH) return;
+    const next = pin + digit;
+    setPin(next);
+    if (next.length < PIN_LENGTH) return;
 
     setTimeout(async () => {
       if (stage === 'create') {
-        setConfirmPin(newPin); setPin(''); setStage('confirm');
+        setConfirmPin(next); setPin(''); setStage('confirm');
       } else if (stage === 'confirm') {
-        if (newPin === confirmPin) {
-          await AsyncStorage.setItem('finsight_pin', newPin);
-          onSuccess();
+        if (next === confirmPin) {
+          try {
+            await savePin(next);
+            onSuccess();
+          } catch (e) {
+            setError("Couldn't save your PIN. Try again.");
+            shake(); setPin(''); setStage('create'); setConfirmPin('');
+          }
         } else {
-          setError('PINs do not match. Try again.');
+          setError("Those PINs didn't match. Start again.");
           shake(); setPin(''); setStage('create'); setConfirmPin('');
         }
-      } else if (stage === 'enter') {
-        const saved = await AsyncStorage.getItem('finsight_pin');
-        if (newPin === saved) { onSuccess(); }
-        else { setError('Incorrect PIN. Try again.'); shake(); setPin(''); }
+      } else {
+        try {
+          const result = await checkPin(next);
+          if (result.ok) { onSuccess(); return; }
+          setWait(result.waitSeconds);
+          setError(result.waitSeconds ? 'Too many wrong tries.' : 'Wrong PIN. Try again.');
+        } catch (e) {
+          setError("Couldn't check your PIN. Try again.");
+        }
+        shake(); setPin('');
       }
     }, 120);
   }
 
-  function handleDelete() { setPin(p => p.slice(0, -1)); setError(''); }
+  // Prove it's the phone's owner to keep the data. Otherwise the data must go,
+  // or "Forgot PIN" would be a way around the PIN.
+  async function forgotPin() {
+    if (bioAvailable) {
+      try {
+        const result = await LocalAuthentication.authenticateAsync({
+          promptMessage: 'Confirm it\'s you to reset your PIN',
+          cancelLabel: 'Cancel',
+        });
+        if (result.success) {
+          setError(''); setPin(''); setWait(0); setStage('create');
+          return;
+        }
+      } catch { /* falls through to the delete option */ }
+    }
+    setConfirmForgot(true);
+  }
 
-  const KEYS = [
-    ['1','2','3'],
-    ['4','5','6'],
-    ['7','8','9'],
-    ['','0','⌫'],
-  ];
-
-  const title    = stage === 'create' ? 'Create your PIN'
-                 : stage === 'confirm' ? 'Confirm your PIN'
-                 : 'Enter your PIN';
-  const subtitle = stage === 'create' ? 'Choose a 6-digit PIN to secure your FinSight'
-                 : stage === 'confirm' ? 'Enter the same PIN again to confirm'
-                 : 'Your data is protected';
+  const title = stage === 'create' ? 'Create your PIN' : stage === 'confirm' ? 'Confirm your PIN' : 'Welcome back';
+  const subtitle = stage === 'create' ? 'Choose 6 digits to protect your money data'
+    : stage === 'confirm' ? 'Enter the same 6 digits again'
+    : 'Enter your PIN to unlock';
+  const showBio = stage === 'enter' && biometricEnabled && bioAvailable;
 
   return (
-    <SafeAreaView style={[s.safe, { backgroundColor: T.bg }]}>
-      <View style={s.container}>
-
-        {/* Brand */}
-        <View style={s.brand}>
-          <View style={[s.brandMark, { backgroundColor: '#3B0B3E', borderWidth: 1, borderColor: '#C4124F' }]}>
-            <Text style={[s.brandLetter, { color: '#E0165F' }]}>f</Text>
-          </View>
-          <Text style={[s.brandName, { color: T.ink }]}>FinSight</Text>
+    <Gradient style={{ flex: 1 }}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'space-between', paddingVertical: space.lg }}>
+        <View style={{ alignSelf: 'stretch', minHeight: 44, paddingHorizontal: space.xl, alignItems: 'flex-end', justifyContent: 'center' }}>
+          {onCancel ? (
+            <Pressable onPress={onCancel} accessibilityRole="button" hitSlop={10}>
+              <Text variant="bodyStrong" color="#FFFFFF">Cancel</Text>
+            </Pressable>
+          ) : null}
         </View>
 
-        <Text style={[s.title, { color: T.ink }]}>{title}</Text>
-        <Text style={[s.subtitle, { color: T.mute }]}>{subtitle}</Text>
+        <View style={{ alignItems: 'center', paddingHorizontal: space.xl }}>
+          <Text variant="heading" family="bold" color="#FFFFFF" style={{ marginBottom: space.xl }}>FinSight</Text>
+          <Text variant="title" family="bold" color="#FFFFFF" align="center" accessibilityRole="header">{title}</Text>
+          <Text color="#FFFFFF" align="center" style={{ marginTop: space.xs }}>{subtitle}</Text>
+          <Animated.View
+            accessible
+            accessibilityLabel={`${pin.length} of ${PIN_LENGTH} digits entered`}
+            style={{ flexDirection: 'row', gap: space.lg, marginTop: space.xxl, transform: [{ translateX: shakeAnim }] }}
+          >
+            {Array.from({ length: PIN_LENGTH }, (_, i) => (
+              <View key={i} style={{
+                width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#FFFFFF',
+                backgroundColor: i < pin.length ? '#FFFFFF' : 'transparent',
+              }} />
+            ))}
+          </Animated.View>
+          <View style={{ minHeight: 28, justifyContent: 'center', marginTop: space.sm }}>
+            {error || wait > 0 ? (
+              <View style={{ backgroundColor: '#FFFFFF', borderRadius: 999, paddingHorizontal: space.md, paddingVertical: space.xxs + 1 }}>
+                <Text variant="label" family="semibold" color="#A30E42" accessibilityLiveRegion="assertive">
+                  {wait > 0 ? `Too many wrong tries. Wait ${formatWait(wait)}.` : error}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
 
-        {/* Dots */}
-        <Animated.View style={[s.dots, { transform: [{ translateX: shakeAnim }] }]}>
-          {Array.from({ length: PIN_LENGTH }).map((_, i) => (
-            <View key={i} style={[
-              s.dot, { borderColor: T.line2 },
-              i < pin.length && { backgroundColor: T.lime, borderColor: T.lime },
-            ]} />
-          ))}
-        </Animated.View>
-
-        {error
-          ? <Text style={[s.error, { color: T.rose }]}>{error}</Text>
-          : <View style={{ height: 20 }} />}
-
-        {/* Keypad */}
-        <View style={s.keypad}>
-          {KEYS.map((row, ri) => (
-            <View key={ri} style={s.row}>
-              {row.map((key, ki) => (
-                key === '' ? <View key={ki} style={s.keyEmpty} /> :
-                key === '⌫' ? (
-                  <TouchableOpacity key={ki} style={s.keyDelete} onPress={handleDelete} activeOpacity={0.6}>
-                    <Text style={[s.deleteText, { color: T.mute }]}>⌫</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity key={ki}
-                    style={[s.key, { backgroundColor: T.surface, borderColor: T.line }]}
-                    onPress={() => handlePress(key)} activeOpacity={0.7}>
-                    <Text style={[s.keyText, { color: T.ink }]}>{key}</Text>
-                  </TouchableOpacity>
-                )
-              ))}
+        <View style={{ gap: space.md }}>
+          {KEYS.map((row, r) => (
+            <View key={r} style={{ flexDirection: 'row', gap: space.xl }}>
+              {row.map(key => {
+                if (key === 'bio') {
+                  return showBio
+                    ? <Key key={key} label="Unlock with fingerprint" onPress={tryBiometric}><Icon name="finger-print" size={30} color="#FFFFFF" /></Key>
+                    : <View key={key} style={{ width: 76, height: 76 }} />;
+                }
+                if (key === 'del') {
+                  return (
+                    <Key key={key} label="Delete last digit" onPress={() => { setPin(p => p.slice(0, -1)); setError(''); }}>
+                      <Icon name="backspace-outline" size={28} color="#FFFFFF" />
+                    </Key>
+                  );
+                }
+                return <Key key={key} label={key} onPress={() => handlePress(key)}><Text variant="title" family="semibold" color="#FFFFFF" style={{ fontSize: 28 }}>{key}</Text></Key>;
+              })}
             </View>
           ))}
         </View>
 
-        {/* Biometric button — only in unlock mode */}
-        {stage === 'enter' && biometricEnabled && bioAvailable && (
-          <TouchableOpacity onPress={tryBiometric} style={s.bioBtn} activeOpacity={0.75}>
-            <Text style={{ fontSize: 32 }}>🫆</Text>
-            <Text style={[s.bioLabel, { color: T.limeDeep }]}>Use fingerprint</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Forgot PIN */}
-        {stage === 'enter' && onForgot && (
-          <TouchableOpacity onPress={onForgot} style={s.forgotBtn}>
-            <Text style={[s.forgotText, { color: T.mute }]}>Forgot PIN?</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </SafeAreaView>
+        <View style={{ minHeight: 44, justifyContent: 'center' }}>
+          {stage === 'enter' && onForgot ? (
+            <Pressable onPress={forgotPin} accessibilityRole="button" hitSlop={10}>
+              <Text variant="bodyStrong" color="#FFFFFF">Forgot PIN?</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </SafeAreaView>
+      <ConfirmSheet
+        visible={confirmForgot}
+        destructive
+        title="Delete your data to reset?"
+        body="We couldn't confirm it's you, so the only way to reset your PIN is to delete all your FinSight data from this phone. You can restore a cloud backup afterwards if you made one."
+        confirmLabel="Delete data and start again"
+        onConfirm={() => { setConfirmForgot(false); onForgot(); }}
+        onCancel={() => setConfirmForgot(false)}
+      />
+    </Gradient>
   );
 }
-
-const styles = (T) => StyleSheet.create({
-  safe:       { flex: 1 },
-  container:  { flex:1, alignItems:'center', justifyContent:'center', paddingHorizontal:32, gap:16 },
-  brand:      { flexDirection:'row', alignItems:'center', gap:10, marginBottom:16 },
-  brandMark:  { width:40, height:40, borderRadius:10, justifyContent:'center', alignItems:'center' },
-  brandLetter:{ fontSize:26, fontStyle:'italic', fontWeight:'400' },
-  brandName:  { fontSize:20, fontWeight:'800', letterSpacing:-0.5 },
-  title:      { fontSize:26, fontWeight:'800', textAlign:'center', letterSpacing:-0.5 },
-  subtitle:   { fontSize:14, textAlign:'center', lineHeight:20 },
-  dots:       { flexDirection:'row', gap:14, marginVertical:24 },
-  dot:        { width:16, height:16, borderRadius:8, borderWidth:2, backgroundColor:'transparent' },
-  error:      { fontSize:13, fontWeight:'600', textAlign:'center', minHeight:20 },
-  keypad:     { gap:12, width:'100%', maxWidth:280 },
-  row:        { flexDirection:'row', justifyContent:'center', gap:16 },
-  key:        { width:72, height:72, borderRadius:36, justifyContent:'center', alignItems:'center', borderWidth:1, elevation:2 },
-  keyText:    { fontSize:26, fontWeight:'300' },
-  keyEmpty:   { width:72, height:72 },
-  keyDelete:  { width:72, height:72, justifyContent:'center', alignItems:'center' },
-  deleteText: { fontSize:22 },
-  bioBtn:     { alignItems:'center', gap:6, marginTop:8 },
-  bioLabel:   { fontSize:13, fontWeight:'700' },
-  forgotBtn:  { marginTop:16, padding:10 },
-  forgotText: { fontSize:14, fontWeight:'600' },
-});
