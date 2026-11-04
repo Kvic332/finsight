@@ -26,6 +26,12 @@ Your transactions, budgets, goals and profile are encrypted on your phone.
 | Creating a cloud account | Your name, email and password | Google Firebase |
 | Backing up | Your transactions, budgets, goals, profile and progress | Google Firebase |
 | Being signed in | Basic usage counts, FinScore and level | Google Firebase |
+| Opening Compare & Grow | A request for the provider list, which includes your internet address. None of your finances are sent | Supabase |
+| Choosing "Go to provider" | You leave FinSight for that provider's website, where its own privacy policy applies. Some links are referral links, so the provider may know you came from FinSight | The provider |
+
+FinSight may earn from referral links. The app labels those links, and they never change the order of a list.
+
+Backups are protected by Google Firebase's security, not by FinSight's own encryption. [Lawyer to confirm this wording, including who at FinSight can access Firebase.]
 
 ## Why we use it
 
@@ -40,8 +46,8 @@ To show your figures, answer your questions, keep backups you ask for, limit mis
 ## How long we keep it
 
 - Data on your phone stays until you delete it in Settings or uninstall the app.
-- Cloud backups stay until you ask us to delete them. [Confirm the retention period and how to request this.]
-- ARIA message counts contain no message content. [Confirm the retention period.]
+- Cloud backups, your profile and your login stay until you delete your account in the app, under Cloud backup. You can also email us to ask. [Confirm how long Google keeps deleted data in its own systems.]
+- ARIA message counts contain your account ID and a number, with no message content. They're deleted automatically after 30 days.
 - ARIA conversations aren't stored by FinSight. [Confirm the provider's retention terms.]
 
 ## Where it's processed

@@ -5,11 +5,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { space } from '../constants/tokens';
 import {
-  Button, Card, ConfirmSheet, EmptyState, IconButton, IconTile, Input, SegmentedControl, Text, useTheme,
+  Button, Card, ConfirmSheet, EmptyState, IconButton, IconTile, Input, SegmentedControl, Sheet, Text, useTheme,
   useToast,
 } from '../components/ui';
 import {
-  backupToCloud, getCloudProfile, onAuthChange, resetPassword, restoreFromCloud, signIn, signOut, signUp,
+  backupToCloud, deleteAccount, getCloudProfile, onAuthChange, resetPassword, restoreFromCloud, signIn, signOut, signUp,
 } from '../services/cloudSync';
 
 const AUTH_ERRORS = {
@@ -22,6 +22,54 @@ const AUTH_ERRORS = {
   'auth/too-many-requests': 'Too many tries. Wait a few minutes and try again.',
   'auth/network-request-failed': 'No internet connection. Check it and try again.',
 };
+
+export function DeleteAccountSheet({ onClose, onDelete }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  async function confirm() {
+    setDeleting(true);
+    setError('');
+    try {
+      await onDelete(password);
+    } catch (err) {
+      setError(AUTH_ERRORS[err.code] || "Couldn't delete your account. Check your connection and try again.");
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <Sheet
+      visible
+      onClose={onClose}
+      title="Delete your account?"
+      footer={(
+        <>
+          <Button full title="Delete account" variant="danger" loading={deleting} disabled={!password} onPress={confirm} />
+          <Button full title="Keep my account" variant="ghost" onPress={onClose} />
+        </>
+      )}
+    >
+      <View style={{ gap: space.md }}>
+        <Text color="inkMuted">
+          This permanently deletes your login, cloud backup, profile and FinScore history. You can't undo it.
+        </Text>
+        <Text color="inkMuted">
+          Data on this phone stays until you choose Delete everything in Settings.
+        </Text>
+        <Input
+          label="Enter your password to confirm"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          autoCapitalize="none"
+          error={error || undefined}
+        />
+      </View>
+    </Sheet>
+  );
+}
 
 function Header({ onBack }) {
   return (
@@ -48,6 +96,7 @@ export default function CloudAccountScreen({ onBack }) {
   const [restored, setRestored] = useState(null);
   const [confirmRestore, setConfirmRestore] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => onAuthChange(async u => {
     setUser(u);
@@ -120,6 +169,14 @@ export default function CloudAccountScreen({ onBack }) {
     setProfile(null);
   }
 
+  async function removeAccount(accountPassword) {
+    await deleteAccount(accountPassword);
+    setConfirmDelete(false);
+    setProfile(null);
+    setPassword('');
+    toast.show('Your account has been deleted', { tone: 'success' });
+  }
+
   if (user) {
     const history = [...(profile?.finscore?.history || [])].reverse().slice(0, 7);
     return (
@@ -155,7 +212,7 @@ export default function CloudAccountScreen({ onBack }) {
           <Card style={{ padding: space.lg, gap: space.xs }}>
             <Text variant="bodyStrong" family="bold">What's stored</Text>
             <Text variant="label" family="regular" color="inkMuted">
-              Your backup holds your transactions, budgets, goals and profile, and only your account can read it. Your FinScore and basic usage counts are also saved with your account.
+              Your backup holds your transactions, budgets, goals and profile, and the app only lets your account open it. It's protected by Google Firebase's security, not by FinSight's own encryption. Your FinScore and basic usage counts are also saved with your account.
             </Text>
           </Card>
 
@@ -174,7 +231,10 @@ export default function CloudAccountScreen({ onBack }) {
           ) : null}
 
           <Button full title="Sign out" variant="ghost" onPress={() => setConfirmSignOut(true)} />
+          <Button full title="Delete account" variant="danger" onPress={() => setConfirmDelete(true)} />
         </ScrollView>
+
+        {confirmDelete ? <DeleteAccountSheet onClose={() => setConfirmDelete(false)} onDelete={removeAccount} /> : null}
 
         <ConfirmSheet
           visible={confirmRestore}

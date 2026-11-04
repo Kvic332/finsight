@@ -55,6 +55,17 @@ npm run test:rules
 
 `test:rules` needs Java and uses the Firestore emulator. App calculations are tested separately with `npm test` in `finsight-mobile`.
 
+## App updates without a new APK
+
+Builds listen on the channel named in `eas.json`, such as `preview`. JavaScript fixes can be sent to phones with:
+
+```bash
+cd finsight-mobile
+eas update --channel preview --message "What changed"
+```
+
+Updates take their `EXPO_PUBLIC_` values from `finsight-mobile/.env` on the computer that publishes them, not from `eas.json`. If that file is missing, ARIA and Compare & Grow stop working in the update. Changes to the icon, splash, permissions or native libraries still need a new build.
+
 ## Compare and Grow catalogue
 
 The app reads the `compare_listings` view with the publishable key. Only the service role can write. A product is listed only when all of these are true:
@@ -73,3 +84,19 @@ The app reads the `compare_listings` view with the publishable key. Only the ser
 Licence checks and rate history can only be added to. To correct a check, add a new one. If two checks share a timestamp, the one that isn't `verified` wins.
 
 To test the access rules, run `tests/compare_grow.sql` against a database with the migrations applied. It stops with an error if a check fails, and rolls everything back when it finishes.
+
+### Catalogue admin
+
+Admins manage the catalogue in the app, under **Settings → Admin → Compare catalogue**. The screen calls the `catalog-admin` function, which holds the only write access.
+
+```bash
+supabase functions deploy catalog-admin --no-verify-jwt
+```
+
+The function checks each request in this order:
+
+1. The Firebase token is valid and isn't anonymous.
+2. Firestore confirms `admins/<uid>` exists, using the caller's own token. This needs the rules in `firestore.rules` to be deployed. If Firestore can't be reached, the request stops.
+3. The request passes validation, and only known fields reach the database. Who made the change comes from the token.
+
+Providers and products can be archived but not deleted, so their history stays intact.

@@ -10,20 +10,16 @@ import {
 import HomeScreen from '../screens/HomeScreen';
 import ActivityScreen from '../screens/ActivityScreen';
 import AddTransactionScreen from '../screens/AddTransactionScreen';
-import GrowPreviewScreen from '../screens/GrowPreviewScreen';
+import GrowScreen from '../screens/GrowScreen';
 import PlanScreen from '../screens/PlanScreen';
 import ARIAScreen from '../screens/ARIAScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import SMSScreen from '../screens/SMSScreen';
 import BankImportScreen from '../screens/BankImportScreen';
-import { InvestmentsScreen } from './legacyScreens';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
-
-// Made-up provider data must never reach real users: only test builds see it.
-const SHOW_GROW_PREVIEW = process.env.EXPO_PUBLIC_DESIGN_PREVIEW === '1';
 
 const TAB_ICONS = {
   Home: ['home', 'home-outline'],
@@ -111,9 +107,7 @@ function MainTabs({ theme, user, setUser }) {
       <Tab.Screen name="Home">{p => <HomeScreen {...p} user={user} />}</Tab.Screen>
       <Tab.Screen name="Activity">{p => <ActivityScreen {...p} user={user} />}</Tab.Screen>
       <Tab.Screen name="Plan">{p => <PlanScreen {...p} user={user} setUser={setUser} />}</Tab.Screen>
-      <Tab.Screen name="Grow">
-        {p => (SHOW_GROW_PREVIEW ? <GrowPreviewScreen {...p} /> : <InvestmentsScreen {...p} />)}
-      </Tab.Screen>
+      <Tab.Screen name="Grow" component={GrowScreen} />
     </Tab.Navigator>
   );
 }

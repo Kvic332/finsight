@@ -10,6 +10,8 @@ import OnboardingScreen from './screens/OnboardingScreen';
 import PinScreen from './screens/PinScreen';
 import DataLockedScreen from './screens/DataLockedScreen';
 import AdminDashboardScreen from './screens/AdminDashboardScreen';
+import CatalogAdminScreen from './screens/CatalogAdminScreen';
+import { DeleteAccountSheet } from './screens/CloudAccountScreen';
 
 // The web build only previews the design while building it. It runs the real
 // screens on made-up data; bank capture, voice and biometrics stay in App.js.
@@ -36,7 +38,7 @@ export default function WebPreview() {
   const [scheme, setScheme] = useState('light');
   const [seeded, setSeeded] = useState(false);
   const [user, setUser] = useState(INITIAL_USER);
-  // Preview a single screen with ?view=onboarding, pin, locked or admin.
+  // Preview a single screen with ?view=onboarding, pin, locked, admin, catalog or delete.
   const view = new URLSearchParams(window.location.search).get('view');
   const c = colors[scheme];
 
@@ -70,6 +72,13 @@ export default function WebPreview() {
                   : view === 'pin' ? <PinScreen mode="unlock" onSuccess={() => {}} onForgot={() => {}} />
                   : view === 'locked' ? <DataLockedScreen onRetry={() => {}} onStartOver={() => {}} />
                   : view === 'admin' ? <AdminDashboardScreen onBack={() => {}} />
+                  : view === 'catalog' ? <CatalogAdminScreen onBack={() => {}} />
+                  : view === 'delete' ? (
+                    <DeleteAccountSheet
+                      onClose={() => {}}
+                      onDelete={async () => { throw Object.assign(new Error('Preview'), { code: 'auth/wrong-password' }); }}
+                    />
+                  )
                   : (
                     <AppNavigator
                       theme={scheme}

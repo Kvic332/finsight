@@ -4,9 +4,12 @@ import {
   signOut as firebaseSignOut,
   sendPasswordResetEmail,
   onAuthStateChanged,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  deleteUser,
 } from 'firebase/auth';
 import {
-  doc, setDoc, getDoc, updateDoc, serverTimestamp, increment, deleteField,
+  doc, setDoc, getDoc, updateDoc, deleteDoc, serverTimestamp, increment, deleteField,
   collection, onSnapshot, query, orderBy,
 } from 'firebase/firestore';
 import AsyncStorage from './dataStore';
@@ -69,6 +72,17 @@ export async function resetPassword(email) {
 
 export function currentUser() {
   return accountUser(auth.currentUser);
+}
+
+// Removes the backup, the profile and the login, in that order. The login goes
+// last because the database needs it: if a step fails, trying again still works.
+export async function deleteAccount(password) {
+  const user = currentUser();
+  if (!user) throw new Error('Not signed in');
+  await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+  await deleteDoc(backupDoc(user.uid));
+  await deleteDoc(doc(db, 'users', user.uid));
+  await deleteUser(user);
 }
 
 // ── Analytics tracking ────────────────────────────────────────────────────────

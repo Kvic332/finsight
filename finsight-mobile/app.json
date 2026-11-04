@@ -9,12 +9,12 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0D0F0E"
+      "backgroundColor": "#D8145A"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0D0F0E"
+        "backgroundImage": "./assets/adaptive-background.png"
       },
       "allowBackup": false,
       "package": "com.kvic.finsightmobile",

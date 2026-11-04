@@ -1,4 +1,7 @@
 # Callers use Firebase tokens, which handler.ts verifies itself, so Supabase's
-# own JWT check has to stay off for this function.
+# own JWT check has to stay off for these functions.
 [functions.aria]
+verify_jwt = false
+
+[functions.catalog-admin]
 verify_jwt = false

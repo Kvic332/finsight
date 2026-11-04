@@ -132,6 +132,7 @@ select pg_temp.must_fail('postgres', $q$insert into public.verifications (provid
 -- FX products need a buy or sell rate and are checked against CBN.
 insert into public.products (id, provider_id, category, name, currency, status) values
   ('40000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-00000000000a', 'fx', 'USD', 'USD', 'published');
+select pg_temp.must_fail('postgres', $q$update public.products set currency = 'NGN' where category = 'fx'$q$, 'FX in naira');
 select pg_temp.must_fail('postgres', $q$insert into public.rates (product_id, category, source_url, checked_at) values ('40000000-0000-0000-0000-00000000000a', 'fx', 'https://s.test', now())$q$, 'FX without a rate');
 select pg_temp.must_fail('postgres', $q$insert into public.rates (product_id, category, buy_rate, sell_rate, source_url, checked_at) values ('40000000-0000-0000-0000-00000000000a', 'fx', 1600, 1500, 'https://s.test', now())$q$, 'buy above sell');
 insert into public.rates (product_id, category, buy_rate, sell_rate, source_url, checked_at)

@@ -6,29 +6,36 @@
   "build": {
     "base": {
       "env": {
-        "EXPO_PUBLIC_ARIA_URL": "https://otahfeuhnivowowkeolt.supabase.co/functions/v1/aria"
+        "EXPO_PUBLIC_ARIA_URL": "https://otahfeuhnivowowkeolt.supabase.co/functions/v1/aria",
+        "EXPO_PUBLIC_CATALOG_ADMIN_URL": "https://otahfeuhnivowowkeolt.supabase.co/functions/v1/catalog-admin",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://otahfeuhnivowowkeolt.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_KEY": "sb_publishable_SzymkXd1l0XX9ecayq1nNA_EBy9A6n2"
       }
     },
     "development": {
       "extends": "base",
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "channel": "development"
     },
     "preview": {
       "extends": "base",
       "distribution": "internal",
+      "channel": "preview",
       "android": {
         "buildType": "apk"
       }
     },
     "design": {
       "extends": "preview",
+      "channel": "design",
       "env": {
         "EXPO_PUBLIC_DESIGN_PREVIEW": "1"
       }
     },
     "production": {
       "extends": "base",
+      "channel": "production",
       "autoIncrement": true
     }
   },

@@ -14,6 +14,7 @@ import {
 import BankImportScreen from './BankImportScreen';
 import CloudAccountScreen from './CloudAccountScreen';
 import AdminDashboardScreen from './AdminDashboardScreen';
+import CatalogAdminScreen from './CatalogAdminScreen';
 import DesignGalleryScreen from './DesignGalleryScreen';
 import PinScreen from './PinScreen';
 import { onAuthChange, checkIsAdmin } from '../services/cloudSync';
@@ -202,6 +203,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
   const [showBankImport, setShowBankImport] = useState(false);
   const [showCloud, setShowCloud] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showCatalog, setShowCatalog] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showCapture, setShowCapture] = useState(false);
@@ -573,7 +575,8 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
 
         {isAdmin ? (
           <Section title="Admin">
-            <Row icon="pulse-outline" title="Live analytics" subtitle="Stats across all users" onPress={() => setShowAdmin(true)} last />
+            <Row icon="pulse-outline" title="Live analytics" subtitle="Stats across all users" onPress={() => setShowAdmin(true)} />
+            <Row icon="git-compare-outline" title="Compare catalogue" subtitle="Providers, rates and licence checks" onPress={() => setShowCatalog(true)} last />
           </Section>
         ) : null}
 
@@ -592,7 +595,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
           <Row icon="shield-checkmark-outline" title="Your privacy" subtitle="Where your data goes"
             onPress={() => setAbout({
               title: 'Your privacy',
-              body: 'Your transactions are stored on this phone.\n\nWhen you ask ARIA a question, a summary of your finances goes through our server to Anthropic, the AI provider, to get an answer.\n\nIf you create a cloud account, your backup and basic usage figures are stored with Google Firebase. Backups are only readable by your account.\n\nWe don\'t sell your data.',
+              body: 'Your transactions, budgets, goals and profile are stored on this phone, encrypted.\n\nWhen you ask ARIA a question, a summary of your finances goes through our server to Anthropic, the AI provider, to get an answer.\n\nIf you create a cloud account, your backup and basic usage figures are stored with Google Firebase. The app only lets your account open your backup. It\'s protected by Firebase\'s security, not by FinSight\'s own encryption. You can delete your account and backup under Cloud backup.\n\nCompare & Grow doesn\'t send your finances anywhere. "Go to provider" opens a website we don\'t run, and we may earn from some of those links. That never changes the order of the list.\n\nWe don\'t sell your data.',
             })} />
           <ListRow leading={<IconTile name="information-circle-outline" size={40} tone="accent" />} title="Version" subtitle="FinSight 1.0.0" divider={false} />
         </Section>
@@ -735,6 +738,11 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
       </Modal>
       <Modal visible={showAdmin} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowAdmin(false)}>
         <AdminDashboardScreen onBack={() => setShowAdmin(false)} />
+      </Modal>
+      <Modal visible={showCatalog} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowCatalog(false)}>
+        <ToastProvider>
+          <CatalogAdminScreen onBack={() => setShowCatalog(false)} />
+        </ToastProvider>
       </Modal>
       <Modal visible={showPinSetup} animationType="slide" statusBarTranslucent onRequestClose={() => setShowPinSetup(false)}>
         <PinScreen
