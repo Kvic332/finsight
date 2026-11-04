@@ -120,6 +120,7 @@ const trimmed = value => String(Number(Number(value).toFixed(2)));
 export function annualNote({ rate_period: period, annual_min_pct: min, annual_max_pct: max }) {
   if (period === 'annual') return null;
   if (!hasValue(min)) return "Can't be shown per year, as it depends on the term";
+  if (Number(min) === 0 && Number(max) > 0) return `Up to about ${trimmed(max)}% a year, before compounding`;
   return min === max
     ? `About ${trimmed(min)}% a year, before compounding`
     : `About ${trimmed(min)}% to ${trimmed(max)}% a year, before compounding`;

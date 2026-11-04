@@ -84,6 +84,11 @@ test('rates are described plainly', () => {
   assert.equal(describeRate({ rate_min_pct: null, buy_rate: null, sell_rate: 1600 }), 'Sell ₦1,600');
 });
 
+test('a provider that only publishes its top rate reads as "up to"', () => {
+  assert.equal(describeRate({ rate_min_pct: 0, rate_max_pct: 16, rate_period: 'annual' }), 'Up to 16% a year');
+  assert.equal(describeRate({ rate_min_pct: 0, rate_max_pct: null, rate_period: 'annual' }), '0% a year');
+});
+
 test('numbers are parsed strictly', () => {
   assert.equal(parseNumber(''), null);
   assert.equal(parseNumber('  '), null);

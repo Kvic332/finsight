@@ -80,7 +80,11 @@ export function describeRate(rate) {
   }
   const period = RATE_PERIODS.find(p => p.value === rate.rate_period);
   const hasRange = rate.rate_max_pct !== null && rate.rate_max_pct !== undefined && rate.rate_max_pct !== rate.rate_min_pct;
-  const value = hasRange ? `${rate.rate_min_pct}% to ${rate.rate_max_pct}%` : `${rate.rate_min_pct}%`;
+  // A lowest rate of 0 means the provider only publishes its top rate.
+  const upToOnly = hasRange && Number(rate.rate_min_pct) === 0;
+  const value = upToOnly
+    ? `Up to ${rate.rate_max_pct}%`
+    : hasRange ? `${rate.rate_min_pct}% to ${rate.rate_max_pct}%` : `${rate.rate_min_pct}%`;
   return period ? `${value} ${period.suffix}` : value;
 }
 

@@ -219,7 +219,7 @@ function RateForm({ product, rate, onClose, onSaved }) {
         </>
       ) : (
         <>
-          <Input label="Lowest rate, %" value={min} onChangeText={setMin} keyboardType="decimal-pad" />
+          <Input label="Lowest rate, %" value={min} onChangeText={setMin} keyboardType="decimal-pad" hint={'Enter 0 if the provider only publishes an "up to" rate.'} />
           <Input label="Highest rate, %" value={max} onChangeText={setMax} keyboardType="decimal-pad" hint="Leave blank if there's one rate." />
           <ChoiceRow label="The rate is quoted per" options={RATE_PERIODS} value={period} onChange={setPeriod} />
         </>
