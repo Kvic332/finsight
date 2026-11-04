@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  amountRange, annualNote, filterListings, headlineRate, isStale, MAX_COMPARE, regulatorsIn, sortListings, sortOptions,
-  termRange, toggleCompare,
+  amountRange, annualNote, filterListings, headlineRate, inflationCheck, inflationMonth, isInflationCurrent, isStale,
+  MAX_COMPARE, regulatorsIn, sortListings, sortOptions, termRange, toggleCompare,
 } from '../services/compareRules.js';
 
 function listing(over = {}) {
@@ -173,6 +173,63 @@ test('the yearly note appears only when it adds something', () => {
   assert.match(annualNote(listing()), /About 48% a year/);
   assert.match(annualNote(listing({ annual_min_pct: 12.345, annual_max_pct: 12.345 })), /12\.35%/);
   assert.match(annualNote(listing({ rate_period: 'per_term', annual_min_pct: null, annual_max_pct: null })), /depends on the term/);
+});
+
+// ── Inflation ─────────────────────────────────────────────────────────────────
+const INFLATION = { month: '2026-09-01', headline_pct: 14.63, source_url: 'https://nbs.test' };
+const NOV = new Date('2026-11-04T12:00:00Z');
+const saving = (min, max, over = {}) => listing({ category: 'savings', annual_min_pct: min, annual_max_pct: max, ...over });
+
+test('a rate above inflation says so, using real growth', () => {
+  const result = inflationCheck(saving(20, 20), INFLATION, NOV);
+  assert.equal(result.tone, 'positive');
+  // 1.20 / 1.1463 is 4.7% real growth, where a simple subtraction would say 5.4%.
+  assert.equal(result.label, 'Rate beats inflation by about 4.7%');
+});
+
+test('a rate below inflation says so plainly', () => {
+  const result = inflationCheck(saving(12, 12), INFLATION, NOV);
+  assert.equal(result.tone, 'warning');
+  assert.equal(result.label, 'Rate is about 2.3% below inflation');
+});
+
+test('a range is judged on its top rate and worded that way', () => {
+  assert.equal(inflationCheck(saving(0, 22), INFLATION, NOV).label, 'Top rate beats inflation by about 6.4%');
+  assert.equal(inflationCheck(saving(5, 12), INFLATION, NOV).label, 'Top rate is about 2.3% below inflation');
+});
+
+test('a rate matching inflation is level', () => {
+  const result = inflationCheck(saving(14.63, 14.63), INFLATION, NOV);
+  assert.equal(result.tone, 'neutral');
+  assert.equal(result.label, 'Rate is level with inflation');
+});
+
+test('funds are checked as well', () => {
+  assert.ok(inflationCheck(saving(18, 18, { category: 'fund' }), INFLATION, NOV));
+});
+
+test('the detail names the figure, its month, its source and its limits', () => {
+  const { detail } = inflationCheck(saving(20, 20), INFLATION, NOV);
+  assert.match(detail, /14\.63% in September 2026/);
+  assert.match(detail, /National Bureau of Statistics/);
+  assert.match(detail, /before tax and fees/);
+});
+
+test('nothing is said where the comparison would mislead', () => {
+  assert.equal(inflationCheck(listing(), INFLATION, NOV), null);
+  assert.equal(inflationCheck(saving(6, 6, { currency: 'USD' }), INFLATION, NOV), null);
+  assert.equal(inflationCheck(saving(null, null), INFLATION, NOV), null);
+  assert.equal(inflationCheck(saving(20, 20), null, NOV), null);
+});
+
+test('an old inflation figure is not used', () => {
+  assert.equal(isInflationCurrent(INFLATION, new Date('2026-12-29T00:00:00Z')), true);
+  assert.equal(isInflationCurrent(INFLATION, new Date('2026-12-30T12:00:00Z')), false);
+  assert.equal(inflationCheck(saving(20, 20), INFLATION, new Date('2027-02-01T00:00:00Z')), null);
+});
+
+test('months read naturally', () => {
+  assert.equal(inflationMonth({ month: '2026-01-01' }), 'January 2026');
 });
 
 // ── Comparing ─────────────────────────────────────────────────────────────────

@@ -10,11 +10,11 @@ import {
   tapFeedback, useTheme, useToast,
 } from '../components/ui';
 import InvestmentsScreen from './InvestmentsScreen';
-import { fetchListings } from '../services/compareCatalog';
+import { fetchInflation, fetchListings } from '../services/compareCatalog';
 import { describeRate, hostOf, shortDate } from '../services/catalogRules';
 import {
-  amountRange, annualNote, filterListings, headlineRate, isStale, MAX_COMPARE, regulatorsIn, sortListings,
-  sortOptions, TABS, termRange, TERMS, toggleCompare,
+  amountRange, annualNote, filterListings, headlineRate, inflationCheck, isStale, MAX_COMPARE, regulatorsIn,
+  sortListings, sortOptions, TABS, termRange, TERMS, toggleCompare,
 } from '../services/compareRules';
 import { parseAmount } from '../services/format';
 
@@ -64,8 +64,11 @@ function Freshness({ listing }) {
   );
 }
 
-function ListingCard({ listing, selected, onDetails, onLeave, onCompare }) {
+const INFLATION_ICONS = { positive: 'trending-up-outline', warning: 'trending-down-outline', neutral: 'remove-outline' };
+
+function ListingCard({ listing, inflation, selected, onDetails, onLeave, onCompare }) {
   const details = [amountRange(listing), termRange(listing)].filter(Boolean).join(' · ');
+  const check = inflationCheck(listing, inflation);
   return (
     <Card style={{ gap: space.md }}>
       {/* Only this part opens the details, so screen readers can reach the buttons below. */}
@@ -90,6 +93,7 @@ function ListingCard({ listing, selected, onDetails, onLeave, onCompare }) {
           {details ? <Text variant="label" family="regular" color="inkMuted">{details}</Text> : null}
         </View>
 
+        {check ? <Badge label={check.label} tone={check.tone} icon={INFLATION_ICONS[check.tone]} /> : null}
         <LicenceBadges listing={listing} />
         <View style={{ gap: space.xxs }}>
           <Freshness listing={listing} />
@@ -136,7 +140,8 @@ function LinkRow({ icon, label, url }) {
   );
 }
 
-function DetailSheet({ listing, onClose, onLeave }) {
+function DetailSheet({ listing, inflation, onClose, onLeave }) {
+  const check = inflationCheck(listing, inflation);
   return (
     <Sheet
       visible
@@ -153,12 +158,14 @@ function DetailSheet({ listing, onClose, onLeave }) {
         <DetailRow label="Product" value={listing.product_name} />
         <DetailRow label="Rate" value={describeRate(listing)} />
         <DetailRow label="Per year" value={annualNote(listing)} />
+        {check ? <DetailRow label="Against inflation" value={`${check.label}. ${check.detail}`} /> : null}
         <DetailRow label="Amount" value={amountRange(listing)} />
         <DetailRow label="Term" value={termRange(listing)} />
         <DetailRow label="Fees" value={listing.fees} />
         <DetailRow label="Key terms" value={listing.key_terms.join('\n')} />
         <Freshness listing={listing} />
         <LinkRow icon="document-text-outline" label={`Rate source: ${hostOf(listing.rate_source_url)}`} url={listing.rate_source_url} />
+        {check ? <LinkRow icon="stats-chart-outline" label={`Inflation source: ${hostOf(inflation.source_url)}`} url={inflation.source_url} /> : null}
         {listing.badges.map(b => (
           <View key={b.regulator}>
             <LinkRow icon="shield-checkmark-outline" label={`${b.regulator} register: ${hostOf(b.source_url)}`} url={b.source_url} />
@@ -189,9 +196,10 @@ function CompareRow({ label, values }) {
   );
 }
 
-function CompareModal({ listings, onClose, onRemove, onLeave }) {
+function CompareModal({ listings, inflation, onClose, onRemove, onLeave }) {
   const { c } = useTheme();
   const values = read => listings.map(l => read(l) || NOT_STATED);
+  const hasInflation = listings.some(l => inflationCheck(l, inflation));
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaView style={{ flex: 1, backgroundColor: c.canvas }}>
@@ -214,6 +222,7 @@ function CompareModal({ listings, onClose, onRemove, onLeave }) {
           </View>
           <CompareRow label="Rate" values={values(describeRate)} />
           <CompareRow label="Per year" values={values(annualNote).map(v => (v === NOT_STATED ? 'As above' : v))} />
+          {hasInflation ? <CompareRow label="Against inflation" values={values(l => inflationCheck(l, inflation)?.label)} /> : null}
           <CompareRow label="Amount" values={values(amountRange)} />
           <CompareRow label="Term" values={values(termRange)} />
           <CompareRow label="Fees" values={values(l => l.fees)} />
@@ -333,7 +342,7 @@ function LeaveSheet({ listing, onClose }) {
   );
 }
 
-function CompareList({ listings, refreshing, onRefresh }) {
+function CompareList({ listings, inflation, refreshing, onRefresh }) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const toast = useToast();
@@ -444,6 +453,7 @@ function CompareList({ listings, refreshing, onRefresh }) {
             <ListingCard
               key={listing.product_id}
               listing={listing}
+              inflation={inflation}
               selected={selected.includes(listing.product_id)}
               onDetails={() => setDetails(listing)}
               onLeave={() => setLeaving(listing)}
@@ -485,6 +495,7 @@ function CompareList({ listings, refreshing, onRefresh }) {
       {details ? (
         <DetailSheet
           listing={details}
+          inflation={inflation}
           onClose={() => setDetails(null)}
           onLeave={() => { setLeaving(details); setDetails(null); }}
         />
@@ -492,6 +503,7 @@ function CompareList({ listings, refreshing, onRefresh }) {
       {comparing ? (
         <CompareModal
           listings={compared}
+          inflation={inflation}
           onClose={() => setComparing(false)}
           onRemove={removeFromCompare}
           onLeave={listing => { setComparing(false); setLeaving(listing); }}
@@ -506,12 +518,15 @@ export default function GrowScreen() {
   const { c } = useTheme();
   const toast = useToast();
   const [listings, setListings] = useState(null);
+  const [inflation, setInflation] = useState(null);
   const [failed, setFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async ({ announce = false } = {}) => {
     try {
-      setListings(await fetchListings());
+      const [nextListings, nextInflation] = await Promise.all([fetchListings(), fetchInflation()]);
+      setListings(nextListings);
+      setInflation(nextInflation);
       setFailed(false);
     } catch {
       setFailed(true);
@@ -546,5 +561,5 @@ export default function GrowScreen() {
   // Until the first verified provider goes live, people keep the starting list.
   if (!listings.length) return <InvestmentsScreen />;
 
-  return <CompareList listings={listings} refreshing={refreshing} onRefresh={refresh} />;
+  return <CompareList listings={listings} inflation={inflation} refreshing={refreshing} onRefresh={refresh} />;
 }

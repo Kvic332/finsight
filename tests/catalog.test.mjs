@@ -29,6 +29,7 @@ function harness(over = {}, storeOver = {}) {
       productCategory: async () => 'loan',
       saveRate: record('saveRate'),
       addCheck: record('addCheck'),
+      saveInflation: record('saveInflation'),
       ...storeOver,
     },
     ...over,
@@ -215,6 +216,37 @@ test('dates use Lagos time, and today sits just behind the clock', () => {
   assert.equal(checkedAt('2026-11-01', NOW), '2026-10-31T23:00:00.000Z');
 });
 
+// ── Inflation ─────────────────────────────────────────────────────────────────
+const goodInflation = {
+  action: 'save_inflation', month: '2026-09', headline_pct: 14.63, source_url: 'https://nbs.test/cpi', checked_on: '2026-11-03',
+};
+
+test('an inflation figure records its month, source and who saved it', async () => {
+  const { handler, calls } = harness();
+  assert.equal((await handler(request({ ...goodInflation, updated_by: 'someone-else' }))).status, 200);
+  const row = calls.writes[0].args[0];
+  assert.equal(row.month, '2026-09-01');
+  assert.equal(row.headline_pct, 14.63);
+  assert.equal(row.updated_by, 'admin-1');
+});
+
+test('an inflation figure needs a real past month, a sane value and a source', async () => {
+  const { handler, calls } = harness();
+  for (const extra of [
+    { month: '2026-12' }, { month: '2026-13' }, { month: 'September' }, { headline_pct: undefined }, { headline_pct: '14' },
+    { headline_pct: 501 }, { headline_pct: -1 }, { source_url: 'http://nbs.test' }, { checked_on: '2026-11-04' },
+  ]) {
+    assert.equal((await handler(request({ ...goodInflation, ...extra }))).status, 400, JSON.stringify(extra));
+  }
+  assert.equal(calls.writes.length, 0);
+});
+
+test('non-admins cannot change the inflation figure', async () => {
+  const { handler, calls } = harness({ isAdmin: async () => false });
+  assert.equal((await handler(request(goodInflation))).status, 403);
+  assert.equal(calls.writes.length, 0);
+});
+
 // ── Database errors ───────────────────────────────────────────────────────────
 test('database refusals become clear errors', async () => {
   const save = code => ({ saveProvider: async () => { throw new StoreError(code); } });
@@ -270,5 +302,6 @@ test('the list includes what the app would actually show', async () => {
   const { store } = fakeRest(url => (url.includes('compare_listings') ? { body: [{ product_id: PRODUCT }] } : { body: [] }));
   const all = await store.listAll();
   assert.deepEqual(all.listed, [PRODUCT]);
-  assert.deepEqual(Object.keys(all).sort(), ['checks', 'listed', 'products', 'providers', 'rates']);
+  assert.deepEqual(Object.keys(all).sort(), ['checks', 'inflation', 'listed', 'products', 'providers', 'rates']);
+  assert.equal(all.inflation, null);
 });

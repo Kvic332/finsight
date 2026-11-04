@@ -11,6 +11,7 @@ import {
   CATEGORIES, CHECK_STATUSES, RATE_PERIODS, REGULATORS, REGULATORS_BY_CATEGORY, currentRegulators, describeRate,
   hostOf, isCurrentLicence, latestChecks, listingBlockers, parseNumber, shortDate, todayInLagos,
 } from '../services/catalogRules';
+import { inflationMonth, isInflationCurrent } from '../services/compareRules';
 
 const STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
@@ -274,6 +275,36 @@ function CheckForm({ provider, onClose, onSaved }) {
   );
 }
 
+function InflationForm({ onClose, onSaved }) {
+  const [month, setMonth] = useState('');
+  const [pct, setPct] = useState('');
+  const [source, setSource] = useState('');
+  const [checkedOn, setCheckedOn] = useState(todayInLagos());
+  return (
+    <FormSheet
+      title="Update inflation"
+      onClose={onClose}
+      onSave={async () => {
+        await catalogAction('save_inflation', {
+          month: month.trim(),
+          headline_pct: requireNumber(pct, 'Inflation'),
+          source_url: source.trim(),
+          checked_on: checkedOn.trim(),
+        });
+        onSaved('Inflation updated.');
+      }}
+    >
+      <Text variant="label" family="regular" color="inkMuted">
+        Use headline inflation, year on year, from the National Bureau of Statistics. It publishes each month's figure around the middle of the next month.
+      </Text>
+      <Input label="Month it covers" value={month} onChangeText={setMonth} placeholder="YYYY-MM" />
+      <Input label="Headline inflation, %" value={pct} onChangeText={setPct} keyboardType="decimal-pad" />
+      <Input label="Where it's published" value={source} onChangeText={setSource} placeholder="https://" autoCapitalize="none" autoCorrect={false} keyboardType="url" />
+      <Input label="Date you checked it" value={checkedOn} onChangeText={setCheckedOn} placeholder="YYYY-MM-DD" />
+    </FormSheet>
+  );
+}
+
 function ProductCard({ product, provider, rate, checks, listed, onEdit, onRate, onStatus }) {
   const blockers = listed ? [] : listingBlockers({ provider, product, rate, checks });
   return (
@@ -465,6 +496,18 @@ export default function CatalogAdminScreen({ onBack }) {
           contentContainerStyle={{ padding: space.xl, paddingTop: space.sm, gap: space.lg }}
         >
           <Button full title="Add provider" icon="add" onPress={() => setForm({ type: 'provider' })} />
+          <Card style={{ gap: space.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm }}>
+              <Text variant="bodyStrong" family="bold">Inflation</Text>
+              {data.inflation && !isInflationCurrent(data.inflation) ? <Badge label="Too old to show" tone="warning" /> : null}
+            </View>
+            <Text variant="label" family="regular" color="inkMuted">
+              {data.inflation
+                ? `${data.inflation.headline_pct}% for ${inflationMonth(data.inflation)}, from ${hostOf(data.inflation.source_url)}`
+                : 'No figure yet, so savings and funds show no inflation check.'}
+            </Text>
+            <Button full title="Update inflation" variant="ghost" onPress={() => setForm({ type: 'inflation' })} />
+          </Card>
           {data.providers.length ? (
             <Card padded={false} style={{ overflow: 'hidden' }}>
               {data.providers.map((p, i) => {
@@ -496,6 +539,7 @@ export default function CatalogAdminScreen({ onBack }) {
         </ScrollView>
       )}
 
+      {form?.type === 'inflation' ? <InflationForm onClose={() => setForm(null)} onSaved={saved} /> : null}
       {form?.type === 'provider' ? <ProviderForm provider={form.provider} onClose={() => setForm(null)} onSaved={saved} /> : null}
       {form?.type === 'product' ? <ProductForm product={form.product} providerId={provider?.id} onClose={() => setForm(null)} onSaved={saved} /> : null}
       {form?.type === 'rate' ? <RateForm product={form.product} rate={rateFor(form.product.id)} onClose={() => setForm(null)} onSaved={saved} /> : null}

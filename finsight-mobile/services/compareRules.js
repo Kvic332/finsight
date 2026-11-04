@@ -126,6 +126,43 @@ export function annualNote({ rate_period: period, annual_min_pct: min, annual_ma
     : `About ${trimmed(min)}% to ${trimmed(max)}% a year, before compounding`;
 }
 
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+// NBS publishes about two weeks after a month ends, so this allows for a late report.
+const INFLATION_FRESH_DAYS = 90;
+
+export function inflationMonth({ month }) {
+  const [year, number] = month.split('-').map(Number);
+  return `${MONTH_NAMES[number - 1]} ${year}`;
+}
+
+export function isInflationCurrent(inflation, now = new Date()) {
+  if (!inflation) return false;
+  const [year, number] = inflation.month.split('-').map(Number);
+  const monthEnd = Date.UTC(year, number, 1);
+  return now.getTime() - monthEnd <= INFLATION_FRESH_DAYS * 86400000;
+}
+
+// Whether a rate grows money faster than prices rise. Null when it can't be said
+// plainly: a dollar product, a rate tied to its term, or an old inflation figure.
+export function inflationCheck(listing, inflation, now = new Date()) {
+  const { category, currency, annual_min_pct: min, annual_max_pct: max } = listing;
+  if (category !== 'savings' && category !== 'fund') return null;
+  if (currency !== 'NGN' || !hasValue(max) || !isInflationCurrent(inflation, now)) return null;
+
+  const rate = Number(max);
+  const prices = Number(inflation.headline_pct);
+  // Real growth, not a simple subtraction, because rates and prices compound together.
+  const real = ((1 + rate / 100) / (1 + prices / 100) - 1) * 100;
+  const gap = Math.abs(real).toFixed(1);
+  const subject = hasValue(min) && Number(min) !== rate ? 'Top rate' : 'Rate';
+  const detail = `Inflation was ${prices}% in ${inflationMonth(inflation)}, from the National Bureau of Statistics. This compares yearly figures before tax and fees, and inflation can change.`;
+
+  if (Number(gap) === 0) return { tone: 'neutral', label: `${subject} is level with inflation`, detail };
+  return real > 0
+    ? { tone: 'positive', label: `${subject} beats inflation by about ${gap}%`, detail }
+    : { tone: 'warning', label: `${subject} is about ${gap}% below inflation`, detail };
+}
+
 export function toggleCompare(selected, id) {
   if (selected.includes(id)) return { selected: selected.filter(s => s !== id), full: false };
   if (selected.length >= MAX_COMPARE) return { selected, full: true };

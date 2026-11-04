@@ -44,14 +44,15 @@ export function createStore(fetchFn: typeof fetch, supabaseUrl: string, serviceK
 
   return {
     async listAll() {
-      const [providers, products, rates, checks, listed] = await Promise.all([
+      const [providers, products, rates, checks, listed, inflation] = await Promise.all([
         call('providers?select=*&order=name'),
         call('products?select=*&order=name'),
         call('rates?select=*'),
         call('verifications?select=*&order=checked_at.desc,created_at.desc'),
         call('compare_listings?select=product_id'),
+        call('inflation_figures?select=*&order=month.desc&limit=1'),
       ]);
-      return { providers, products, rates, checks, listed: listed.map(r => r.product_id) };
+      return { providers, products, rates, checks, listed: listed.map(r => r.product_id), inflation: inflation[0] ?? null };
     },
     saveProvider: (id, fields) => (id ? update('providers', id, fields) : insert('providers', fields)),
     saveProduct: (id, fields) => (id ? update('products', id, fields) : insert('products', fields)),
@@ -65,5 +66,9 @@ export function createStore(fetchFn: typeof fetch, supabaseUrl: string, serviceK
       return saved;
     },
     addCheck: row => insert('verifications', row),
+    async saveInflation(row) {
+      const [saved] = await call('inflation_figures?on_conflict=month', 'POST', row, 'resolution=merge-duplicates,return=representation');
+      return saved;
+    },
   };
 }

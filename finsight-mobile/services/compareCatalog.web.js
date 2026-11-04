@@ -57,6 +57,10 @@ const SAMPLE = [
   sample('f2', 'fund', 'Provider H', 'Dollar fund', { min: 6.5, period: 'annual' }, { currency: 'USD', min_amount: 100 }),
 ];
 
+export async function fetchInflation() {
+  return { month: '2026-09-01', headline_pct: 14.63, source_url: 'https://example.com/cpi' };
+}
+
 export async function fetchListings() {
   const mode = new URLSearchParams(window.location.search).get('catalog');
   if (mode === 'error') throw new Error('Preview error');

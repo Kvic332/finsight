@@ -15,6 +15,7 @@ export type Store = {
   productCategory: (id: string) => Promise<string | null>;
   saveRate: (row: Row) => Promise<Row>;
   addCheck: (row: Row) => Promise<Row>;
+  saveInflation: (row: Row) => Promise<Row>;
 };
 
 export type Deps = {
@@ -200,6 +201,21 @@ export function checkRow(body: Row, uid: string, now: Date): Row {
   };
 }
 
+export function inflationRow(body: Row, uid: string, now: Date): Row {
+  if (typeof body.month !== 'string' || !/^\d{4}-\d{2}$/.test(body.month)) throw new Invalid();
+  const month = calendarDate(`${body.month}-01`);
+  if (month > lagosToday(now)) throw new Invalid();
+  const pct = optionalNumber(body.headline_pct, 500);
+  if (pct === null) throw new Invalid();
+  return {
+    month,
+    headline_pct: pct,
+    source_url: httpsUrl(body.source_url),
+    checked_at: checkedAt(body.checked_on, now),
+    updated_by: uid,
+  };
+}
+
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
     status,
@@ -241,6 +257,8 @@ async function route(action: unknown, body: Row, uid: string, deps: Deps): Promi
     }
     case 'add_check':
       return json(200, { row: await store.addCheck(checkRow(body, uid, now)) });
+    case 'save_inflation':
+      return json(200, { row: await store.saveInflation(inflationRow(body, uid, now)) });
     default:
       return fail(400, 'invalid_request');
   }

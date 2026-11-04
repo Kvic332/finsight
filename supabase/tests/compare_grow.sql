@@ -118,6 +118,11 @@ insert into public.verifications (provider_id, regulator, status, source_url, ch
 values ('00000000-0000-0000-0000-00000000000b', 'FCCPC', 'revoked', 'https://reg.test', now());
 select pg_temp.expect(pg_temp.count_as('anon', 'select 1 from public.compare_listings'), 1, 'hidden once revoked');
 
+-- Inflation figures are public to read and closed to write.
+select pg_temp.must_fail('anon', $q$insert into public.inflation_figures (month, headline_pct, source_url, checked_at) values ('2020-01-01', 1, 'https://x.test', now())$q$, 'anon inflation insert');
+select pg_temp.must_fail('anon', 'select updated_by from public.inflation_figures', 'read inflation updated_by');
+select pg_temp.must_fail('postgres', $q$insert into public.inflation_figures (month, headline_pct, source_url, checked_at) values ('2020-01-15', 1, 'https://x.test', now())$q$, 'mid-month inflation');
+
 -- Bad data is rejected.
 select pg_temp.must_fail('postgres', $q$insert into public.providers (name, website_url) values ('x', 'javascript:alert(1)')$q$, 'unsafe website');
 select pg_temp.must_fail('postgres', $q$update public.products set referral_url = 'http://x.test' where name = 'Loan'$q$, 'unsafe referral');

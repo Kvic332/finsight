@@ -14,6 +14,7 @@ const db = {
   }],
   rates: [],
   checks: [],
+  inflation: { month: '2026-09-01', headline_pct: 14.63, source_url: 'https://example.com/cpi', checked_at: stamp() },
 };
 
 function listed() {
@@ -55,6 +56,11 @@ export async function catalogAction(action, { id, ...payload } = {}) {
       db.rates = db.rates.filter(r => r.product_id !== rate.product_id);
       const row = { ...rate, checked_at: checked_on === todayInLagos() ? stamp() : `${checked_on}T00:00:00+01:00` };
       db.rates.push(row);
+      return { row };
+    }
+    case 'save_inflation': {
+      const row = { month: `${payload.month}-01`, headline_pct: payload.headline_pct, source_url: payload.source_url, checked_at: stamp() };
+      db.inflation = row;
       return { row };
     }
     case 'add_check': {
