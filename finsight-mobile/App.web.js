@@ -12,6 +12,7 @@ import DataLockedScreen from './screens/DataLockedScreen';
 import AdminDashboardScreen from './screens/AdminDashboardScreen';
 import CatalogAdminScreen from './screens/CatalogAdminScreen';
 import { DeleteAccountSheet } from './screens/CloudAccountScreen';
+import BankImportScreen from './screens/BankImportScreen';
 
 // The web build only previews the design while building it. It runs the real
 // screens on made-up data; bank capture, voice and biometrics stay in App.js.
@@ -38,7 +39,7 @@ export default function WebPreview() {
   const [scheme, setScheme] = useState('light');
   const [seeded, setSeeded] = useState(false);
   const [user, setUser] = useState(INITIAL_USER);
-  // Preview a single screen with ?view=onboarding, pin, locked, admin, catalog or delete.
+  // Preview a single screen with ?view=onboarding, pin, locked, admin, catalog, delete or statement.
   const view = new URLSearchParams(window.location.search).get('view');
   const c = colors[scheme];
 
@@ -73,6 +74,7 @@ export default function WebPreview() {
                   : view === 'locked' ? <DataLockedScreen onRetry={() => {}} onStartOver={() => {}} />
                   : view === 'admin' ? <AdminDashboardScreen onBack={() => {}} />
                   : view === 'catalog' ? <CatalogAdminScreen onBack={() => {}} />
+                  : view === 'statement' ? <BankImportScreen onClose={() => {}} />
                   : view === 'delete' ? (
                     <DeleteAccountSheet
                       onClose={() => {}}

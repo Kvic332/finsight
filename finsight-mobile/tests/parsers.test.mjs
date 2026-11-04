@@ -1,7 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseSMS } from '../services/smsParser.js';
-import { csvToRows, parseRows } from '../services/statementParser.js';
+import { csvToRows, parseRows, pdfRowsToTransactions, statementKind } from '../services/statementParser.js';
+
+test('PDF rows become transactions with the right direction and date', () => {
+  const [salary, shop] = pdfRowsToTransactions([
+    ['01/10/2026', 'Salary October', 0, 450000],
+    ['03/10/2026', 'POS Shoprite Ikeja', 12400.5, 0],
+  ]);
+  assert.equal(salary.type, 'credit');
+  assert.equal(salary.amount, 450000);
+  assert.equal(salary.date, '01/10/2026');
+  assert.equal(salary.cat, 'Income');
+  assert.equal(shop.type, 'debit');
+  assert.equal(shop.amount, 12401);
+  assert.equal(shop.source, 'import');
+});
+
+test('a chosen file goes to the right reader', () => {
+  assert.equal(statementKind('October.PDF'), 'pdf');
+  assert.equal(statementKind('statement', 'application/pdf'), 'pdf');
+  assert.equal(statementKind('a.xlsx'), 'excel');
+  assert.equal(statementKind('a.xls'), 'excel');
+  assert.equal(statementKind('a.csv'), 'csv');
+  assert.equal(statementKind('export', 'text/csv'), 'csv');
+  assert.equal(statementKind('photo.jpg', 'image/jpeg'), null);
+  assert.equal(statementKind('notes.docx'), null);
+});
 
 test('structured bank SMS is read correctly', () => {
   const [tx] = parseSMS('Acct:123**45 DR:N5,000.00 Desc:POS Shoprite DT:15/MAY/26 Fidelity');

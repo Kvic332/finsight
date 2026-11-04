@@ -8,6 +8,7 @@
       "env": {
         "EXPO_PUBLIC_ARIA_URL": "https://otahfeuhnivowowkeolt.supabase.co/functions/v1/aria",
         "EXPO_PUBLIC_CATALOG_ADMIN_URL": "https://otahfeuhnivowowkeolt.supabase.co/functions/v1/catalog-admin",
+        "EXPO_PUBLIC_STATEMENT_URL": "https://otahfeuhnivowowkeolt.supabase.co/functions/v1/statement-reader",
         "EXPO_PUBLIC_SUPABASE_URL": "https://otahfeuhnivowowkeolt.supabase.co",
         "EXPO_PUBLIC_SUPABASE_KEY": "sb_publishable_SzymkXd1l0XX9ecayq1nNA_EBy9A6n2"
       }

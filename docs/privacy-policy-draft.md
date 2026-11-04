@@ -26,6 +26,8 @@ Your transactions, budgets, goals and profile are encrypted on your phone.
 | Creating a cloud account | Your name, email and password | Google Firebase |
 | Backing up | Your transactions, budgets, goals, profile and progress | Google Firebase |
 | Being signed in | Basic usage counts, FinScore and level | Google Firebase |
+| Reading a PDF statement, after you agree | The whole PDF, including your name, account number and transactions | Our server (Supabase) and our AI provider (Anthropic) |
+| Reading a PDF statement | An anonymous ID or your account ID, and a daily count, to apply usage limits | Google Firebase and Supabase |
 | Opening Compare & Grow | A request for the provider list, which includes your internet address. None of your finances are sent | Supabase |
 | Choosing "Go to provider" | You leave FinSight for that provider's website, where its own privacy policy applies. Some links are referral links, so the provider may know you came from FinSight | The provider |
 
@@ -48,7 +50,9 @@ To show your figures, answer your questions, keep backups you ask for, limit mis
 - Data on your phone stays until you delete it in Settings or uninstall the app.
 - Cloud backups, your profile and your login stay until you delete your account in the app, under Cloud backup. You can also email us to ask. [Confirm how long Google keeps deleted data in its own systems.]
 - ARIA message counts contain your account ID and a number, with no message content. They're deleted automatically after 30 days.
-- ARIA conversations aren't stored by FinSight. [Confirm the provider's retention terms.]
+- ARIA conversations and PDF statements aren't stored by FinSight. [Confirm the provider's retention terms for both, as statements hold account numbers and full transaction history.]
+- PDF statement counts contain your account ID and a number, with no statement content. They're deleted after 30 days.
+- Excel and CSV statements stay on your phone and aren't sent anywhere.
 
 ## Where it's processed
 

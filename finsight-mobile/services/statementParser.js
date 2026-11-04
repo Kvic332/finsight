@@ -141,6 +141,21 @@ export function parseRows(rows) {
   return transactions;
 }
 
+// ── PDF rows → transactions ───────────────────────────────────────────────────
+// The server returns rows of [date, description, debit, credit]. They go through
+// the same parser as spreadsheets, so every source is treated the same way.
+export function pdfRowsToTransactions(rows) {
+  return parseRows([['Date', 'Description', 'Debit', 'Credit'], ...rows]);
+}
+
+// Which reader a chosen file needs, or null if we can't read it.
+export function statementKind(name, mimeType) {
+  if (/\.pdf$/i.test(name || '') || mimeType === 'application/pdf') return 'pdf';
+  if (/\.xlsx?$/i.test(name || '')) return 'excel';
+  if (/\.(csv|txt)$/i.test(name || '') || mimeType === 'text/csv') return 'csv';
+  return null;
+}
+
 // ── CSV → rows ────────────────────────────────────────────────────────────────
 function parseCSVLine(line) {
   const result = [];

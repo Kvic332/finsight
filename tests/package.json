@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test \"aria*.test.mjs\" \"catalog*.test.mjs\"",
+    "test": "node --test \"aria*.test.mjs\" \"catalog*.test.mjs\" \"statement*.test.mjs\"",
     "test:rules": "firebase emulators:exec --only firestore --project demo-finsight --config ../firebase.json \"node --test rules.test.mjs\""
   },
   "devDependencies": {

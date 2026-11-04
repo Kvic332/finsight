@@ -55,6 +55,23 @@ npm run test:rules
 
 `test:rules` needs Java and uses the Firestore emulator. App calculations are tested separately with `npm test` in `finsight-mobile`.
 
+## PDF statements
+
+The `statement-reader` function reads PDF statements with Claude, after the app asks for consent. It keeps nothing, and logs only an event name and a status code. Excel and CSV files never reach it.
+
+```bash
+supabase functions deploy statement-reader --no-verify-jwt
+```
+
+Password-protected PDFs aren't supported, because Claude can't open them. Requests stop after about 8 MB of PDF.
+
+| Secret | Default | Meaning |
+|---|---|---|
+| `STATEMENT_MODEL` | `claude-opus-5-5` | Claude model |
+| `STATEMENT_DAILY_LIMIT_SIGNED_IN` | `5` | Statements per day, per account |
+| `STATEMENT_DAILY_LIMIT_ANONYMOUS` | `2` | Statements per day, without an account |
+| `STATEMENT_DAILY_LIMIT_GLOBAL` | `100` | Statements per day across everyone. This is the spending cap |
+
 ## App updates without a new APK
 
 Builds listen on the channel named in `eas.json`, such as `preview`. JavaScript fixes can be sent to phones with:

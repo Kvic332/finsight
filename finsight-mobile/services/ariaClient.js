@@ -14,7 +14,7 @@ const OFFLINE_ERROR = "Couldn't reach ARIA. Check your connection and try again.
 // ARIA works without a FinSight account, so people who haven't signed in get a
 // silent anonymous identity. It only exists to apply per-person usage limits.
 // Wait for the saved session first, or this would replace a signed-in user.
-async function getIdToken() {
+export async function getIdToken() {
   await auth.authStateReady();
   const user = auth.currentUser || (await signInAnonymously(auth)).user;
   return user.getIdToken();
