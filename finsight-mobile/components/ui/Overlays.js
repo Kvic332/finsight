@@ -2,7 +2,7 @@ import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
 import {
-  AccessibilityInfo, Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, View,
+  AccessibilityInfo, Animated, Easing, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { motion, radius, space } from '../../constants/tokens';
@@ -10,6 +10,32 @@ import { Button } from './Button';
 import { Icon } from './Icon';
 import { Text } from './Text';
 import { useReducedMotion, useTheme } from './theme';
+
+// How far the keyboard covers a full-screen view on Android, where edge-to-edge
+// windows don't shrink for it. Any shrink that did happen is taken off, so a phone
+// that does resize the window isn't pushed up twice.
+function useKeyboardOverlap() {
+  const [keyboard, setKeyboard] = useState(() => (Platform.OS === 'android' ? Keyboard.metrics()?.height || 0 : 0));
+  const [height, setHeight] = useState(0);
+  const tallest = useRef(0);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return undefined;
+    const subscriptions = [
+      Keyboard.addListener('keyboardDidShow', e => setKeyboard(e.endCoordinates.height)),
+      Keyboard.addListener('keyboardDidHide', () => setKeyboard(0)),
+    ];
+    return () => subscriptions.forEach(s => s.remove());
+  }, []);
+
+  const onLayout = useCallback(e => {
+    const next = e.nativeEvent.layout.height;
+    tallest.current = Math.max(tallest.current, next);
+    setHeight(next);
+  }, []);
+
+  return { overlap: Math.max(keyboard - (tallest.current - height), 0), height, onLayout };
+}
 
 // Bottom sheet, used in place of alerts and full-screen popups. The Modal stays
 // mounted through the closing animation, so the sheet slides away smoothly.
@@ -19,6 +45,7 @@ export function Sheet({ visible, onClose, title, children, footer }) {
   const reduced = useReducedMotion();
   const [mounted, setMounted] = useState(visible);
   const progress = useRef(new Animated.Value(0)).current;
+  const { overlap, height, onLayout } = useKeyboardOverlap();
 
   useEffect(() => {
     if (visible) setMounted(true);
@@ -35,7 +62,8 @@ export function Sheet({ visible, onClose, title, children, footer }) {
     <Modal transparent visible statusBarTranslucent animationType="none" onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, justifyContent: 'flex-end' }}
+        onLayout={onLayout}
+        style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: overlap }}
       >
         <Animated.View style={{
           position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
@@ -50,7 +78,7 @@ export function Sheet({ visible, onClose, title, children, footer }) {
             borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg,
             paddingHorizontal: space.lg, paddingTop: space.sm,
             paddingBottom: Math.max(insets.bottom, space.lg),
-            maxHeight: '90%',
+            maxHeight: height ? (height - overlap) * 0.9 : '90%',
             width: '100%', maxWidth: 560, alignSelf: 'center',
             transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [320, 0] }) }],
           }}

@@ -212,7 +212,7 @@ export default function CloudAccountScreen({ onBack }) {
           <Card style={{ padding: space.lg, gap: space.xs }}>
             <Text variant="bodyStrong" family="bold">What's stored</Text>
             <Text variant="label" family="regular" color="inkMuted">
-              Your backup holds your transactions, budgets, goals and profile, and the app only lets your account open it. It's protected by Google Firebase's security, not by FinSight's own encryption. Your FinScore and basic usage counts are also saved with your account.
+              Your backup holds your transactions, budgets, goals, debts and profile, and the app only lets your account open it. It's protected by Google Firebase's security, not by FinSight's own encryption. Your FinScore and basic usage counts are also saved with your account.
             </Text>
           </Card>
 

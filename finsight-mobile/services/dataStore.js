@@ -9,6 +9,7 @@ import {
 // it's written. Everything else, such as the theme, passes straight through.
 const SENSITIVE = new Set([
   'finsight_transactions', 'finsight_user', 'finsight_budgets', 'finsight_savings', 'finsight_investments',
+  'finsight_debts',
 ]);
 const KEY_NAME = 'finsight_data_key';
 

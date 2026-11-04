@@ -13,9 +13,10 @@ FinSight is run by [legal name and registered address]. To contact us about your
 **Stored on your phone**
 - Your name and any profile details you add, such as your email, phone number, date of birth, sex, nationality, job and photo
 - Your income, payday, banks, budgets and savings goals
+- Debts you add, such as who you owe, how much, the cost and due dates
 - Transactions you enter, paste from bank SMS, import from a statement, or capture from bank notifications if you turn that on
 
-Your transactions, budgets, goals and profile are encrypted on your phone.
+Your transactions, budgets, goals, debts and profile are encrypted on your phone.
 
 If you turn on bank alert capture, Android gives FinSight access to your notifications. FinSight keeps only those from a list of bank apps and from bank SMS senders, and ignores the rest. The text of new alerts stays on your phone, unencrypted in storage only FinSight can use, until you next open the app. It isn't sent to us. [Lawyer to confirm this wording. Google Play also reviews apps that use notification access.]
 
@@ -23,10 +24,10 @@ If you turn on bank alert capture, Android gives FinSight access to your notific
 
 | Feature | What's sent | Who receives it |
 |---|---|---|
-| Asking ARIA a question | Your question, and a summary of your finances: name, income, recent transactions, budgets, goals and banks | Our server (Supabase) and our AI provider (Anthropic) |
+| Asking ARIA a question | Your question, and a summary of your finances: name, income, recent transactions, budgets, goals, debts and banks | Our server (Supabase) and our AI provider (Anthropic) |
 | Using ARIA | An anonymous ID or your account ID, and a daily message count, to apply usage limits | Google Firebase and Supabase |
 | Creating a cloud account | Your name, email and password | Google Firebase |
-| Backing up | Your transactions, budgets, goals, profile and progress | Google Firebase |
+| Backing up | Your transactions, budgets, goals, debts, profile and progress | Google Firebase |
 | Being signed in | Basic usage counts, FinScore and level | Google Firebase |
 | Reading a PDF statement, after you agree | The whole PDF, including your name, account number and transactions | Our server (Supabase) and our AI provider (Anthropic) |
 | Reading a PDF statement | An anonymous ID or your account ID, and a daily count, to apply usage limits | Google Firebase and Supabase |

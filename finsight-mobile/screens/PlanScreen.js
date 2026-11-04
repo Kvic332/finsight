@@ -5,6 +5,7 @@ import { radius, space } from '../constants/tokens';
 import { Gradient, Text, tapFeedback, useTheme } from '../components/ui';
 import BudgetScreen from './BudgetScreen';
 import SavingsScreen from './SavingsScreen';
+import DebtsScreen from './DebtsScreen';
 
 export default function PlanScreen({ route, user, setUser }) {
   const { c } = useTheme();
@@ -20,7 +21,7 @@ export default function PlanScreen({ route, user, setUser }) {
       <Gradient style={{ paddingTop: insets.top + space.sm, paddingHorizontal: space.xl, paddingBottom: space.lg, gap: space.md }}>
         <Text variant="title" family="bold" color="#FFFFFF" accessibilityRole="header">Plan</Text>
         <View accessibilityRole="tablist" style={{ flexDirection: 'row', padding: space.xs, borderRadius: radius.md, backgroundColor: 'rgba(255,255,255,0.2)' }}>
-          {['Budget', 'Savings'].map(option => (
+          {['Budget', 'Savings', 'Debts'].map(option => (
             <Pressable
               key={option}
               onPress={() => { tapFeedback(); setView(option); }}
@@ -36,7 +37,9 @@ export default function PlanScreen({ route, user, setUser }) {
           ))}
         </View>
       </Gradient>
-      {view === 'Budget' ? <BudgetScreen /> : <SavingsScreen user={user} setUser={setUser} />}
+      {view === 'Budget' ? <BudgetScreen />
+        : view === 'Savings' ? <SavingsScreen user={user} setUser={setUser} />
+        : <DebtsScreen user={user} />}
     </View>
   );
 }

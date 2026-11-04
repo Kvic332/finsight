@@ -13,6 +13,7 @@ export const CATEGORY_ICONS = {
   Savings: 'wallet-outline',
   Income: 'arrow-down-outline',
   Transfer: 'swap-horizontal-outline',
+  Debt: 'card-outline',
   Shopping: 'bag-outline',
   Other: 'ellipsis-horizontal',
 };

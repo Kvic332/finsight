@@ -158,7 +158,7 @@ export default function SavingsScreen({ user, setUser }) {
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: space.xs }}>
           <Text variant="heading" family="bold" accessibilityRole="header">Your goals</Text>
           {goals.length ? (
-            <Pressable onPress={() => openNewGoal} accessibilityRole="button" hitSlop={10}>
+            <Pressable onPress={openNewGoal} accessibilityRole="button" hitSlop={10}>
               <Text variant="label" family="semibold" color="accent">Add goal</Text>
             </Pressable>
           ) : null}
@@ -169,7 +169,7 @@ export default function SavingsScreen({ user, setUser }) {
             icon="flag-outline"
             title="Set a savings goal"
             body="Name something you're saving for and track your progress towards it."
-            action={<Button title="Add goal" onPress={() => openNewGoal} />}
+            action={<Button title="Add goal" onPress={openNewGoal} />}
           />
         ) : goals.map(goal => {
           const { used, percent, toGo, done } = goalProgress(goal);

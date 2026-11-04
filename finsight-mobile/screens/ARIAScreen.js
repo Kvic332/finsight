@@ -14,6 +14,7 @@ import {
 import Voice from '../services/voice';
 import { trackEvent } from '../services/cloudSync';
 import { askAria } from '../services/ariaClient';
+import { debtsContext } from '../services/debts';
 import { computePaydayPlan, formatRunway, isSameMonth } from '../services/finance';
 
 const QUICK_QUESTIONS = [
@@ -77,6 +78,7 @@ export default function ARIAScreen({ navigation, user }) {
   const [loading, setLoading] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [budgets, setBudgets] = useState([]);
+  const [debts, setDebts] = useState([]);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   // Off by default: reading someone's money out loud shouldn't happen unasked.
@@ -91,9 +93,11 @@ export default function ARIAScreen({ navigation, user }) {
     Promise.all([
       AsyncStorage.getItem('finsight_transactions'),
       AsyncStorage.getItem('finsight_budgets'),
-    ]).then(([tRaw, bRaw]) => {
+      AsyncStorage.getItem('finsight_debts'),
+    ]).then(([tRaw, bRaw, dRaw]) => {
       setTransactions(tRaw ? JSON.parse(tRaw) : []);
       setBudgets(bRaw ? JSON.parse(bRaw) : []);
+      setDebts(dRaw ? JSON.parse(dRaw) : []);
     });
   }, []));
 
@@ -165,6 +169,7 @@ SPENDING BY CATEGORY THIS PAY PERIOD: ${catSummary || 'No spending data'}
 RECENT TRANSACTIONS: ${recentTx || 'None recorded yet'}
 SAVINGS GOALS: ${goalsSummary || 'None set'}
 MONTHLY BUDGETS: ${budgetSummary || 'No budgets set'}
+DEBTS, MOST EXPENSIVE FIRST: ${debtsContext(debts)}
     `.trim();
   }
 

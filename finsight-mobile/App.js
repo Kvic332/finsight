@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { gradients } from './constants/tokens';
 import { checkAndSendDigests } from './services/notificationService';
 import { syncBankAlerts } from './services/notificationPermission';
+import { syncDebtReminders, syncStoredDebtReminders } from './services/debtReminders';
 import { isPickingMedia } from './services/appState';
 
 const Stack = createNativeStackNavigator();
@@ -68,6 +69,7 @@ export default function App() {
         checkAndSendDigests(name);
       }
       await syncBankAlerts();
+      syncStoredDebtReminders();
     } catch(e){
       // Never fall through to onboarding here: it would overwrite the unreadable data.
       if (e?.code === DATA_LOCKED) setDataLocked(true);
@@ -143,7 +145,7 @@ export default function App() {
         {dataLocked ? (
           <DataLockedScreen
             onRetry={() => { setDataLocked(false); setLoading(true); initApp(); }}
-            onStartOver={async () => { await wipeAllData(); setDataLocked(false); setUser(null); setLocked(false); }}
+            onStartOver={async () => { await syncDebtReminders([]); await wipeAllData(); setDataLocked(false); setUser(null); setLocked(false); }}
           />
         ) : !user ? (
           <Stack.Navigator screenOptions={{ headerShown:false }}>
@@ -159,6 +161,7 @@ export default function App() {
             biometricEnabled={biometricEnabled}
             onSuccess={()=>setLocked(false)}
             onForgot={async()=>{
+              await syncDebtReminders([]);
               await wipeAllData();
               setUser(null); setLocked(false);
             }}

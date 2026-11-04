@@ -150,6 +150,7 @@ export async function backupToCloud() {
     'finsight_xp',
     'finsight_xp_log',
     'finsight_investments',
+    'finsight_debts',
   ];
 
   const pairs = await AsyncStorage.multiGet(keys);
