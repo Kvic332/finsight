@@ -51,6 +51,10 @@ export default function WebPreview() {
         { id: 'b2', name: 'Transport', cat: 'Transport', limit: 3500, keywords: [] },
         { id: 'b3', name: 'Netflix', cat: 'Entertainment', limit: 7000, keywords: ['netflix'] },
       ])],
+      ['finsight_debts', JSON.stringify([
+        { id: 'd1', lender: 'Carbon', owed: 120000, annualRate: 60, payment: 25000, dueDate: null, repeatsMonthly: true, paid: 0 },
+        { id: 'd2', lender: 'Cousin', owed: 40000, annualRate: null, payment: null, dueDate: null, repeatsMonthly: false, paid: 0 },
+      ])],
     ]).finally(() => setSeeded(true));
   }, []);
 
