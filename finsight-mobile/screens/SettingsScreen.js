@@ -19,7 +19,10 @@ import DesignGalleryScreen from './DesignGalleryScreen';
 import PinScreen from './PinScreen';
 import { onAuthChange, checkIsAdmin } from '../services/cloudSync';
 import { scheduleDailyReminder, cancelDailyReminder } from '../services/notificationService';
-import { isNotificationAccessGranted, openNotificationAccessSettings, requestBatteryOptimizationExemption } from '../services/notificationPermission';
+import {
+  isCaptureSupported, isNotificationAccessGranted, openAppInfo, openNotificationAccessSettings,
+  requestBatteryOptimizationExemption, syncBankAlerts,
+} from '../services/notificationPermission';
 import { setPickingMedia } from '../services/appState';
 import { exportCSV, exportPDF } from '../services/exportService';
 import { formatMoney, parseAmount } from '../services/format';
@@ -308,7 +311,6 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
   async function checkNotifAccess() {
     const granted = await isNotificationAccessGranted();
     setNotifAccessGranted(granted);
-    if (granted) requestBatteryOptimizationExemption();
   }
 
   async function saveUser(updates) {
@@ -436,6 +438,10 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
   }
 
   async function openCapture() {
+    if (!isCaptureSupported()) {
+      toast.show('Install the latest version of FinSight to use this.', { tone: 'error' });
+      return;
+    }
     const granted = await isNotificationAccessGranted();
     setNotifAccessGranted(granted);
     if (granted) toast.show('Bank alert capture is already on', { tone: 'success' });
@@ -444,6 +450,8 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
 
   async function enableCapture() {
     setShowCapture(false);
+    // Tells the Android side which sources to keep before access is switched on.
+    await syncBankAlerts();
     await openNotificationAccessSettings();
     setTimeout(async () => {
       const granted = await isNotificationAccessGranted();
@@ -595,7 +603,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
           <Row icon="shield-checkmark-outline" title="Your privacy" subtitle="Where your data goes"
             onPress={() => setAbout({
               title: 'Your privacy',
-              body: 'Your transactions, budgets, goals and profile are stored on this phone, encrypted.\n\nWhen you ask ARIA a question, a summary of your finances goes through our server to Anthropic, the AI provider, to get an answer.\n\nExcel and CSV statements are read on your phone. If you choose a PDF statement, we ask first, then the whole file goes through our server to Anthropic to be read. FinSight doesn\'t keep it.\n\nIf you create a cloud account, your backup and basic usage figures are stored with Google Firebase. The app only lets your account open your backup. It\'s protected by Firebase\'s security, not by FinSight\'s own encryption. You can delete your account and backup under Cloud backup.\n\nCompare & Grow doesn\'t send your finances anywhere. "Go to provider" opens a website we don\'t run, and we may earn from some of those links. That never changes the order of the list.\n\nWe don\'t sell your data.',
+              body: 'Your transactions, budgets, goals and profile are stored on this phone, encrypted.\n\nIf you turn on Capture bank alerts, Android shows FinSight your notifications. It keeps only alerts from bank apps and bank SMS, on this phone, and ignores everything else. New alerts wait unencrypted, in storage only FinSight can use, until the app next opens.\n\nWhen you ask ARIA a question, a summary of your finances goes through our server to Anthropic, the AI provider, to get an answer.\n\nExcel and CSV statements are read on your phone. If you choose a PDF statement, we ask first, then the whole file goes through our server to Anthropic to be read. FinSight doesn\'t keep it.\n\nIf you create a cloud account, your backup and basic usage figures are stored with Google Firebase. The app only lets your account open your backup. It\'s protected by Firebase\'s security, not by FinSight\'s own encryption. You can delete your account and backup under Cloud backup.\n\nCompare & Grow doesn\'t send your finances anywhere. "Go to provider" opens a website we don\'t run, and we may earn from some of those links. That never changes the order of the list.\n\nWe don\'t sell your data.',
             })} />
           <ListRow leading={<IconTile name="information-circle-outline" size={40} tone="accent" />} title="Version" subtitle="FinSight 1.0.0" divider={false} />
         </Section>
@@ -688,10 +696,16 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
         visible={showCapture}
         onClose={() => setShowCapture(false)}
         title="Capture bank alerts"
-        footer={<Button full title="Open phone settings" onPress={enableCapture} />}
+        footer={(
+          <>
+            <Button full title="Open phone settings" onPress={enableCapture} />
+            <Button full title="Open App info" variant="ghost" onPress={() => { setShowCapture(false); openAppInfo(); }} />
+          </>
+        )}
       >
         <View style={{ gap: space.sm }}>
           <Text color="inkMuted">FinSight can add transactions from your bank's notifications, so you don't have to type them.</Text>
+          <Text variant="label" family="regular" color="inkMuted">Android will show FinSight your notifications. It only keeps alerts from bank apps and bank SMS, and ignores everything else. Nothing is sent anywhere.</Text>
           {['Tap Open phone settings', 'Find FinSight in the list', 'Turn it on, then come back'].map((step, i) => (
             <View key={step} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
               <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
@@ -700,6 +714,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
               <Text style={{ flex: 1 }}>{step}</Text>
             </View>
           ))}
+          <Text variant="label" family="regular" color="inkMuted">If Android says the setting is restricted, open App info, tap the three dots at the top, choose Allow restricted settings, then try again.</Text>
         </View>
       </Sheet>
 

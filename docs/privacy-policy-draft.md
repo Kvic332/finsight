@@ -17,6 +17,8 @@ FinSight is run by [legal name and registered address]. To contact us about your
 
 Your transactions, budgets, goals and profile are encrypted on your phone.
 
+If you turn on bank alert capture, Android gives FinSight access to your notifications. FinSight keeps only those from a list of bank apps and from bank SMS senders, and ignores the rest. The text of new alerts stays on your phone, unencrypted in storage only FinSight can use, until you next open the app. It isn't sent to us. [Lawyer to confirm this wording. Google Play also reviews apps that use notification access.]
+
 **Sent to us and our providers only when you use these features**
 
 | Feature | What's sent | Who receives it |

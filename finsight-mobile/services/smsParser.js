@@ -25,7 +25,7 @@ function isBankTransaction(text) {
   return hasBankName || hasBankPattern;
 }
 
-function detectCategory(text) {
+export function detectCategory(text) {
   const lower = text.toLowerCase();
   if (lower.includes('shoprite') || lower.includes('grocery') || lower.includes('market') || lower.includes('food') || lower.includes('eat')) return 'Food';
   if (lower.includes('uber') || lower.includes('bolt') || lower.includes('transport') || lower.includes('fuel') || lower.includes('petrol')) return 'Transport';

@@ -2,15 +2,19 @@
  * Expo config plugin: Native Bank Notification Capture
  *
  * Writes three Java files into the Android project:
- *   1. BankNotificationService.java      — NotificationListenerService that intercepts bank alerts
+ *   1. BankNotificationService.java      — keeps the text of alerts from bank apps and bank SMS
  *   2. NotificationPermissionModule.java — React Native bridge (isNotificationAccessGranted, etc.)
  *   3. NotificationPermissionPackage.java — registers the module with React Native
  *
- * Also patches AndroidManifest.xml to declare the service with BIND_NOTIFICATION_LISTENER_SERVICE.
- * Also patches MainApplication.java to register the package.
+ * Also declares the service in AndroidManifest.xml and registers the package in
+ * MainApplication.kt. If that can't be done the build fails, because the feature
+ * would otherwise ship looking fine while doing nothing.
+ *
+ * Reading the alerts happens in services/bankAlertParser.js, where it's tested and
+ * can be corrected in an app update. The list of bank apps is sent from there too.
  */
 
-const { withDangerousMod, withAndroidManifest } = require('@expo/config-plugins');
+const { withAndroidManifest, withDangerousMod } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
@@ -21,148 +25,93 @@ function getBankNotificationServiceJava(pkg) {
 
 import android.app.Notification;
 import android.content.SharedPreferences;
+import android.os.Bundle;
+import android.provider.Telephony;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.util.Collections;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.Set;
 
 public class BankNotificationService extends NotificationListenerService {
 
-    static final String PREFS_NAME = "finsight_pending";
-    static final String KEY_QUEUE  = "pending_transactions";
+    static final String PREFS_NAME   = "finsight_pending";
+    static final String KEY_ALERTS   = "pending_alerts";
+    static final String KEY_APPS     = "capture_apps";
+    static final String KEY_SENDERS  = "capture_senders";
+    // The queue is shared with NotificationPermissionModule.
+    static final Object LOCK = new Object();
 
-    private static final String[] BANK_NAMES = {
-        "access bank","zenith","gtbank","gtb","first bank","firstbank",
-        "uba","fidelity","sterling","kuda","opay","palmpay","moniepoint",
-        "carbon","wema","stanbic","polaris","union bank","fcmb","ecobank",
-        "providus","jaiz","keystone","vfd","renmoney","fairmoney"
-    };
-
-    private static final Pattern AMOUNT_PAT = Pattern.compile(
-        "[N\\u20a6]\\\\s*([\\\\d,]+(?:\\\\.\\\\d{1,2})?)|([\\\\d,]+(?:\\\\.\\\\d{1,2})?)\\\\s*(?:naira|NGN)",
-        Pattern.CASE_INSENSITIVE
-    );
-
-    private static final Pattern BANK_STRUCT_PAT = Pattern.compile(
-        "\\\\b(acct|a/c|avail(?:able)?\\\\s*bal|new\\\\s*bal|bal[:\\\\s]|trf|ref\\\\s*no|" +
-        "DR[:\\\\s]|CR[:\\\\s]|debited|credited|withdrawal)\\\\b",
-        Pattern.CASE_INSENSITIVE
-    );
+    private static final int MAX_QUEUE = 200;
+    // The same text inside this window is one notification being posted again.
+    private static final long REPEAT_WINDOW_MS = 120000L;
+    // Longer sender names can have suffixes, such as GTBANKPLC. Short ones must match exactly.
+    private static final int MIN_PREFIX_LENGTH = 5;
 
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
         try {
             if (sbn == null) return;
-            // Skip our own app's notifications
-            if (sbn.getPackageName() != null &&
-                sbn.getPackageName().equals(getPackageName())) return;
+            String source = sbn.getPackageName();
+            if (source == null || source.equals(getPackageName())) return;
 
             Notification notif = sbn.getNotification();
             if (notif == null || notif.extras == null) return;
-
-            String title = notif.extras.getString(Notification.EXTRA_TITLE, "");
-            String body  = notif.extras.getString(Notification.EXTRA_TEXT, "");
-            if (title == null) title = "";
-            if (body  == null) body  = "";
-
-            String combined = title + " " + body;
-            String lower    = combined.toLowerCase(Locale.ROOT);
-
-            // Skip finsight budget/digest notifications
-            if (lower.contains("finsight") || lower.contains("budget exceeded") ||
-                lower.contains("daily digest") || lower.contains("weekly digest")) return;
-
-            if (!isBankNotification(lower)) return;
-
-            long amount = parseAmount(combined);
-            if (amount < 10) return;
-
-            String type = parseType(lower);
-            String desc = title.trim().isEmpty() ? body.trim() : title.trim();
-            if (desc.length() > 60) desc = desc.substring(0, 60);
-
-            JSONObject tx = new JSONObject();
-            String id = System.currentTimeMillis() + "" + (int)(Math.random() * 99999);
-            tx.put("id", id);
-            tx.put("amount", amount);
-            tx.put("type", type);
-            tx.put("desc", desc.isEmpty() ? "Bank Transaction" : desc);
-            tx.put("source", "push");
-            tx.put("cat",   type.equals("credit") ? "Income" : "Transfer");
-            tx.put("bank",  detectBank(lower));
-            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
-            tx.put("date", sdf.format(new Date()));
+            if ((notif.flags & Notification.FLAG_GROUP_SUMMARY) != 0) return;
+            if ((notif.flags & Notification.FLAG_ONGOING_EVENT) != 0) return;
 
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-            String raw   = prefs.getString(KEY_QUEUE, "[]");
-            JSONArray arr = new JSONArray(raw);
+            Set<String> apps = prefs.getStringSet(KEY_APPS, Collections.<String>emptySet());
+            boolean fromBankApp = apps.contains(source);
+            boolean fromSmsApp = source.equals(Telephony.Sms.getDefaultSmsPackage(this));
+            // Anything else is dropped here, without its text being kept.
+            if (!fromBankApp && !fromSmsApp) return;
 
-            // Simple dedup: skip if same amount added in last 2 minutes
-            long now = System.currentTimeMillis();
-            for (int i = 0; i < arr.length(); i++) {
-                JSONObject existing = arr.getJSONObject(i);
-                if (existing.optLong("amount") == amount &&
-                    "push".equals(existing.optString("source")) &&
-                    (now - existing.optLong("_ts", 0)) < 120_000) return;
+            String title = readText(notif.extras, Notification.EXTRA_TITLE);
+            if (!fromBankApp && !isBankSender(title, prefs)) return;
+
+            String text = readText(notif.extras, Notification.EXTRA_BIG_TEXT);
+            if (text.isEmpty()) text = readText(notif.extras, Notification.EXTRA_TEXT);
+            if (text.isEmpty()) return;
+
+            long postedAt = sbn.getPostTime();
+            String id = Integer.toHexString((source + "|" + title + "|" + text).hashCode())
+                + "_" + (postedAt / REPEAT_WINDOW_MS);
+
+            synchronized (LOCK) {
+                JSONArray queue = new JSONArray(prefs.getString(KEY_ALERTS, "[]"));
+                for (int i = 0; i < queue.length(); i++) {
+                    if (id.equals(queue.getJSONObject(i).optString("id"))) return;
+                }
+                JSONObject alert = new JSONObject();
+                alert.put("id", id);
+                alert.put("pkg", source);
+                alert.put("channel", fromBankApp ? "app" : "sms");
+                alert.put("title", title);
+                alert.put("text", text);
+                alert.put("postedAt", postedAt);
+                queue.put(alert);
+                while (queue.length() > MAX_QUEUE) queue.remove(0);
+                prefs.edit().putString(KEY_ALERTS, queue.toString()).apply();
             }
-            tx.put("_ts", now);
-
-            arr.put(tx);
-            prefs.edit().putString(KEY_QUEUE, arr.toString()).apply();
-
         } catch (Exception ignored) {}
     }
 
-    private boolean isBankNotification(String lower) {
-        for (String b : BANK_NAMES) {
-            if (lower.contains(b)) return true;
+    // getCharSequence, because many apps send styled text that getString returns as nothing.
+    private String readText(Bundle extras, String key) {
+        CharSequence value = extras.getCharSequence(key);
+        return value == null ? "" : value.toString().trim();
+    }
+
+    private boolean isBankSender(String title, SharedPreferences prefs) {
+        String sender = title.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+        for (String known : prefs.getStringSet(KEY_SENDERS, Collections.<String>emptySet())) {
+            if (sender.equals(known)) return true;
+            if (known.length() >= MIN_PREFIX_LENGTH && sender.startsWith(known)) return true;
         }
-        return BANK_STRUCT_PAT.matcher(lower).find();
-    }
-
-    private long parseAmount(String text) {
-        Matcher m = AMOUNT_PAT.matcher(text);
-        if (m.find()) {
-            String raw = m.group(1) != null ? m.group(1) : m.group(2);
-            if (raw != null) {
-                try { return (long) Double.parseDouble(raw.replace(",", "")); }
-                catch (Exception ignored) {}
-            }
-        }
-        return 0;
-    }
-
-    private String parseType(String lower) {
-        boolean isCredit = lower.matches(".*\\\\b(credit(?:ed)?|received|salary|refund|deposit|inflow|lodgement|cashback)\\\\b.*")
-                        || lower.contains("cr:");
-        boolean isDebit  = lower.matches(".*\\\\b(debit(?:ed)?|withdraw[an]?|paid|charged|sent|transfer(?:red)?\\\\s*to|trf\\\\s*to|transfer out)\\\\b.*")
-                        || lower.contains("dr:");
-        return (isCredit && !isDebit) ? "credit" : "debit";
-    }
-
-    private String detectBank(String lower) {
-        if (lower.contains("gtbank") || lower.contains("gtb")) return "GTBank";
-        if (lower.contains("access bank"))   return "Access Bank";
-        if (lower.contains("zenith"))        return "Zenith Bank";
-        if (lower.contains("first bank") || lower.contains("firstbank")) return "First Bank";
-        if (lower.contains("kuda"))          return "Kuda Bank";
-        if (lower.contains("opay"))          return "OPay";
-        if (lower.contains("palmpay"))       return "PalmPay";
-        if (lower.contains("moniepoint"))    return "Moniepoint";
-        if (lower.contains("uba"))           return "UBA";
-        if (lower.contains("fidelity"))      return "Fidelity Bank";
-        if (lower.contains("sterling"))      return "Sterling Bank";
-        if (lower.contains("wema"))          return "Wema Bank";
-        if (lower.contains("stanbic"))       return "Stanbic IBTC";
-        if (lower.contains("fcmb"))          return "FCMB";
-        if (lower.contains("ecobank"))       return "Ecobank";
-        if (lower.contains("carbon"))        return "Carbon";
-        return null;
+        return false;
     }
 }
 `;
@@ -171,8 +120,6 @@ public class BankNotificationService extends NotificationListenerService {
 function getNotificationPermissionModuleJava(pkg) {
   return `package ${pkg};
 
-import android.app.Activity;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -180,13 +127,18 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.PowerManager;
 import android.provider.Settings;
-import android.text.TextUtils;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.util.HashSet;
+import java.util.Set;
 
 public class NotificationPermissionModule extends ReactContextBaseJavaModule {
+
+    private static final String KEY_OLD_QUEUE = "pending_transactions";
 
     private final ReactApplicationContext reactContext;
 
@@ -198,16 +150,25 @@ public class NotificationPermissionModule extends ReactContextBaseJavaModule {
     @Override
     public String getName() { return "NotificationPermission"; }
 
+    private SharedPreferences prefs() {
+        return reactContext.getSharedPreferences(BankNotificationService.PREFS_NAME, Context.MODE_PRIVATE);
+    }
+
+    private Set<String> toSet(String json) throws Exception {
+        JSONArray array = new JSONArray(json);
+        Set<String> values = new HashSet<String>();
+        for (int i = 0; i < array.length(); i++) values.add(array.getString(i));
+        return values;
+    }
+
     @ReactMethod
     public void isNotificationAccessGranted(Promise promise) {
         try {
-            String pkgName = reactContext.getPackageName();
             String flat = Settings.Secure.getString(
                 reactContext.getContentResolver(),
                 "enabled_notification_listeners"
             );
-            boolean granted = flat != null && flat.contains(pkgName);
-            promise.resolve(granted);
+            promise.resolve(flat != null && flat.contains(reactContext.getPackageName()));
         } catch (Exception e) {
             promise.resolve(false);
         }
@@ -216,19 +177,24 @@ public class NotificationPermissionModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void openNotificationAccessSettings(Promise promise) {
         try {
-            Activity activity = getCurrentActivity();
-            Intent intent;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                intent = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
-            } else {
-                intent = new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS");
-            }
+            Intent intent = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            if (activity != null) {
-                activity.startActivity(intent);
-            } else {
-                reactContext.startActivity(intent);
-            }
+            reactContext.startActivity(intent);
+            promise.resolve(null);
+        } catch (Exception e) {
+            promise.reject("ERROR", e.getMessage());
+        }
+    }
+
+    // Android can block notification access for apps not installed from a store.
+    // It's unblocked from the app's info page.
+    @ReactMethod
+    public void openAppInfo(Promise promise) {
+        try {
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            intent.setData(Uri.parse("package:" + reactContext.getPackageName()));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            reactContext.startActivity(intent);
             promise.resolve(null);
         } catch (Exception e) {
             promise.reject("ERROR", e.getMessage());
@@ -255,24 +221,45 @@ public class NotificationPermissionModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void drainPendingTransactions(Promise promise) {
+    public void setCaptureSources(String appsJson, String sendersJson, Promise promise) {
         try {
-            SharedPreferences prefs = reactContext.getSharedPreferences(
-                BankNotificationService.PREFS_NAME, Context.MODE_PRIVATE
-            );
-            String raw = prefs.getString(BankNotificationService.KEY_QUEUE, "[]");
-            // Clear the queue after draining
-            prefs.edit().remove(BankNotificationService.KEY_QUEUE).apply();
-            promise.resolve(raw);
+            prefs().edit()
+                .putStringSet(BankNotificationService.KEY_APPS, toSet(appsJson))
+                .putStringSet(BankNotificationService.KEY_SENDERS, toSet(sendersJson))
+                // The older format guessed at amounts, so its entries aren't trusted.
+                .remove(KEY_OLD_QUEUE)
+                .apply();
+            promise.resolve(null);
         } catch (Exception e) {
-            promise.resolve("[]");
+            promise.reject("ERROR", e.getMessage());
         }
     }
 
     @ReactMethod
-    public void setNotificationListenerEnabled(boolean enabled, Promise promise) {
-        // Managed by Android system settings; this is a no-op but kept for JS API compat
-        promise.resolve(null);
+    public void getPendingAlerts(Promise promise) {
+        synchronized (BankNotificationService.LOCK) {
+            promise.resolve(prefs().getString(BankNotificationService.KEY_ALERTS, "[]"));
+        }
+    }
+
+    // Called only after the app has stored the alerts, so a failed save loses nothing.
+    @ReactMethod
+    public void removePendingAlerts(String idsJson, Promise promise) {
+        try {
+            Set<String> ids = toSet(idsJson);
+            synchronized (BankNotificationService.LOCK) {
+                JSONArray queue = new JSONArray(prefs().getString(BankNotificationService.KEY_ALERTS, "[]"));
+                JSONArray kept = new JSONArray();
+                for (int i = 0; i < queue.length(); i++) {
+                    JSONObject alert = queue.getJSONObject(i);
+                    if (!ids.contains(alert.optString("id"))) kept.put(alert);
+                }
+                prefs().edit().putString(BankNotificationService.KEY_ALERTS, kept.toString()).apply();
+            }
+            promise.resolve(null);
+        } catch (Exception e) {
+            promise.reject("ERROR", e.getMessage());
+        }
     }
 }
 `;
@@ -380,33 +367,28 @@ const withManifest = (config) => {
   });
 };
 
-// Step 3: Patch MainApplication to register the package
-const withMainApplication = (config) => {
+// Step 3: Register the package in MainApplication.kt
+const PACKAGE_LIST = /PackageList\(this\)\.packages\.apply \{/;
+const REGISTRATION = 'add(NotificationPermissionPackage())';
+
+const REGISTER_FAILED = 'withNativeBankCapture: could not register NotificationPermissionPackage in MainApplication.kt. Bank alert capture would not work, so update this plugin.';
+
+function registerPackage(contents) {
+  if (contents.includes(REGISTRATION)) return contents;
+  if (!PACKAGE_LIST.test(contents)) throw new Error(REGISTER_FAILED);
+  return contents.replace(PACKAGE_LIST, match => `${match}\n              ${REGISTRATION}`);
+}
+
+const withPackageRegistered = (config) => {
   return withDangerousMod(config, [
     'android',
     async (config) => {
-      const platformRoot = config.modRequest.platformProjectRoot;
       const pkg = 'com.kvic.finsightmobile';
-      const pkgPath = pkg.replace(/\./g, path.sep);
       const mainAppPath = path.join(
-        platformRoot, 'app', 'src', 'main', 'java', pkgPath, 'MainApplication.java'
+        config.modRequest.platformProjectRoot, 'app', 'src', 'main', 'java', pkg.replace(/\./g, path.sep), 'MainApplication.kt'
       );
-
-      if (!fs.existsSync(mainAppPath)) return config; // Expo hasn't generated it yet
-
-      let src = fs.readFileSync(mainAppPath, 'utf8');
-
-      const marker = 'new NotificationPermissionPackage()';
-      if (!src.includes(marker)) {
-        // Insert after the last "new ReactNativeFeatureFlagsCxxInterop()" or before the closing "]"
-        // We find the packages list and insert our package
-        src = src.replace(
-          /return packages;\s*\}/,
-          `packages.add(new NotificationPermissionPackage());\n      return packages;\n    }`
-        );
-        fs.writeFileSync(mainAppPath, src, 'utf8');
-      }
-
+      if (!fs.existsSync(mainAppPath)) throw new Error(REGISTER_FAILED);
+      fs.writeFileSync(mainAppPath, registerPackage(fs.readFileSync(mainAppPath, 'utf8')), 'utf8');
       return config;
     },
   ]);
@@ -416,8 +398,9 @@ const withMainApplication = (config) => {
 const withNativeBankCapture = (config) => {
   config = withJavaFiles(config);
   config = withManifest(config);
-  config = withMainApplication(config);
+  config = withPackageRegistered(config);
   return config;
 };
 
 module.exports = withNativeBankCapture;
+module.exports.registerPackage = registerPackage;
