@@ -20,6 +20,7 @@ import DashboardScreen from '../screens/DashboardScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import SMSScreen from '../screens/SMSScreen';
 import BankImportScreen from '../screens/BankImportScreen';
+import ReviewTransactionsScreen from '../screens/ReviewTransactionsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -144,6 +145,7 @@ export default function AppNavigator({ theme, toggleTheme, user, setUser }) {
       <Stack.Screen name="Insights">{back('Insights', p => <DashboardScreen {...p} user={user} />)}</Stack.Screen>
       <Stack.Screen name="Settings">{back('Settings', p => <SettingsScreen {...p} theme={theme} toggleTheme={toggleTheme} user={user} setUser={setUser} />)}</Stack.Screen>
       <Stack.Screen name="ImportSMS">{back('Import bank SMS', p => <SMSScreen {...p} />)}</Stack.Screen>
+      <Stack.Screen name="ReviewTransactions">{back('Check imported transactions', p => <ReviewTransactionsScreen {...p} />)}</Stack.Screen>
       <Stack.Screen name="ImportStatement">
         {p => <BankImportScreen onClose={() => p.navigation.goBack()} />}
       </Stack.Screen>

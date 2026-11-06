@@ -602,7 +602,8 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
 
         <Section title="Your data">
           <Row icon="cloud-outline" title="Cloud backup" subtitle={cloudUser ? `Signed in as ${cloudUser.email}` : 'Back up and restore your data'} onPress={() => setShowCloud(true)} />
-          <Row icon="document-text-outline" title="Import a statement" subtitle="Excel or CSV from your bank" onPress={() => setShowBankImport(true)} />
+          <Row icon="document-text-outline" title="Import a statement" subtitle="PDF, Excel or CSV from your bank" onPress={() => setShowBankImport(true)} />
+          <Row icon="shield-checkmark-outline" title="Check imported transactions" subtitle="Find adverts or failed payments read as money" onPress={() => navigation?.navigate('ReviewTransactions')} />
           <Row icon="grid-outline" title="Export as CSV" subtitle={exporting ? 'Preparing your file' : 'Opens in Excel and Google Sheets'} onPress={() => handleExport('csv')} />
           <Row icon="document-outline" title="Export as PDF" subtitle={exporting ? 'Preparing your file' : 'A statement to share or save'} onPress={() => handleExport('pdf')} />
           <Row icon="trash-outline" title="Clear transactions" subtitle="Remove your transaction history" onPress={askClearTransactions} />

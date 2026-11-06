@@ -4,12 +4,12 @@ import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '../services/dataStore';
 import { space } from '../constants/tokens';
 import {
-  Badge, Button, Card, ConfirmSheet, EmptyState, Gradient, Icon, IconTile, Input, Money, ProgressBar, Sheet,
+  Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Gradient, Icon, IconTile, Input, Money, ProgressBar, Sheet,
   Text, useTheme, useToast,
 } from '../components/ui';
 import { computeStats, savingsFlows } from '../services/finance';
 import { formatMoney, parseAmount } from '../services/format';
-import { addToGoal, goalProgress, normalizeGoals, updateGoal } from '../services/plans';
+import { addToGoal, goalProgress, normalizeGoals, unassignedSavings, updateGoal } from '../services/plans';
 import { addTransaction, loadTransactions } from '../services/transactions';
 import { awardXP } from '../services/xpService';
 import { trackEvent } from '../services/cloudSync';
@@ -43,6 +43,10 @@ export default function SavingsScreen({ user, setUser }) {
   const [goalErrors, setGoalErrors] = useState({});
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const [assigning, setAssigning] = useState(false);
+  const [assignGoalId, setAssignGoalId] = useState(null);
+  const [assignAmount, setAssignAmount] = useState('');
+  const [assignError, setAssignError] = useState('');
 
   const goals = normalizeGoals(user?.goals);
 
@@ -114,6 +118,34 @@ export default function SavingsScreen({ user, setUser }) {
     toast.show(editing ? 'Goal updated' : 'Goal added', { tone: 'success' });
   }
 
+  function openAssign() {
+    const first = goals.find(g => !goalProgress(g).done) || goals[0];
+    chooseAssignGoal(first);
+    setAssignError('');
+    setAssigning(true);
+  }
+
+  // Suggests what fits: the unassigned money, but no more than the goal still needs.
+  function chooseAssignGoal(goal) {
+    setAssignGoalId(goal.id);
+    const toGo = goalProgress(goal).toGo;
+    setAssignAmount(String(toGo > 0 ? Math.min(unassigned, toGo) : unassigned));
+  }
+
+  // Counts money that's already saved towards a goal. No transaction is added,
+  // because the saving was already recorded when it happened.
+  async function saveAssign() {
+    const value = parseAmount(assignAmount);
+    if (!value) { setAssignError('Enter an amount, like 50,000'); return; }
+    if (value > unassigned) { setAssignError(`You have ${formatMoney(unassigned)} not in a goal`); return; }
+    const goal = goals.find(g => g.id === assignGoalId);
+    const updated = addToGoal(goals, assignGoalId, value);
+    await saveGoals(updated);
+    setAssigning(false);
+    const reached = goalProgress(updated.find(g => g.id === assignGoalId)).done && !goalProgress(goal).done;
+    toast.show(reached ? `Goal reached: ${goal.name}` : `${formatMoney(value)} counted towards ${goal.name}`, { tone: 'success' });
+  }
+
   async function removeGoal() {
     await saveGoals(goals.filter(g => g.id !== deleting.id));
     setDeleting(null);
@@ -125,6 +157,7 @@ export default function SavingsScreen({ user, setUser }) {
   const { income, savingsRate, totalSpend, totalSaved: savedThisMonth } = computeStats(user, transactions);
   const recent = transactions.filter(t => t.cat === 'Savings').slice(0, 4);
   const toTarget = Math.max(0, Math.round(income * (TARGET_RATE / 100)) - savedThisMonth);
+  const unassigned = unassignedSavings(totalSaved, goals);
 
   let insight = `You're saving ${savingsRate}% of your income. Moving ${formatMoney(toTarget)} more this month would reach ${TARGET_RATE}%.`;
   if (savingsRate >= TARGET_RATE) insight = `You're saving ${savingsRate}% of your income, above the ${TARGET_RATE}% many people aim for.`;
@@ -154,6 +187,24 @@ export default function SavingsScreen({ user, setUser }) {
           <Icon name="sparkles" size={20} color="#FFD9E8" />
           <Text variant="label" color="#FFFFFF" style={{ flex: 1, lineHeight: 20 }}>{insight}</Text>
         </Gradient>
+
+        {unassigned > 0 ? (
+          <Card style={{ padding: space.lg, gap: space.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+              <IconTile name="wallet-outline" tone="accent" />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Money value={unassigned} variant="bodyStrong" family="bold" />
+                <Text variant="label" family="regular" color="inkMuted">saved but not in a goal yet</Text>
+              </View>
+            </View>
+            <Text variant="label" family="regular" color="inkMuted">
+              Savings from bank alerts and statements aren't linked to a goal by themselves. Count them towards one to see your real progress.
+            </Text>
+            {goals.length
+              ? <Button full title="Add to a goal" variant="secondary" onPress={openAssign} />
+              : <Button full title="Set a goal for it" variant="secondary" onPress={openNewGoal} />}
+          </Card>
+        ) : null}
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: space.xs }}>
           <Text variant="heading" family="bold" accessibilityRole="header">Your goals</Text>
@@ -242,6 +293,30 @@ export default function SavingsScreen({ user, setUser }) {
         <View style={{ gap: space.md }}>
           <Input label="Goal name" placeholder="New laptop" value={goalName} error={goalErrors.name} onChangeText={setGoalName} />
           <Input label="Target amount" prefix="₦" keyboardType="numeric" placeholder="500,000" value={goalTarget} error={goalErrors.target} onChangeText={setGoalTarget} />
+        </View>
+      </Sheet>
+
+      <Sheet
+        visible={assigning}
+        onClose={() => setAssigning(false)}
+        title="Count savings towards a goal"
+        footer={<Button full title="Add to goal" onPress={saveAssign} />}
+      >
+        <View style={{ gap: space.md }}>
+          <Text color="inkMuted">{`You have ${formatMoney(unassigned)} saved that isn't in a goal. This doesn't move any money.`}</Text>
+          {goals.length > 1 ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+              {goals.map(g => <Chip key={g.id} label={g.name} selected={g.id === assignGoalId} onPress={() => { chooseAssignGoal(g); setAssignError(''); }} />)}
+            </View>
+          ) : null}
+          <Input
+            label={`Amount for ${goals.find(g => g.id === assignGoalId)?.name || 'this goal'}`}
+            prefix="₦"
+            keyboardType="numeric"
+            value={assignAmount}
+            error={assignError}
+            onChangeText={v => { setAssignAmount(v); setAssignError(''); }}
+          />
         </View>
       </Sheet>
 

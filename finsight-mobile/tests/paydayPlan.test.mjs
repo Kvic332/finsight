@@ -89,6 +89,13 @@ test('a savings budget is not counted on top of the savings share', () => {
   assert.equal(plan.free, 90000);
 });
 
+test('a one-off budget is not taken out of every month', () => {
+  const plan = planPayday({ pay: 1200000, budgets: [budget({ limit: 30000 }), budget({ id: 'l', name: 'Laptop', limit: 590000, oneOff: true })], savePercent: 0, period });
+  assert.equal(plan.budgetTotal, 30000);
+  assert.deepEqual(plan.oneOffBudgets, ['Laptop']);
+  assert.equal(plan.free, 1170000);
+});
+
 test('savings shrink to what is left after debts and budgets', () => {
   const plan = planPayday({ pay: 100000, debts: [debt()], budgets: [budget()], savePercent: 30, period });
   assert.equal(plan.wanted, 30000);

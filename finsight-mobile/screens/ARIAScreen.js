@@ -139,7 +139,7 @@ export default function ARIAScreen({ navigation, user }) {
     const budgetSummary = budgets.map(b => {
       const spent = budgetSpent(b, transactions);
       const pct = b.limit > 0 ? Math.round(spent / b.limit * 100) : 0;
-      return `${b.name}: ₦${spent.toLocaleString()}/₦${b.limit.toLocaleString()} (${pct}%${pct >= 100 ? ' EXCEEDED' : pct >= 80 ? ' WARNING' : ''})`;
+      return `${b.name}${b.oneOff ? ' (one-off, not monthly)' : ''}: ₦${spent.toLocaleString()}/₦${b.limit.toLocaleString()} (${pct}%${pct >= 100 ? ' EXCEEDED' : pct >= 80 ? ' WARNING' : ''})`;
     }).join(' | ');
     const goalsSummary = (user?.goals || [])
       .map(g => (typeof g === 'object' ? `${g.name} (₦${(g.saved || 0).toLocaleString()} saved of ₦${(g.target || 0).toLocaleString()})` : String(g)))

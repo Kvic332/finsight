@@ -1,4 +1,5 @@
 // Reads bank alert SMS text into transactions.
+import { noiseReason } from './transactionReview.js';
 
 const BANKS = {
   'access': 'Access Bank', 'zenith': 'Zenith Bank', 'gtb': 'GTBank', 'gtbank': 'GTBank',
@@ -51,6 +52,8 @@ export function parseSMS(text) {
   for (const block of blocks) {
     // ── Skip non-bank noise (Jumia, subscriptions, OTPs, promotions) ──────────
     if (!isBankTransaction(block)) continue;
+    // Adverts, failed payments and balance warnings mention amounts but move no money.
+    if (noiseReason(block)) continue;
 
     let amount = 0;
     let type = 'debit';

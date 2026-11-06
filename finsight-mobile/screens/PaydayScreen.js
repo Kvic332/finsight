@@ -134,6 +134,11 @@ export default function PaydayScreen({ user, setUser }) {
               You have no budgets yet, so nothing is set aside for rent, food or bills. Add them under Budget.
             </Text>
           ) : null}
+          {plan.oneOffBudgets.length ? (
+            <Text variant="label" family="regular" color="inkMuted">
+              {`One-off budgets aren't taken out of every month: ${plan.oneOffBudgets.join(', ')}. Set money aside for them from what's left.`}
+            </Text>
+          ) : null}
           {plan.noPayment.length ? (
             <Text variant="label" family="regular" color="inkMuted">
               {`Not counted: ${plan.noPayment.join(', ')}. Add a payment amount under Debts.`}

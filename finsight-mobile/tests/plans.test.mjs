@@ -1,8 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  addToGoal, budgetSpent, budgetStatus, goalProgress, normalizeGoals, updateGoal,
+  addToGoal, budgetSpent, budgetStatus, goalProgress, normalizeGoals, unassignedSavings, updateGoal,
 } from '../services/plans.js';
+
+test('savings not in any goal are found, and never go below zero', () => {
+  const goals = [{ id: '1', saved: 50000 }, { id: '2', saved: 0 }];
+  assert.equal(unassignedSavings(366583, goals), 316583);
+  assert.equal(unassignedSavings(366583, []), 366583);
+  // After a withdrawal, goals can hold more than is saved: nothing is unassigned.
+  assert.equal(unassignedSavings(20000, goals), 0);
+});
 
 const now = new Date(2026, 10, 20);
 const tx = over => ({ type: 'debit', cat: 'Food', amount: 1000, date: '05/11/2026', desc: 'Lunch', ...over });
@@ -40,6 +48,41 @@ test("a budget counts purchases that mention its name, whatever their category",
 test('a short or symbol-filled budget name matches safely', () => {
   assert.equal(budgetSpent({ name: 'TV', cat: 'Shopping' }, [tx({ cat: 'Other', desc: 'tv licence' })], now), 0);
   assert.equal(budgetSpent({ name: 'Data (MTN)', cat: 'Utilities' }, [tx({ cat: 'Other', desc: 'data (mtn) bundle' })], now), 1000);
+});
+
+test('a one-off budget counts by name from its start, across months, ignoring its category', () => {
+  const laptop = { name: 'Laptop', cat: 'Other', limit: 590000, oneOff: true, startDate: '2026-10-01' };
+  const spent = budgetSpent(laptop, [
+    tx({ amount: 300000, cat: 'Transfer', desc: 'Laptop deposit', date: '15/10/2026' }),
+    tx({ amount: 290000, cat: 'Shopping', desc: 'laptop balance', date: '03/11/2026' }),
+    tx({ amount: 5000, cat: 'Other', desc: 'Gift' }),
+    tx({ amount: 9000, cat: 'Other', desc: 'Laptop bag', date: '20/09/2026' }),
+  ], now);
+  assert.equal(spent, 590000);
+});
+
+test('a one-off budget without a start date counts from the month it was made', () => {
+  const budget = { name: 'Wedding', cat: 'Other', oneOff: true, createdMonth: '2026-11' };
+  const spent = budgetSpent(budget, [
+    tx({ amount: 100, desc: 'Wedding cake', date: '01/11/2026' }),
+    tx({ amount: 900, desc: 'Wedding venue', date: '31/10/2026' }),
+  ], now);
+  assert.equal(spent, 100);
+});
+
+test('an old one-off budget with no dates starts this month, not with all history', () => {
+  // A laptop stand bought in May shouldn't count towards a laptop planned in November.
+  const budget = { name: 'Laptop', cat: 'Other', oneOff: true };
+  const spent = budgetSpent(budget, [
+    tx({ amount: 2899, desc: 'order 10 Steps Laptop Stand', date: '28/05/2026' }),
+    tx({ amount: 500000, desc: 'Laptop', date: '02/11/2026' }),
+  ], now);
+  assert.equal(spent, 500000);
+});
+
+test('goal names lose stray spaces', () => {
+  assert.equal(normalizeGoals([{ id: '1', name: 'Investment ', target: 100 }])[0].name, 'Investment');
+  assert.equal(normalizeGoals([{ id: '1', name: '  ', target: 100 }])[0].name, 'Goal');
 });
 
 test('budget status warns at 80% and flags going over', () => {

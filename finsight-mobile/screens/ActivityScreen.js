@@ -1,15 +1,16 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ScrollView, SectionList, StatusBar, View } from 'react-native';
+import { Pressable, ScrollView, SectionList, StatusBar, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, space } from '../constants/tokens';
 import {
-  Button, CategoryTile, Chip, ConfirmSheet, EmptyState, Gradient, IconButton, Input, Money, Sheet,
+  Button, CategoryTile, Chip, ConfirmSheet, EmptyState, Gradient, Icon, IconButton, Input, Money, Sheet,
   Text, useTheme, useToast,
 } from '../components/ui';
 import { computePaydayPlan, parseTxDate } from '../services/finance';
 import { formatDayLabel, formatMoney } from '../services/format';
 import { deleteTransaction, loadTransactions } from '../services/transactions';
+import { suspectTransactions } from '../services/transactionReview';
 import { TransactionRow } from './HomeScreen';
 
 function Total({ label, amount }) {
@@ -33,6 +34,7 @@ export default function ActivityScreen({ navigation, user }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useFocusEffect(useCallback(() => { loadTransactions().then(setTransactions).catch(() => {}); }, []));
+  const suspects = useMemo(() => suspectTransactions(transactions).length, [transactions]);
 
   const plan = computePaydayPlan(user, transactions);
 
@@ -98,6 +100,11 @@ export default function ActivityScreen({ navigation, user }) {
           <Total label="Money in" amount={plan.moneyIn} />
           <Total label="Money out" amount={plan.totalSpend} />
         </View>
+        <Text variant="caption" color="#FFFFFF" style={{ marginTop: space.sm, opacity: 0.85 }}>
+          {plan.cycle.hasPayday
+            ? `Since your last payday on ${plan.cycle.start.toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })}`
+            : 'This month so far'}
+        </Text>
       </Gradient>
 
       <View style={{
@@ -121,6 +128,24 @@ export default function ActivityScreen({ navigation, user }) {
                   autoFocus
                   returnKeyType="search"
                 />
+              ) : null}
+              {suspects ? (
+                <Pressable
+                  onPress={() => navigation.navigate('ReviewTransactions')}
+                  accessibilityRole="button"
+                  style={({ pressed }) => ({
+                    flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md,
+                    borderRadius: radius.md, borderWidth: 1, borderColor: c.warning,
+                    backgroundColor: pressed ? c.sunken : c.surface,
+                  })}
+                >
+                  <Icon name="alert-circle-outline" size={22} color="warning" />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text variant="label" family="semibold">{`${suspects === 1 ? '1 imported transaction looks' : `${suspects} imported transactions look`} wrong`}</Text>
+                    <Text variant="caption" color="inkMuted">Adverts or failed payments read as money. Check them</Text>
+                  </View>
+                  <Icon name="chevron-forward" size={18} color="inkSubtle" />
+                </Pressable>
               ) : null}
               {categories.length ? (
                 <ScrollView

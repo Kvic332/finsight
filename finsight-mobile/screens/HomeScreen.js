@@ -233,6 +233,8 @@ export default function HomeScreen({ navigation, user }) {
           </View>
         </View>
       </ScrollView>
+      {/* Keeps scrolled content out from under the clock and battery icons. */}
+      <Gradient pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top }} />
 
       <Sheet visible={showImport} onClose={() => setShowImport(false)} title="Import transactions">
         <Card padded={false} tone="sunken">
@@ -246,7 +248,7 @@ export default function HomeScreen({ navigation, user }) {
           <ListRow
             leading={<IconTile name="document-text-outline" tone="accent" />}
             title="Upload a statement"
-            subtitle="Excel or CSV from your bank"
+            subtitle="PDF, Excel or CSV from your bank"
             chevron
             divider={false}
             onPress={() => { setShowImport(false); navigation.navigate('ImportStatement'); }}

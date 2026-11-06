@@ -47,7 +47,9 @@ export function planPayday({ pay, debts = [], budgets = [], savePercent = DEFAUL
     .map(d => ({ id: d.id, lender: d.lender, amount: Math.min(d.payment, d.owed) }));
   const debtTotal = debtLines.reduce((sum, d) => sum + d.amount, 0);
   // A savings budget is the same money as the savings share, so it isn't counted twice.
-  const budgetTotal = budgets.filter(b => b.cat !== 'Savings').reduce((sum, b) => sum + (b.limit || 0), 0);
+  // A one-off budget, like a laptop, isn't spent every month, so it's listed apart.
+  const budgetTotal = budgets.filter(b => b.cat !== 'Savings' && !b.oneOff).reduce((sum, b) => sum + (b.limit || 0), 0);
+  const oneOffBudgets = budgets.filter(b => b.oneOff).map(b => b.name);
   const committed = debtTotal + budgetTotal;
   const wanted = Math.round(pay * (savePercent / 100));
   const saving = Math.min(wanted, Math.max(0, pay - committed));
@@ -57,6 +59,7 @@ export function planPayday({ pay, debts = [], budgets = [], savePercent = DEFAUL
     debtLines,
     debtTotal,
     budgetTotal,
+    oneOffBudgets,
     wanted,
     saving,
     free,
