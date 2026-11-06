@@ -38,7 +38,7 @@ export default function PlanScreen({ route, user, setUser }) {
           ))}
         </View>
       </Gradient>
-      {view === 'Budget' ? <BudgetScreen />
+      {view === 'Budget' ? <BudgetScreen user={user} />
         : view === 'Savings' ? <SavingsScreen user={user} setUser={setUser} />
         : view === 'Debts' ? <DebtsScreen user={user} />
         : <PaydayScreen user={user} setUser={setUser} />}

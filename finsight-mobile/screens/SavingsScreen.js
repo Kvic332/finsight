@@ -7,7 +7,7 @@ import {
   Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Gradient, Icon, IconTile, Input, Money, ProgressBar, Sheet,
   Text, useTheme, useToast,
 } from '../components/ui';
-import { computeStats, savingsFlows } from '../services/finance';
+import { computePeriodStats, periodLabel, savingsFlows } from '../services/finance';
 import { formatMoney, parseAmount } from '../services/format';
 import { addToGoal, goalProgress, normalizeGoals, unassignedSavings, updateGoal } from '../services/plans';
 import { addTransaction, loadTransactions } from '../services/transactions';
@@ -154,12 +154,13 @@ export default function SavingsScreen({ user, setUser }) {
   }
 
   const totalSaved = savingsFlows(transactions).saved;
-  const { income, savingsRate, totalSpend, totalSaved: savedThisMonth } = computeStats(user, transactions);
+  const { income, savingsRate, totalSpend, totalSaved: savedThisMonth, cycle } = computePeriodStats(user, transactions);
+  const when = periodLabel(cycle);
   const recent = transactions.filter(t => t.cat === 'Savings').slice(0, 4);
   const toTarget = Math.max(0, Math.round(income * (TARGET_RATE / 100)) - savedThisMonth);
   const unassigned = unassignedSavings(totalSaved, goals);
 
-  let insight = `You're saving ${savingsRate}% of your income. Moving ${formatMoney(toTarget)} more this month would reach ${TARGET_RATE}%.`;
+  let insight = `You're saving ${savingsRate}% of your income. Moving ${formatMoney(toTarget)} more before payday would reach ${TARGET_RATE}%.`;
   if (savingsRate >= TARGET_RATE) insight = `You're saving ${savingsRate}% of your income, above the ${TARGET_RATE}% many people aim for.`;
   else if (income === 0) insight = 'Add your monthly income in Settings to see your savings rate.';
 
@@ -174,10 +175,10 @@ export default function SavingsScreen({ user, setUser }) {
           <Text variant="label" family="medium" color="inkMuted">Total saved</Text>
           <Money value={totalSaved} variant="display" family="bold" adjustsFontSizeToFit style={{ fontSize: 36, lineHeight: 46, letterSpacing: -0.8 }} />
           <Text variant="label" family="medium" color="inkMuted" style={{ marginBottom: space.lg }}>
-            {savingsRate}% of this month's income · aiming for {TARGET_RATE}%
+            {`${savingsRate}% of your income ${when} · aiming for ${TARGET_RATE}%`}
           </Text>
           <View style={{ gap: space.md }}>
-            <SnapshotRow label="Income this month" value={income} of={income} tone="positive" />
+            <SnapshotRow label={`Income ${when}`} value={income} of={income} tone="positive" />
             <SnapshotRow label="Spent" value={totalSpend} of={income} tone="negative" />
             <SnapshotRow label="Saved" value={savedThisMonth} of={income} tone="accent" />
           </View>

@@ -137,7 +137,7 @@ export default function ARIAScreen({ navigation, user }) {
       .map(([cat, amt]) => `${cat} ₦${amt.toLocaleString()}`)
       .join(', ');
     const budgetSummary = budgets.map(b => {
-      const spent = budgetSpent(b, transactions);
+      const spent = budgetSpent(b, transactions, undefined, stats.cycle);
       const pct = b.limit > 0 ? Math.round(spent / b.limit * 100) : 0;
       return `${b.name}${b.oneOff ? ' (one-off, not monthly)' : ''}: ₦${spent.toLocaleString()}/₦${b.limit.toLocaleString()} (${pct}%${pct >= 100 ? ' EXCEEDED' : pct >= 80 ? ' WARNING' : ''})`;
     }).join(' | ');

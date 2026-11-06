@@ -8,7 +8,7 @@ import {
   Button, Card, CategoryTile, EmptyState, Gradient, Icon, IconTile, ProgressBar, Sheet, Text, useTheme,
   useToast,
 } from '../components/ui';
-import { computeStats } from '../services/finance';
+import { computePeriodStats, periodLabel } from '../services/finance';
 import { formatMoney, formatMoneyCompact } from '../services/format';
 import { loadTransactions } from '../services/transactions';
 import { checkAchievements, getStreak } from '../services/notificationService';
@@ -87,7 +87,9 @@ export default function DashboardScreen({ user }) {
   const [sharing, setSharing] = useState(false);
   const cardRef = useRef(null);
 
-  const stats = computeStats(user, transactions);
+  // The same pay period as Home and Activity.
+  const stats = computePeriodStats(user, transactions);
+  const when = periodLabel(stats.cycle);
   const { finScore, totalSpend, totalSaved, categoryTotals, spendTrend, income, scoreBreakdown } = stats;
   const parts = scoreParts(scoreBreakdown);
   const g = grade(finScore);
@@ -100,7 +102,7 @@ export default function DashboardScreen({ user }) {
     setTransactions(txs);
     const currentStreak = await getStreak();
     setStreak(currentStreak);
-    const { earned: list } = await checkAchievements(currentStreak, txs, computeStats(user, txs).finScore);
+    const { earned: list } = await checkAchievements(currentStreak, txs, computePeriodStats(user, txs).finScore);
     setEarned(list);
     setXp(await getXPState());
   }
@@ -141,7 +143,7 @@ export default function DashboardScreen({ user }) {
         <Card onPress={() => setShowScore(true)} accessibilityLabel={`FinScore ${finScore} out of 100, ${g.label}. See the breakdown`} style={{ padding: 0, overflow: 'hidden' }}>
           <Gradient style={{ padding: space.xl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View>
-              <Text variant="label" color="#FFFFFF">FinScore this month</Text>
+              <Text variant="label" color="#FFFFFF">{stats.cycle.hasPayday ? 'FinScore this pay period' : 'FinScore this month'}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.xs }}>
                 <Text variant="display" family="bold" color="#FFFFFF" tabular style={{ fontSize: 56, lineHeight: 64, letterSpacing: -1.5 }}>{finScore}</Text>
                 <Text variant="bodyStrong" color="#FFFFFF">/ 100</Text>
@@ -183,7 +185,7 @@ export default function DashboardScreen({ user }) {
 
         <Card style={{ padding: space.lg + 2 }}>
           <Text variant="heading" family="bold" accessibilityRole="header">Where your money went</Text>
-          <Text variant="label" family="regular" color="inkMuted" style={{ marginBottom: space.md }}>This month · {formatMoney(totalSpend)}</Text>
+          <Text variant="label" family="regular" color="inkMuted" style={{ marginBottom: space.md }}>{`${when[0].toUpperCase()}${when.slice(1)} · ${formatMoney(totalSpend)}`}</Text>
           {categories.length ? categories.slice(0, 6).map(([cat, amt]) => {
             const share_ = totalSpend > 0 ? amt / totalSpend : 0;
             return (
@@ -198,7 +200,7 @@ export default function DashboardScreen({ user }) {
                 </View>
               </View>
             );
-          }) : <EmptyState icon="pie-chart-outline" title="Nothing yet this month" body="Your spending by category will appear here." />}
+          }) : <EmptyState icon="pie-chart-outline" title={`Nothing yet ${when}`} body="Your spending by category will appear here." />}
         </Card>
 
         <Card style={{ padding: space.lg + 2 }}>

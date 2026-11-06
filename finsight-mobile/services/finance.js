@@ -180,6 +180,20 @@ export function computeStats(user, transactions, now = new Date(), period = null
   };
 }
 
+// Figures for the pay period around today, so every screen counts from the same
+// day: the last payday, or the 1st of the month with no fixed payday.
+export function computePeriodStats(user, transactions, now = new Date()) {
+  const cycle = payCycle(user?.salaryDay, now);
+  return { ...computeStats(user, transactions, now, cycle), cycle };
+}
+
+// How to name the pay period in a sentence: "since 23 Oct" or "this month".
+export function periodLabel(cycle) {
+  return cycle.hasPayday
+    ? `since ${cycle.start.toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })}`
+    : 'this month';
+}
+
 // Everything the Home screen says about reaching the next payday.
 export function computePaydayPlan(user, transactions, now = new Date()) {
   const cycle = payCycle(user?.salaryDay, now);

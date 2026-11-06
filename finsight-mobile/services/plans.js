@@ -29,9 +29,15 @@ export function budgetStart(budget, now = new Date()) {
 // name as a whole word, so a "Laptop" budget counts "Laptop from Slot" whatever its
 // category. A one-off budget, such as a laptop, counts from its start with no monthly
 // reset, and only by name and keywords: its category would sweep in unrelated spending.
-export function budgetSpent(budget, transactions, now = new Date()) {
+// A monthly budget counts the pay period it's given ({ start, end }), so it agrees
+// with Home and Activity, or the calendar month when none is given.
+export function budgetSpent(budget, transactions, now = new Date(), period = null) {
   const start = budget.oneOff ? budgetStart(budget, now) : null;
   const inRange = date => {
+    if (!budget.oneOff && period) {
+      const day = parseTxDate(date);
+      return !!day && day >= period.start && day < period.end;
+    }
     if (!budget.oneOff) return isSameMonth(date, now);
     const day = parseTxDate(date);
     return !!day && day >= start;

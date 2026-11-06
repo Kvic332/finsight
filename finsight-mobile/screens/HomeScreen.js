@@ -7,7 +7,7 @@ import {
   Button, Card, CategoryTile, EmptyState, Gradient, Icon, ListRow, Money, Sheet, Text, tapFeedback,
   useTheme, useToast, IconTile,
 } from '../components/ui';
-import { computePaydayPlan, computeStats, parseTxDate } from '../services/finance';
+import { computePaydayPlan, parseTxDate } from '../services/finance';
 import { formatDayLabel, formatMoney } from '../services/format';
 import { loadTransactions } from '../services/transactions';
 import { checkAchievements, updateStreak } from '../services/notificationService';
@@ -106,14 +106,15 @@ export default function HomeScreen({ navigation, user }) {
 
   const firstName = user?.name?.split(' ')[0] || '';
   const plan = computePaydayPlan(user, transactions);
-  const { finScore } = computeStats(user, transactions);
+  // The pay-period score, so Home and Insights always show the same number.
+  const { finScore } = plan;
 
   async function load() {
     const txs = await loadTransactions();
     setTransactions(txs);
     const updated = await updateStreak();
     setStreak(updated);
-    const score = computeStats(user, txs).finScore;
+    const score = computePaydayPlan(user, txs).finScore;
     const { newlyEarned } = await checkAchievements(updated, txs, score);
     if (newlyEarned.length) toast.show(`Achievement unlocked: ${newlyEarned[0].title}`, { tone: 'success' });
     const opened = await awardXP('daily_open');

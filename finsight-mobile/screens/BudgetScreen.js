@@ -10,6 +10,7 @@ import {
 } from '../components/ui';
 import { formatMoney, parseAmount } from '../services/format';
 import { budgetSpent, budgetStatus } from '../services/plans';
+import { payCycle, periodLabel } from '../services/finance';
 
 const CATEGORIES = ['Food', 'Transport', 'Utilities', 'Shopping', 'Entertainment', 'Health', 'Savings', 'Other'];
 const PRESETS = [
@@ -53,8 +54,11 @@ function BudgetRow({ budget, spent, onPress }) {
   );
 }
 
-export default function BudgetScreen() {
+export default function BudgetScreen({ user }) {
   const toast = useToast();
+  // Budgets count the same pay period as Home and Activity.
+  const cycle = payCycle(user?.salaryDay);
+  const spentOn = (b, txs) => budgetSpent(b, txs, undefined, cycle);
   const [budgets, setBudgets] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -109,10 +113,11 @@ export default function BudgetScreen() {
   async function checkBudgetAlerts(list, txs) {
     for (const b of list) {
       try {
-        const spent = budgetSpent(b, txs);
+        const spent = spentOn(b, txs);
         const pct = b.limit > 0 ? (spent / b.limit) * 100 : 0;
         // A one-off budget warns once, not again every month.
-        const alertKey = b.oneOff ? `finsight_budget_alerted_${b.id}` : `finsight_budget_alerted_${b.id}_${monthKey()}`;
+        const periodKey = cycle.start.toISOString().slice(0, 10);
+        const alertKey = b.oneOff ? `finsight_budget_alerted_${b.id}` : `finsight_budget_alerted_${b.id}_${periodKey}`;
         const alerted = await AsyncStorage.getItem(alertKey);
         if (pct >= 100 && alerted !== 'exceeded') {
           await AsyncStorage.setItem(alertKey, 'exceeded');
@@ -188,9 +193,9 @@ export default function BudgetScreen() {
   // The monthly total leaves out one-off budgets, which don't reset each month.
   const monthly = budgets.filter(b => !b.oneOff);
   const totalLimit = monthly.reduce((s, b) => s + b.limit, 0);
-  const totalSpent = monthly.reduce((s, b) => s + budgetSpent(b, transactions), 0);
+  const totalSpent = monthly.reduce((s, b) => s + spentOn(b, transactions), 0);
   const total = budgetStatus(totalSpent, totalLimit);
-  const month = new Date().toLocaleDateString('en-NG', { month: 'long' });
+  const when = cycle.hasPayday ? periodLabel(cycle) : `in ${new Date().toLocaleDateString('en-NG', { month: 'long' })}`;
 
   return (
     <>
@@ -206,7 +211,7 @@ export default function BudgetScreen() {
           <>
             {monthly.length ? <Card style={{ padding: space.xl }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text variant="label" family="medium" color="inkMuted">Budgeted spending in {month}</Text>
+                <Text variant="label" family="medium" color="inkMuted">Budgeted spending {when}</Text>
                 {total.tone !== 'accent' ? <Badge label={total.tone === 'negative' ? 'Over budget' : 'Nearly used'} tone={total.tone} /> : null}
               </View>
               <Money value={totalSpent} variant="display" family="bold" adjustsFontSizeToFit style={{ fontSize: 36, lineHeight: 46, letterSpacing: -0.8 }} />
@@ -222,7 +227,7 @@ export default function BudgetScreen() {
               </Pressable>
             </View>
             {budgets.map(b => (
-              <BudgetRow key={b.id} budget={b} spent={budgetSpent(b, transactions)} onPress={() => openEdit(b)} />
+              <BudgetRow key={b.id} budget={b} spent={spentOn(b, transactions)} onPress={() => openEdit(b)} />
             ))}
           </>
         )}

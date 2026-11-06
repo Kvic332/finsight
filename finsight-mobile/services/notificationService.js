@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from './dataStore';
-import { computeStats, formatRunway, parseTxDate, savingsFlows, spendingOf } from './finance';
+import { computePeriodStats, computeStats, formatRunway, parseTxDate, savingsFlows, spendingOf } from './finance';
 
 // ── Permission ────────────────────────────────────────────────────────────────
 export async function requestNotificationPermission() {
@@ -79,7 +79,7 @@ export async function sendDailyDigestNow(userName = 'there') {
     });
     const todayTopCats = Object.entries(todayCatMap).sort((a, b) => b[1] - a[1]).slice(0, 3);
 
-    const stats = computeStats(user, allTxs);
+    const stats = computePeriodStats(user, allTxs);
     const weekday = new Date().toLocaleDateString('en-NG', { weekday: 'long' });
     const streakBadge = streak.count >= 7 ? '🔥' : streak.count >= 3 ? '⚡' : '🌱';
 
@@ -138,7 +138,7 @@ export async function sendWeeklyDigestNow(userName = 'there') {
     });
     const topCat = Object.entries(weekCats).sort((a, b) => b[1] - a[1])[0];
 
-    const stats = computeStats(user, allTxs);
+    const stats = computePeriodStats(user, allTxs);
     const brokeChange = prevStats?.daysLeft != null && stats.daysLeft !== null ? stats.daysLeft - prevStats.daysLeft : 0;
     const brokeArrow = brokeChange > 0 ? `↑ +${brokeChange}d` : brokeChange < 0 ? `↓ ${brokeChange}d` : '→ same';
 

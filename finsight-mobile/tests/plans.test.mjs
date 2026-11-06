@@ -50,6 +50,18 @@ test('a short or symbol-filled budget name matches safely', () => {
   assert.equal(budgetSpent({ name: 'Data (MTN)', cat: 'Utilities' }, [tx({ cat: 'Other', desc: 'data (mtn) bundle' })], now), 1000);
 });
 
+test('a monthly budget can count the pay period instead of the calendar month', () => {
+  // Payday on the 23rd: the period runs 23 Oct to 23 Nov.
+  const period = { start: new Date(2026, 9, 23), end: new Date(2026, 10, 23) };
+  const spent = budgetSpent({ cat: 'Food' }, [
+    tx({ amount: 400, date: '25/10/2026' }),
+    tx({ amount: 600, date: '05/11/2026' }),
+    tx({ amount: 900, date: '22/10/2026' }),
+    tx({ amount: 800, date: '23/11/2026' }),
+  ], now, period);
+  assert.equal(spent, 1000);
+});
+
 test('a one-off budget counts by name from its start, across months, ignoring its category', () => {
   const laptop = { name: 'Laptop', cat: 'Other', limit: 590000, oneOff: true, startDate: '2026-10-01' };
   const spent = budgetSpent(laptop, [
