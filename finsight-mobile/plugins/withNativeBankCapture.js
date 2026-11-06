@@ -24,6 +24,8 @@ function getBankNotificationServiceJava(pkg) {
   return `package ${pkg};
 
 import android.app.Notification;
+import android.content.ComponentName;
+import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.provider.Telephony;
@@ -41,8 +43,37 @@ public class BankNotificationService extends NotificationListenerService {
     static final String KEY_ALERTS   = "pending_alerts";
     static final String KEY_APPS     = "capture_apps";
     static final String KEY_SENDERS  = "capture_senders";
+    static final String KEY_DISCONNECTED_AT = "disconnected_at";
     // The queue is shared with NotificationPermissionModule.
     static final Object LOCK = new Object();
+
+    // Whether Android has this listener connected in this process right now.
+    static volatile boolean connected = false;
+
+    // Asks Android to connect the listener again. It does nothing if it's already
+    // connected, so it's safe to call whenever the app opens.
+    static void requestReconnect(Context context) {
+        try {
+            requestRebind(new ComponentName(context, BankNotificationService.class));
+        } catch (Exception ignored) {}
+    }
+
+    @Override
+    public void onListenerConnected() {
+        connected = true;
+    }
+
+    // Android or a battery saver can disconnect the listener. Without asking to be
+    // connected again, capture stays off until access is switched off and on.
+    @Override
+    public void onListenerDisconnected() {
+        connected = false;
+        try {
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putLong(KEY_DISCONNECTED_AT, System.currentTimeMillis()).apply();
+        } catch (Exception ignored) {}
+        requestReconnect(this);
+    }
 
     private static final int MAX_QUEUE = 200;
     // The same text inside this window is one notification being posted again.
@@ -127,7 +158,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.PowerManager;
 import android.provider.Settings;
+import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Promise;
+import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
@@ -217,6 +250,37 @@ public class NotificationPermissionModule extends ReactContextBaseJavaModule {
             promise.resolve(null);
         } catch (Exception e) {
             promise.resolve(null);
+        }
+    }
+
+    private boolean accessGranted() {
+        String flat = Settings.Secure.getString(reactContext.getContentResolver(), "enabled_notification_listeners");
+        return flat != null && flat.contains(reactContext.getPackageName());
+    }
+
+    private boolean batteryExempt() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true;
+        PowerManager pm = (PowerManager) reactContext.getSystemService(Context.POWER_SERVICE);
+        return pm != null && pm.isIgnoringBatteryOptimizations(reactContext.getPackageName());
+    }
+
+    // Called whenever the app opens. Reconnects the listener if Android dropped it,
+    // and reports what might stop capture so the app can say what to change.
+    @ReactMethod
+    public void ensureCapture(Promise promise) {
+        try {
+            boolean granted = accessGranted();
+            boolean wasConnected = BankNotificationService.connected;
+            if (granted && !wasConnected) BankNotificationService.requestReconnect(reactContext);
+            WritableMap status = Arguments.createMap();
+            status.putBoolean("granted", granted);
+            status.putBoolean("connected", wasConnected);
+            status.putBoolean("batteryExempt", batteryExempt());
+            status.putDouble("disconnectedAt",
+                prefs().getLong(BankNotificationService.KEY_DISCONNECTED_AT, 0L));
+            promise.resolve(status);
+        } catch (Exception e) {
+            promise.reject("ERROR", e.getMessage());
         }
     }
 

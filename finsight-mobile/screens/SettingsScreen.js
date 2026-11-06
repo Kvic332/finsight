@@ -20,7 +20,7 @@ import PinScreen from './PinScreen';
 import { onAuthChange, checkIsAdmin } from '../services/cloudSync';
 import { scheduleDailyReminder, cancelDailyReminder } from '../services/notificationService';
 import {
-  isCaptureSupported, isNotificationAccessGranted, openAppInfo, openNotificationAccessSettings,
+  ensureCapture, isCaptureSupported, isNotificationAccessGranted, openAppInfo, openNotificationAccessSettings,
   requestBatteryOptimizationExemption, syncBankAlerts,
 } from '../services/notificationPermission';
 import { setPickingMedia } from '../services/appState';
@@ -28,6 +28,7 @@ import { exportCSV, exportPDF } from '../services/exportService';
 import { formatMoney, parseAmount } from '../services/format';
 import { hasPin as readHasPin, removePin, wipeAllData } from '../services/pinStore';
 import { syncDebtReminders } from '../services/debtReminders';
+import { syncPaydayReminder } from '../services/paydayReminder';
 
 const NIGERIAN_BANKS = [
   'GTBank', 'Access Bank', 'Zenith Bank', 'First Bank', 'UBA', 'Fidelity Bank',
@@ -223,6 +224,9 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
   const [galleryScheme, setGalleryScheme] = useState('light');
 
   const [notifAccessGranted, setNotifAccessGranted] = useState(false);
+  // Null on an older APK that can't report whether the phone may pause capture.
+  const [captureStatus, setCaptureStatus] = useState(null);
+  const awaitingAccess = useRef(false);
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [reminderHour, setReminderHour] = useState(21);
   const [reminderMinute, setReminderMinute] = useState(0);
@@ -309,10 +313,20 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
     setHasPin(pinSet);
   }
 
+  // Also runs when the user comes back from the phone's settings, however long
+  // they took there, and then asks to let capture run in the background.
   async function checkNotifAccess() {
-    const granted = await isNotificationAccessGranted();
+    const status = await ensureCapture();
+    const granted = status ? status.granted : await isNotificationAccessGranted();
     setNotifAccessGranted(granted);
+    setCaptureStatus(status);
+    if (!awaitingAccess.current || !granted) return;
+    awaitingAccess.current = false;
+    toast.show('Bank alert capture is on', { tone: 'success' });
+    if (!status?.batteryExempt) requestBatteryOptimizationExemption();
   }
+
+  const capturePausable = notifAccessGranted && captureStatus && !captureStatus.batteryExempt;
 
   async function saveUser(updates) {
     const updated = { ...user, ...updates };
@@ -382,14 +396,21 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
     const day = parseInt(salaryDayInput, 10);
     if (!(day >= 1 && day <= 31)) { setSalaryError('Enter a day from 1 to 31'); return; }
     await saveUser({ salaryDay: String(day) });
+    syncPaydayReminder({ ...user, salaryDay: String(day) });
     setShowSalaryDay(false);
     toast.show(`Payday set to day ${day}`, { tone: 'success' });
   }
 
   async function clearSalaryDay() {
     await saveUser({ salaryDay: '' });
+    syncPaydayReminder({ ...user, salaryDay: '' });
     setShowSalaryDay(false);
     toast.show('Payday removed. Figures now follow the calendar month.');
+  }
+
+  async function setPaydayReminder(on) {
+    await saveUser({ paydayReminder: on });
+    syncPaydayReminder({ ...user, paydayReminder: on });
   }
 
   async function saveLockTimeout() {
@@ -443,9 +464,12 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
       toast.show('Install the latest version of FinSight to use this.', { tone: 'error' });
       return;
     }
-    const granted = await isNotificationAccessGranted();
+    const status = await ensureCapture();
+    const granted = status ? status.granted : await isNotificationAccessGranted();
     setNotifAccessGranted(granted);
-    if (granted) toast.show('Bank alert capture is already on', { tone: 'success' });
+    setCaptureStatus(status);
+    // Once it's on, the sheet explains how to stop the phone pausing it.
+    if (granted && !status) toast.show('Bank alert capture is already on', { tone: 'success' });
     else setShowCapture(true);
   }
 
@@ -453,15 +477,13 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
     setShowCapture(false);
     // Tells the Android side which sources to keep before access is switched on.
     await syncBankAlerts();
+    awaitingAccess.current = true;
     await openNotificationAccessSettings();
-    setTimeout(async () => {
-      const granted = await isNotificationAccessGranted();
-      setNotifAccessGranted(granted);
-      if (granted) {
-        requestBatteryOptimizationExemption();
-        toast.show('Bank alert capture is on', { tone: 'success' });
-      }
-    }, 3000);
+  }
+
+  async function allowBackground() {
+    setShowCapture(false);
+    await requestBatteryOptimizationExemption();
   }
 
   function askRemovePin() {
@@ -501,6 +523,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
       onConfirm: async () => {
         await cancelDailyReminder().catch(() => {});
         await syncDebtReminders([]);
+        await syncPaydayReminder(null);
         await wipeAllData();
         setUser(null);
       },
@@ -546,13 +569,16 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
           <Row
             icon={notifAccessGranted ? 'checkmark-circle-outline' : 'notifications-outline'}
             title="Capture bank alerts"
-            subtitle={notifAccessGranted ? 'On. Adds transactions from your bank notifications' : 'Add transactions from your bank notifications'}
+            subtitle={capturePausable ? 'On, but your phone may pause it. Tap to fix'
+              : notifAccessGranted ? 'On. Adds transactions from your bank notifications' : 'Add transactions from your bank notifications'}
             onPress={openCapture}
           />
           <Row icon="alarm-outline" title="Daily reminder" subtitle={reminderEnabled ? `Every day at ${clock(reminderHour, reminderMinute)}` : 'A nudge to log your spending'}
             right={<Toggle value={reminderEnabled} onValueChange={setReminder} label="Daily reminder" />} />
           <Row icon="time-outline" title="Reminder time" subtitle={clock(reminderHour, reminderMinute)}
-            onPress={() => { setPickerHour(reminderHour); setPickerMinute(reminderMinute); setShowTimePicker(true); }} last />
+            onPress={() => { setPickerHour(reminderHour); setPickerMinute(reminderMinute); setShowTimePicker(true); }} />
+          <Row icon="calendar-outline" title="Payday reminder" subtitle={user?.salaryDay ? 'At 9am on payday, to plan your pay' : 'Set a payday above to get this'}
+            right={<Toggle value={user?.paydayReminder !== false} onValueChange={setPaydayReminder} label="Payday reminder" />} last />
         </Section>
 
         <Section title="Security">
@@ -697,14 +723,30 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
       <Sheet
         visible={showCapture}
         onClose={() => setShowCapture(false)}
-        title="Capture bank alerts"
+        title={notifAccessGranted ? 'Keep bank alert capture running' : 'Capture bank alerts'}
         footer={(
           <>
-            <Button full title="Open phone settings" onPress={enableCapture} />
+            {notifAccessGranted
+              ? <Button full title={captureStatus?.batteryExempt ? 'Battery use allowed' : 'Allow background use'} disabled={!!captureStatus?.batteryExempt} onPress={allowBackground} />
+              : <Button full title="Open phone settings" onPress={enableCapture} />}
             <Button full title="Open App info" variant="ghost" onPress={() => { setShowCapture(false); openAppInfo(); }} />
           </>
         )}
       >
+        {notifAccessGranted ? (
+          <View style={{ gap: space.sm }}>
+            <Text color="inkMuted">Capture is on. Some phones pause apps in the background to save battery, which stops new alerts being added.</Text>
+            <Text variant="label" family="regular" color="inkMuted">
+              {captureStatus?.batteryExempt
+                ? "FinSight is already allowed to run in the background."
+                : 'Tap Allow background use, then choose Allow.'}
+            </Text>
+            <Text variant="label" family="regular" color="inkMuted">
+              On Tecno, Infinix, itel, Xiaomi, Oppo and some other phones, also open App info and turn on Auto-start or Allow background activity, and set Battery to No restrictions. The names differ between phones.
+            </Text>
+            <Text variant="label" family="regular" color="inkMuted">Alerts that arrive while capture is paused aren't added later, so add those by hand or paste the SMS.</Text>
+          </View>
+        ) : (
         <View style={{ gap: space.sm }}>
           <Text color="inkMuted">FinSight can add transactions from your bank's notifications, so you don't have to type them.</Text>
           <Text variant="label" family="regular" color="inkMuted">Android will show FinSight your notifications. It only keeps alerts from bank apps and bank SMS, and ignores everything else. Nothing is sent anywhere.</Text>
@@ -718,6 +760,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
           ))}
           <Text variant="label" family="regular" color="inkMuted">If Android says the setting is restricted, open App info, tap the three dots at the top, choose Allow restricted settings, then try again.</Text>
         </View>
+        )}
       </Sheet>
 
       <Sheet visible={!!about} onClose={() => setAbout(null)} title={about?.title} footer={<Button full title="Done" variant="secondary" onPress={() => setAbout(null)} />}>

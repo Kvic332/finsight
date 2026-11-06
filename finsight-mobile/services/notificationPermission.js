@@ -49,6 +49,19 @@ export async function requestBatteryOptimizationExemption() {
   } catch (e) {}
 }
 
+// ── Keep capture running ──────────────────────────────────────────────────────
+// Reconnects the listener if Android dropped it, and says what could stop it:
+// { granted, connected, batteryExempt, disconnectedAt }. Null on an APK built
+// before this check existed.
+export async function ensureCapture() {
+  if (!isCaptureSupported() || !NotificationPermission.ensureCapture) return null;
+  try {
+    return await NotificationPermission.ensureCapture();
+  } catch (e) {
+    return null;
+  }
+}
+
 // ── Bring queued bank alerts into the app ─────────────────────────────────────
 // The Android service can't reach the encrypted store, so it queues alert text. The
 // queue is only cleared once the transactions are saved, so a failed save loses
@@ -59,6 +72,7 @@ export async function syncBankAlerts() {
   if (!isCaptureSupported() || syncing) return;
   syncing = true;
   try {
+    await ensureCapture();
     await NotificationPermission.setCaptureSources(JSON.stringify(Object.keys(BANK_APPS)), JSON.stringify(BANK_SENDERS));
     const alerts = JSON.parse(await NotificationPermission.getPendingAlerts() || '[]');
     if (!alerts.length) return;
