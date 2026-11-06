@@ -117,3 +117,24 @@ The function checks each request in this order:
 3. The request passes validation, and only known fields reach the database. Who made the change comes from the token.
 
 Providers and products can be archived but not deleted, so their history stays intact.
+
+### Weekly fund yields
+
+`sec-fund-rates` keeps money market fund yields current from the SEC's weekly valuation report. A database job (`sec-fund-rates` in `cron.job`) calls it daily at 08:15 Lagos time, and it does nothing until a newer report is published.
+
+```bash
+supabase functions deploy sec-fund-rates --no-verify-jwt
+```
+
+- It only accepts calls carrying the secret named `sec_import_secret` in the database vault. The function checks it through `check_sec_import_secret`, which only the service role can call.
+- Funds are matched to the report by exact name. A new yield is applied only if it's between 5% and 40% and moved less than 3 points since the last figure. Anything else is held.
+- Every decision is logged in `fund_rate_imports` with status `applied`, `held` or `unmatched`. Held and unmatched funds keep their old rate until someone updates them in the catalogue admin.
+- Applied rates keep their history through the `rates_record_history` trigger, as manual changes do.
+
+To see recent decisions:
+
+```sql
+select p.name, i.report_date, i.status, i.proposed_pct, i.reason
+from fund_rate_imports i join products p on p.id = i.product_id
+order by i.created_at desc limit 20;
+```
