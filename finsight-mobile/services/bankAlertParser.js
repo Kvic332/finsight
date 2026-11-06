@@ -2,6 +2,7 @@
 // can be unit tested and corrected with an app update. A wrong amount is worse than
 // a missed alert, so anything unclear returns null rather than a guess.
 import { detectCategory } from './smsParser.js';
+import { noiseReason } from './transactionReview.js';
 
 // Android app IDs, each confirmed on Google Play. Notifications from any other app
 // are ignored, apart from bank SMS below.
@@ -133,7 +134,8 @@ function formatDate(time) {
 export function parseBankAlert(alert) {
   const text = String(alert?.text || '');
   const combined = `${alert?.title || ''}\n${text}`;
-  if (!text || NOT_A_TRANSACTION.test(combined)) return null;
+  // Bank apps also send adverts, and some of them mention amounts.
+  if (!text || NOT_A_TRANSACTION.test(combined) || noiseReason(combined)) return null;
 
   const labelled = labelledAmount(combined);
   const amount = labelled ? labelled.amount : firstOwnAmount(combined);

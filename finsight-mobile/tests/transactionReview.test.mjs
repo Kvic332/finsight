@@ -137,3 +137,12 @@ test('reviewing removes the chosen and marks the rest as checked', () => {
   assert.equal(after[0].reviewedOk, true);
   assert.equal(suspectTransactions(after).length, 0);
 });
+
+test('captured adverts already saved are flagged for removal', () => {
+  const imported = desc => ({ id: desc, desc, amount: 1000, type: 'debit', cat: 'Other', date: '04/11/2026', source: 'push' });
+  for (const desc of [
+    "Xiaomi upgrade you've been waiting for", 'Confirm Before ₦50,625. Now ₦13,502.',
+    'Top up Airtime will expire Your ₦100', 'N200 and stay connected', 'get ₦75',
+  ]) assert.equal(suspectReason(imported(desc)), 'Looks like an advert', desc);
+  assert.equal(suspectReason(imported('Get groceries at SPAR')), null);
+});

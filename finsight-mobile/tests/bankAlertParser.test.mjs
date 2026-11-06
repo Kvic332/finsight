@@ -155,3 +155,21 @@ test('the bridge is registered in MainApplication.kt, once', () => {
 test('the build fails if the bridge cannot be registered', () => {
   assert.throws(() => registerPackage('class MainApplication'), /could not register/);
 });
+
+// ── Adverts from bank apps ────────────────────────────────────────────────────
+test('adverts that mention amounts are not read as transactions', () => {
+  const adverts = [
+    'The Xiaomi upgrade you have been waiting for! Pay with OPay and save ₦5,000 today',
+    'Confirm Before ₦50,625. Now ₦13,502. Shop now on our app',
+    'Top up Airtime will expire soon. Your ₦100 bonus credited',
+    'Buy N200 and stay connected all week',
+    'Invite friends and get ₦75,000 credited to your wallet',
+  ];
+  for (const text of adverts) assert.equal(parseBankAlert(alert(text, { pkg: 'team.opay.pay', title: 'OPay' })), null, text);
+});
+
+test('real alerts still get through the advert check', () => {
+  assert.equal(parse('Credit Alert! Amt: NGN1,200,000.00 CR Desc: SALARY OCT Avail Bal: NGN1,250,000.00').amount, 1200000);
+  assert.equal(parse('You have received ₦5,000 from JOHN DOE').type, 'credit');
+  assert.equal(parse('Debit alert: ₦13,502 paid to JUMIA. Avail Bal ₦40,000').amount, 13502);
+});

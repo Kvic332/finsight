@@ -17,6 +17,10 @@ const RULES = [
       String.raw`\bclaim it\b`, String.raw`\bsign ?up reward\b`, String.raw`\bbrand day\b`,
       String.raw`\bdon'?t miss\b`, String.raw`\bmiss out\b`, String.raw`\bsteal\b`, String.raw`\bdial \*`,
       String.raw`\bloan has been approved\b`, String.raw`\bcomplete more tasks\b`, String.raw`\bsmartphone you love\b`,
+      // Seen in captured notifications: price drops, upgrades and network offers.
+      String.raw`\bbefore\s*(?:₦|n|ngn)\s?[\d,]+.{0,12}\bnow\b`, String.raw`\bbeen waiting for\b`,
+      String.raw`\bwill expire\b`, String.raw`\bstay connected\b`, String.raw`(?:^|\s)get\s*(?:₦|n|ngn)\s?\d`,
+      String.raw`\bshop now\b`, String.raw`\bbuy now\b`, String.raw`\blimited time\b`, String.raw`\bfree delivery\b`,
     ].join('|'), 'i'),
   },
   {
