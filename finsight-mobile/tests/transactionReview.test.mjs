@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 import { applyReview, suspectReason, suspectTransactions } from '../services/transactionReview.js';
 import { parseSMS } from '../services/smsParser.js';
 
+test('pasted interest earned is money in', () => {
+  const [found] = parseSMS("OPay Acct 123***890 OWealth Interest Earned. Your balance 'OWealth' earned interest of ₦26.40 today.");
+  assert.equal(found.type, 'credit');
+});
+
 test('pasted balance warnings, failed payments and adverts are skipped', () => {
   assert.deepEqual(parseSMS('Your balance is less than NGN101. Top up now. Acct 123***890'), []);
   assert.deepEqual(parseSMS('GTBank: Debit of NGN5,000 failed due to insufficient funds. Acct 123***890'), []);
@@ -65,6 +70,36 @@ test('real transactions are left alone', () => {
 test('anything typed by hand, or already checked, is never flagged', () => {
   assert.equal(suspectReason(tx({ desc: '40% OFF', source: 'manual' })), null);
   assert.equal(suspectReason(tx({ desc: '40% OFF', reviewedOk: true })), null);
+});
+
+test('money in saved as spending is offered a fix, not removal', () => {
+  const item = suspectTransactions([tx({ id: 'i', desc: "OWealth Interest Earned Your Available Balance 'OW", amount: 26, cat: 'Savings' })])[0];
+  assert.equal(item.action, 'fix');
+  assert.deepEqual(item.changes, { type: 'credit', cat: 'Income' });
+  assert.equal(suspectTransactions([tx({ desc: 'Refund for failed order', amount: 5000 })])[0].action, 'fix');
+});
+
+test('a credit tagged savings that never mentions savings is offered Income', () => {
+  const item = suspectTransactions([tx({ id: 's', type: 'credit', cat: 'Savings', desc: 'IK SPORTS WEAR SHOP - IYK SPORTS WEAR SHOP', amount: 250000 })])[0];
+  assert.equal(item.action, 'fix');
+  assert.deepEqual(item.changes, { cat: 'Income' });
+});
+
+test('real savings and real spending are not offered fixes', () => {
+  const real = [
+    tx({ type: 'credit', cat: 'Savings', desc: 'your Spend & Save! Auto-deposited from your CashBox' }),
+    tx({ type: 'debit', cat: 'Savings', desc: 'your FairSave account' }),
+    tx({ type: 'debit', cat: 'Transport', desc: 'Uber' }),
+    tx({ type: 'credit', cat: 'Income', desc: 'Salary credited to your account' }),
+  ];
+  assert.deepEqual(suspectTransactions(real), []);
+});
+
+test('applying a fix changes the transaction and marks it checked', () => {
+  const list = [tx({ id: 'i', desc: 'Interest Earned', cat: 'Savings' }), tx({ id: 'u', desc: 'Uber' })];
+  const after = applyReview(list, [], [], { i: { type: 'credit', cat: 'Income' } });
+  assert.deepEqual([after[0].type, after[0].cat, after[0].reviewedOk], ['credit', 'Income', true]);
+  assert.equal(suspectTransactions(after).length, 0);
 });
 
 test('reviewing removes the chosen and marks the rest as checked', () => {

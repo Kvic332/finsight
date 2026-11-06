@@ -48,18 +48,45 @@ export function suspectReason(tx) {
   return null;
 }
 
-export function suspectTransactions(transactions) {
-  return transactions
-    .map(tx => ({ tx, reason: suspectReason(tx) }))
-    .filter(item => item.reason);
+// Money that came in but was saved as spending: interest, refunds, credits.
+const MONEY_IN = /\binterest (?:earned|paid|credited)\b|\b(?:has been|was|been) credited\b|\bcredited to your\b|\byou(?:'ve| have)? received\b|\bcashback\b|\brefund(?:ed)?\b|\breversal\b|\breversed\b/i;
+// What savings look like, so a credit tagged Savings without any of it stands out.
+const SAVINGS_WORDS = /sav(?:e|ing|ings)|cashbox|piggy|cowry|vault|target|owealth|fixed deposit|lock|stash/i;
+
+// A wrong direction or category is fixed rather than removed: the money was real.
+export function suspectFix(tx) {
+  if (!tx || tx.source === 'manual' || tx.reviewedOk) return null;
+  const text = `${tx.desc || ''} ${tx.raw || ''}`;
+  if (tx.type === 'debit' && MONEY_IN.test(text)) {
+    return { reason: 'Looks like money in, saved as money out', changes: { type: 'credit', cat: 'Income' }, change: 'Change to money in, under Income' };
+  }
+  if (tx.type === 'credit' && tx.cat === 'Savings' && !SAVINGS_WORDS.test(text)) {
+    return { reason: "Looks like a payment to you, not savings", changes: { cat: 'Income' }, change: 'Change the category to Income' };
+  }
+  return null;
 }
 
-// Removes the chosen ones and remembers the rest were checked, so they aren't
-// flagged again.
-export function applyReview(transactions, removeIds, keepIds) {
+// Things to remove come first; only a transaction that isn't junk is checked for a fix.
+export function suspectTransactions(transactions) {
+  return transactions
+    .map(tx => {
+      const reason = suspectReason(tx);
+      if (reason) return { tx, reason, action: 'remove' };
+      const fix = suspectFix(tx);
+      return fix ? { tx, reason: fix.reason, action: 'fix', changes: fix.changes, change: fix.change } : null;
+    })
+    .filter(Boolean);
+}
+
+// Removes and fixes the chosen ones, and remembers the rest were checked, so
+// they aren't flagged again.
+export function applyReview(transactions, removeIds, keepIds, fixes = {}) {
   const remove = new Set(removeIds);
   const keep = new Set(keepIds);
   return transactions
     .filter(tx => !remove.has(tx.id))
-    .map(tx => (keep.has(tx.id) ? { ...tx, reviewedOk: true } : tx));
+    .map(tx => {
+      if (fixes[tx.id]) return { ...tx, ...fixes[tx.id], reviewedOk: true };
+      return keep.has(tx.id) ? { ...tx, reviewedOk: true } : tx;
+    });
 }

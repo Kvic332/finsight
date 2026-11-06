@@ -163,7 +163,7 @@ export default function ActivityScreen({ navigation, user }) {
                   <Icon name="alert-circle-outline" size={22} color="warning" />
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text variant="label" family="semibold">{`${suspects === 1 ? '1 imported transaction looks' : `${suspects} imported transactions look`} wrong`}</Text>
-                    <Text variant="caption" color="inkMuted">Adverts or failed payments read as money. Check them</Text>
+                    <Text variant="caption" color="inkMuted">Adverts, failed payments or money saved the wrong way. Check them</Text>
                   </View>
                   <Icon name="chevron-forward" size={18} color="inkSubtle" />
                 </Pressable>

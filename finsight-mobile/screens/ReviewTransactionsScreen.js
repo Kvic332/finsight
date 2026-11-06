@@ -33,6 +33,9 @@ function SuspectRow({ item, selected, onToggle }) {
         <Text variant="bodyStrong" family="semibold" numberOfLines={2}>{tx.desc}</Text>
         <Text variant="caption" color="inkMuted" numberOfLines={1}>{`${formatDayLabel(parseTxDate(tx.date) || undefined)} · ${tx.cat}`}</Text>
         <Text variant="caption" color="warning">{reason}</Text>
+        <Text variant="caption" family="semibold" color={selected ? 'ink' : 'inkMuted'}>
+          {item.action === 'fix' ? `Fix: ${item.change}` : 'Remove'}
+        </Text>
       </View>
       <Money value={money} family="bold" tone="auto" showSign={money > 0} />
     </Pressable>
@@ -67,18 +70,25 @@ export default function ReviewTransactionsScreen({ navigation }) {
     });
   }
 
+  const count = n => (n === 1 ? '1 transaction' : `${n} transactions`);
+
   async function finish() {
     setConfirming(false);
     try {
       const list = await loadTransactions();
+      const chosen = items.filter(i => selected.has(i.tx.id));
+      const removeIds = chosen.filter(i => i.action === 'remove').map(i => i.tx.id);
+      const fixes = Object.fromEntries(chosen.filter(i => i.action === 'fix').map(i => [i.tx.id, i.changes]));
       const keep = items.filter(i => !selected.has(i.tx.id)).map(i => i.tx.id);
-      await saveTransactions(applyReview(list, [...selected], keep));
-      toast.show(selected.size
-        ? `${selected.size === 1 ? '1 transaction' : `${selected.size} transactions`} removed`
-        : 'Marked as checked', { tone: 'success' });
+      await saveTransactions(applyReview(list, removeIds, keep, fixes));
+      const done = [
+        removeIds.length ? `${count(removeIds.length)} removed` : null,
+        Object.keys(fixes).length ? `${count(Object.keys(fixes).length)} fixed` : null,
+      ].filter(Boolean).join(', ');
+      toast.show(done || 'Marked as checked', { tone: 'success' });
       navigation.goBack();
     } catch (e) {
-      toast.show("Couldn't save this. Nothing was removed.", { tone: 'error' });
+      toast.show("Couldn't save this. Nothing was changed.", { tone: 'error' });
     }
   }
 
@@ -87,19 +97,25 @@ export default function ReviewTransactionsScreen({ navigation }) {
   if (!items.length) {
     return (
       <ScrollView contentContainerStyle={{ padding: space.xl }}>
-        <EmptyState icon="checkmark-circle-outline" title="Nothing looks wrong" body="None of your imported transactions look like adverts, failed payments or balance warnings." />
+        <EmptyState icon="checkmark-circle-outline" title="Nothing looks wrong" body="None of your imported transactions look like adverts, failed payments, balance warnings or money saved the wrong way round." />
       </ScrollView>
     );
   }
 
-  const removing = items.filter(i => selected.has(i.tx.id));
+  const removing = items.filter(i => selected.has(i.tx.id) && i.action === 'remove');
+  const fixing = items.filter(i => selected.has(i.tx.id) && i.action === 'fix');
   const removingTotal = removing.reduce((sum, i) => sum + i.tx.amount, 0);
+  const buttonTitle = removing.length && fixing.length
+    ? `Remove ${removing.length}, fix ${fixing.length}`
+    : removing.length ? `Remove ${removing.length} selected`
+    : fixing.length ? `Fix ${fixing.length} selected`
+    : "Keep all, they're right";
 
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ padding: space.xl, paddingTop: space.sm, gap: space.sm }}>
         <Text color="inkMuted" style={{ marginBottom: space.sm }}>
-          {`These ${items.length === 1 ? 'transaction was' : `${items.length} transactions were`} imported from messages that look like adverts, failed payments or balance warnings, so they may not be real money. Untick any that are real.`}
+          {`FinSight found ${count(items.length)} that look wrong. Adverts, failed payments and warnings can be removed, because no money moved. Money saved the wrong way round can be fixed. Untick anything that's right as it is.`}
         </Text>
         {items.map(item => (
           <SuspectRow key={item.tx.id} item={item} selected={selected.has(item.tx.id)} onToggle={() => toggle(item.tx.id)} />
@@ -108,16 +124,17 @@ export default function ReviewTransactionsScreen({ navigation }) {
       <View style={{ padding: space.xl, paddingTop: space.sm, paddingBottom: Math.max(insets.bottom + space.sm, space.xl), gap: space.xs }}>
         <Button
           full
-          variant={selected.size ? 'danger' : 'primary'}
-          title={selected.size ? `Remove ${selected.size} selected` : 'Keep all, they\'re real'}
-          onPress={() => (selected.size ? setConfirming(true) : finish())}
+          variant={removing.length ? 'danger' : 'primary'}
+          title={buttonTitle}
+          // Only removing needs a second check; a fix can be changed back by editing.
+          onPress={() => (removing.length ? setConfirming(true) : finish())}
         />
       </View>
       <ConfirmSheet
         visible={confirming}
         destructive
-        title={`Remove ${removing.length === 1 ? '1 transaction' : `${removing.length} transactions`}?`}
-        body={`They total ${formatMoney(removingTotal)}. Your totals, savings and Broke Clock will update. You can't undo this, unless you restore a cloud backup made before now.`}
+        title={`Remove ${count(removing.length)}?`}
+        body={`They total ${formatMoney(removingTotal)}.${fixing.length ? ` ${count(fixing.length)} will also be fixed.` : ''} Your totals, savings and Broke Clock will update. Removing can't be undone, unless you restore a cloud backup made before now.`}
         confirmLabel="Remove transactions"
         onConfirm={finish}
         onCancel={() => setConfirming(false)}

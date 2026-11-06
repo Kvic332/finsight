@@ -96,7 +96,7 @@ export function parseSMS(text) {
 
       // Override type from context keywords
       // Credit = money coming IN to your account
-      if (/credit(?:ed)?|received|incoming|funded|salary|refund|topup|cashback|lodgement|inflow|deposit/i.test(block)) type = 'credit';
+      if (/credit(?:ed)?|received|incoming|funded|salary|refund|topup|cashback|lodgement|inflow|deposit|interest (?:earned|paid)|earned interest/i.test(block)) type = 'credit';
       // Debit = money going OUT of your account (including transfers you initiate)
       if (/debit(?:ed)?|withdrawn?|charged?|deducted|payment of|via pos|atm|\bsent\b|transfer(?:red)? to|trf to|send|transfer out/i.test(block)) type = 'debit';
     }
