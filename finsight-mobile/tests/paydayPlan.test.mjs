@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nextGoalEta, planPayday, planPeriod } from '../services/paydayPlan.js';
+import { nextGoalEta, paydayReminderTimes, planPayday, planPeriod } from '../services/paydayPlan.js';
 
 const NOW = new Date(2026, 10, 4, 12, 0);
 const period = planPeriod(25, NOW);
@@ -109,6 +109,30 @@ test('with nothing committed, savings still come out first', () => {
   const plan = planPayday({ pay: 100000, period });
   assert.equal(plan.saving, 20000);
   assert.equal(plan.free, 80000);
+});
+
+// ── Reminders ─────────────────────────────────────────────────────────────────
+test('reminders are set for the next three paydays at 9am', () => {
+  assert.deepEqual(paydayReminderTimes(25, NOW), [
+    new Date(2026, 10, 25, 9), new Date(2026, 11, 25, 9), new Date(2027, 0, 25, 9),
+  ]);
+});
+
+test('payday morning still reminds, but not once 9am has passed', () => {
+  assert.deepEqual(paydayReminderTimes(25, new Date(2026, 10, 25, 8))[0], new Date(2026, 10, 25, 9));
+  assert.deepEqual(paydayReminderTimes(25, new Date(2026, 10, 25, 9))[0], new Date(2026, 11, 25, 9));
+});
+
+test('a late payday lands on the last day of shorter months', () => {
+  assert.deepEqual(paydayReminderTimes(31, new Date(2027, 0, 31, 12)), [
+    new Date(2027, 1, 28, 9), new Date(2027, 2, 31, 9), new Date(2027, 3, 30, 9),
+  ]);
+});
+
+test('no fixed payday means no reminders', () => {
+  assert.deepEqual(paydayReminderTimes('', NOW), []);
+  assert.deepEqual(paydayReminderTimes(undefined, NOW), []);
+  assert.deepEqual(paydayReminderTimes('40', NOW), []);
 });
 
 // ── Goals ─────────────────────────────────────────────────────────────────────

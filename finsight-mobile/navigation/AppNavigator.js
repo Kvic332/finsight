@@ -1,9 +1,12 @@
-import React from 'react';
-import { Pressable, StatusBar, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Platform, Pressable, StatusBar, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
+import * as Notifications from 'expo-notifications';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { space } from '../constants/tokens';
+import { PAYDAY_REMINDER_TYPE } from '../services/paydayReminder';
 import {
   Gradient, Icon, IconButton, Text, tapFeedback, useTheme,
 } from '../components/ui';
@@ -101,14 +104,31 @@ function WithBack({ navigation, title, children }) {
   );
 }
 
+// Opens the plan when a payday reminder is tapped. These screens only exist once
+// the app is unlocked, so a tap made before the PIN is handled straight after it.
+// Cleared once used, so a later unlock doesn't open the plan again.
+function PaydayReminderTaps() {
+  const navigation = useNavigation();
+  const response = Notifications.useLastNotificationResponse();
+  useEffect(() => {
+    if (response?.notification?.request?.content?.data?.type !== PAYDAY_REMINDER_TYPE) return;
+    Notifications.clearLastNotificationResponse();
+    navigation.navigate('Main', { screen: 'Plan', params: { view: 'Payday' } });
+  }, [response, navigation]);
+  return null;
+}
+
 function MainTabs({ theme, user, setUser }) {
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={props => <AppTabBar {...props} />}>
-      <Tab.Screen name="Home">{p => <HomeScreen {...p} user={user} />}</Tab.Screen>
-      <Tab.Screen name="Activity">{p => <ActivityScreen {...p} user={user} />}</Tab.Screen>
-      <Tab.Screen name="Plan">{p => <PlanScreen {...p} user={user} setUser={setUser} />}</Tab.Screen>
-      <Tab.Screen name="Grow" component={GrowScreen} />
-    </Tab.Navigator>
+    <>
+      <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={props => <AppTabBar {...props} />}>
+        <Tab.Screen name="Home">{p => <HomeScreen {...p} user={user} />}</Tab.Screen>
+        <Tab.Screen name="Activity">{p => <ActivityScreen {...p} user={user} />}</Tab.Screen>
+        <Tab.Screen name="Plan">{p => <PlanScreen {...p} user={user} setUser={setUser} />}</Tab.Screen>
+        <Tab.Screen name="Grow" component={GrowScreen} />
+      </Tab.Navigator>
+      {Platform.OS !== 'web' ? <PaydayReminderTaps /> : null}
+    </>
   );
 }
 

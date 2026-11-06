@@ -19,6 +19,7 @@ import { gradients } from './constants/tokens';
 import { checkAndSendDigests } from './services/notificationService';
 import { syncBankAlerts } from './services/notificationPermission';
 import { syncDebtReminders, syncStoredDebtReminders } from './services/debtReminders';
+import { syncPaydayReminder } from './services/paydayReminder';
 import { isPickingMedia } from './services/appState';
 
 const Stack = createNativeStackNavigator();
@@ -67,6 +68,7 @@ export default function App() {
         const parsed = JSON.parse(u);
         const name = parsed?.name?.split(' ')[0] || 'there';
         checkAndSendDigests(name);
+        syncPaydayReminder(parsed);
       }
       await syncBankAlerts();
       syncStoredDebtReminders();
@@ -145,7 +147,7 @@ export default function App() {
         {dataLocked ? (
           <DataLockedScreen
             onRetry={() => { setDataLocked(false); setLoading(true); initApp(); }}
-            onStartOver={async () => { await syncDebtReminders([]); await wipeAllData(); setDataLocked(false); setUser(null); setLocked(false); }}
+            onStartOver={async () => { await syncDebtReminders([]); await syncPaydayReminder(null); await wipeAllData(); setDataLocked(false); setUser(null); setLocked(false); }}
           />
         ) : !user ? (
           <Stack.Navigator screenOptions={{ headerShown:false }}>
@@ -153,6 +155,7 @@ export default function App() {
               {p=><OnboardingScreen {...p} onComplete={async(ud)=>{
                 await AsyncStorage.setItem('finsight_user', JSON.stringify(ud));
                 setUser(ud); setLocked(false);
+                syncPaydayReminder(ud);
               }}/>}
             </Stack.Screen>
           </Stack.Navigator>
@@ -162,6 +165,7 @@ export default function App() {
             onSuccess={()=>setLocked(false)}
             onForgot={async()=>{
               await syncDebtReminders([]);
+              await syncPaydayReminder(null);
               await wipeAllData();
               setUser(null); setLocked(false);
             }}

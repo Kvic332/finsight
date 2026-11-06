@@ -7,6 +7,21 @@ import { goalProgress } from './plans.js';
 
 export const SAVE_PERCENTS = [5, 10, 20, 30];
 export const DEFAULT_SAVE_PERCENT = 20;
+const REMINDER_HOUR = 9;
+const REMINDERS_AHEAD = 3;
+
+// The next few paydays at 9am. Scheduled ahead and refreshed whenever the app
+// opens, so a reminder still arrives if the app isn't opened for a while.
+export function paydayReminderTimes(salaryDay, now = new Date()) {
+  const day = parseInt(salaryDay, 10);
+  if (!(day >= 1 && day <= 31)) return [];
+  return Array.from({ length: REMINDERS_AHEAD + 1 }, (_, i) => {
+    const year = now.getFullYear();
+    const month = now.getMonth() + i;
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    return new Date(year, month, Math.min(day, lastDay), REMINDER_HOUR);
+  }).filter(at => at > now).slice(0, REMINDERS_AHEAD);
+}
 
 // The month this pay has to last: starting today on payday, otherwise from the
 // next payday. With no fixed payday it's the calendar month.
