@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, TextInput, View,
 } from 'react-native';
@@ -13,6 +13,9 @@ import { formatMoney, parseAmount } from '../services/format';
 import { addTransaction, loadTransactions, updateTransaction } from '../services/transactions';
 import { awardXP } from '../services/xpService';
 import { trackEvent } from '../services/cloudSync';
+import { detectCategory } from '../services/smsParser';
+import Voice from '../services/voice';
+import { parseSpokenTransaction } from '../services/voiceEntry';
 
 const OUT_CATEGORIES = ['Food', 'Transport', 'Utilities', 'Shopping', 'Entertainment', 'Health', 'Savings', 'Other'];
 const IN_CATEGORIES = ['Income', 'Savings', 'Other'];
@@ -66,18 +69,80 @@ export default function AddTransactionScreen({ navigation, route, user }) {
   const [type, setType] = useState(editing?.type || 'debit');
   const [amount, setAmount] = useState(editing ? String(editing.amount) : '');
   const [desc, setDesc] = useState(editing?.desc || '');
-  const [cat, setCat] = useState(editing?.cat || 'Food');
+  const [cat, setCat] = useState(editing?.cat || 'Other');
+  // Until someone picks a category, by tap or voice, it follows the description.
+  const [catChosen, setCatChosen] = useState(!!editing);
   const [errors, setErrors] = useState({});
   const [picking, setPicking] = useState(false);
   const [saved, setSaved] = useState(null);
+  const [voiceReady, setVoiceReady] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [heard, setHeard] = useState(null);
 
   const categories = type === 'credit' ? IN_CATEGORIES : OUT_CATEGORIES;
+  // Speech results arrive in a listener set up once, so it reads the latest values here.
+  const latest = useRef({});
+  latest.current = { categories, amount, desc };
+
+  function guessCategory(text, kind) {
+    const options = kind === 'credit' ? IN_CATEGORIES : OUT_CATEGORIES;
+    const guess = detectCategory(text || '');
+    return options.includes(guess) ? guess : kind === 'credit' ? 'Income' : 'Other';
+  }
 
   function changeType(next) {
     setType(next);
-    if (next === 'credit' && !IN_CATEGORIES.includes(cat)) setCat('Income');
-    if (next === 'debit' && !OUT_CATEGORIES.includes(cat)) setCat('Food');
+    if (!catChosen) setCat(guessCategory(desc, next));
+    else if (next === 'credit' && !IN_CATEGORIES.includes(cat)) setCat('Income');
+    else if (next === 'debit' && !OUT_CATEGORIES.includes(cat)) setCat('Other');
   }
+
+  function changeDesc(value) {
+    setDesc(value);
+    if (errors.desc) setErrors(e => ({ ...e, desc: undefined }));
+    if (!catChosen) setCat(guessCategory(value, type));
+  }
+
+  function applySpoken(text) {
+    const now = latest.current;
+    const spoken = parseSpokenTransaction(text, now.categories);
+    if (spoken.cat) { setCat(spoken.cat); setCatChosen(true); }
+    // Fills empty fields only, so speaking never overwrites what was typed.
+    if (spoken.amount && !now.amount) setAmount(String(spoken.amount));
+    if (spoken.desc && !now.desc.trim()) setDesc(spoken.desc);
+    setHeard({ text, found: !!spoken.cat });
+  }
+
+  useEffect(() => {
+    Voice.onSpeechResults = e => { setListening(false); applySpoken(e.value?.[0] || ''); };
+    Voice.onSpeechEnd = () => setListening(false);
+    Voice.onSpeechError = () => { setListening(false); setHeard({ text: '', found: false }); };
+    Voice.isAvailable().then(available => setVoiceReady(!!available)).catch(() => setVoiceReady(false));
+    return () => { Voice.destroy().then(Voice.removeAllListeners).catch(() => {}); };
+  }, []);
+
+  async function toggleVoice() {
+    tapFeedback();
+    if (listening) {
+      try { await Voice.stop(); } catch (e) { /* already stopped */ }
+      setListening(false);
+      return;
+    }
+    setHeard(null);
+    try {
+      await Voice.start('en-US');
+      setListening(true);
+    } catch (e) {
+      setHeard({ text: '', found: false, unavailable: true });
+    }
+  }
+
+  let voiceNote = null;
+  if (listening) voiceNote = 'Listening. Say a category, like food or transport.';
+  else if (heard?.unavailable) voiceNote = "Voice isn't available on this phone. Choose a category instead.";
+  else if (heard && !heard.found) voiceNote = heard.text ? `Heard "${heard.text}" but no category. Try again, or choose one.` : "Didn't catch that. Try again, or choose a category.";
+  else if (heard) voiceNote = `Heard "${heard.text}"`;
+  else if (!catChosen && desc.trim()) voiceNote = 'Picked from the description. Tap to change, or say it.';
 
   async function save() {
     const value = parseAmount(amount);
@@ -144,13 +209,27 @@ export default function AddTransactionScreen({ navigation, route, user }) {
             label="Description"
             placeholder={type === 'credit' ? 'Salary' : 'Groceries'}
             value={desc}
-            onChangeText={v => { setDesc(v); if (errors.desc) setErrors(e => ({ ...e, desc: undefined })); }}
+            onChangeText={changeDesc}
             error={errors.desc}
             returnKeyType="done"
           />
 
           <View style={{ gap: space.xs }}>
-            <Text variant="label">Category</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text variant="label">Category</Text>
+              {voiceReady ? (
+                <Pressable
+                  onPress={toggleVoice}
+                  accessibilityRole="button"
+                  accessibilityLabel={listening ? 'Stop listening' : 'Say the category'}
+                  hitSlop={10}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}
+                >
+                  <Icon name={listening ? 'stop-circle' : 'mic'} size={18} color="accent" />
+                  <Text variant="label" family="semibold" color="accent">{listening ? 'Stop' : 'Say it'}</Text>
+                </Pressable>
+              ) : null}
+            </View>
             <Pressable
               onPress={() => { tapFeedback(); setPicking(true); }}
               accessibilityRole="button"
@@ -165,6 +244,9 @@ export default function AddTransactionScreen({ navigation, route, user }) {
               <Text variant="bodyStrong" style={{ flex: 1 }}>{cat}</Text>
               <Icon name="chevron-forward" size={18} color="inkSubtle" />
             </Pressable>
+            {voiceNote ? (
+              <Text variant="caption" color={heard && !heard.found ? 'negative' : 'inkMuted'} accessibilityLiveRegion="polite">{voiceNote}</Text>
+            ) : null}
           </View>
         </ScrollView>
 
@@ -180,7 +262,7 @@ export default function AddTransactionScreen({ navigation, route, user }) {
             return (
               <Pressable
                 key={option}
-                onPress={() => { tapFeedback(); setCat(option); setPicking(false); }}
+                onPress={() => { tapFeedback(); setCat(option); setCatChosen(true); setHeard(null); setPicking(false); }}
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}
                 style={({ pressed }) => ({

@@ -40,6 +40,7 @@
       ],
       "./plugins/withAndroidExclusion",
       "./plugins/withNativeBankCapture",
+      "./plugins/withSpeechRecognition",
       "expo-font",
       "expo-secure-store"
     ],

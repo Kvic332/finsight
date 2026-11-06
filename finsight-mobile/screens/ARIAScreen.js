@@ -15,7 +15,8 @@ import Voice from '../services/voice';
 import { trackEvent } from '../services/cloudSync';
 import { askAria } from '../services/ariaClient';
 import { debtsContext } from '../services/debts';
-import { computePaydayPlan, formatRunway, isSameMonth } from '../services/finance';
+import { computePaydayPlan, formatRunway } from '../services/finance';
+import { budgetSpent } from '../services/plans';
 
 const QUICK_QUESTIONS = [
   'What are my top expenses?',
@@ -136,12 +137,7 @@ export default function ARIAScreen({ navigation, user }) {
       .map(([cat, amt]) => `${cat} ₦${amt.toLocaleString()}`)
       .join(', ');
     const budgetSummary = budgets.map(b => {
-      const spent = transactions.filter(t => {
-        if (t.type !== 'debit') return false;
-        const catMatch = (t.cat || '').toLowerCase() === (b.cat || '').toLowerCase();
-        const kwMatch = (b.keywords || []).some(k => (t.desc || '').toLowerCase().includes(k.toLowerCase()));
-        return isSameMonth(t.date) && (catMatch || kwMatch);
-      }).reduce((s, t) => s + (t.amount || 0), 0);
+      const spent = budgetSpent(b, transactions);
       const pct = b.limit > 0 ? Math.round(spent / b.limit * 100) : 0;
       return `${b.name}: ₦${spent.toLocaleString()}/₦${b.limit.toLocaleString()} (${pct}%${pct >= 100 ? ' EXCEEDED' : pct >= 80 ? ' WARNING' : ''})`;
     }).join(' | ');

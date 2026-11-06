@@ -35,7 +35,7 @@ function BudgetRow({ budget, spent, onPress }) {
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text variant="bodyStrong" family="bold" numberOfLines={1}>{budget.name}</Text>
           <Text variant="label" family="regular" color={over ? 'negative' : tone === 'warning' ? 'warning' : 'inkMuted'} numberOfLines={1}>
-            {over ? `${formatMoney(-left)} over` : `${formatMoney(left)} left`}
+            {over ? `${formatMoney(-left)} over` : left === 0 ? 'Limit reached' : `${formatMoney(left)} left`}
           </Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
@@ -112,8 +112,10 @@ export default function BudgetScreen() {
           await AsyncStorage.setItem(alertKey, 'exceeded');
           await Notifications.scheduleNotificationAsync({
             content: {
-              title: `Budget exceeded: ${b.name}`,
-              body: `You've spent ₦${spent.toLocaleString()}, over your ₦${b.limit.toLocaleString()} budget.`,
+              title: pct > 100 ? `Budget exceeded: ${b.name}` : `Budget reached: ${b.name}`,
+              body: pct > 100
+                ? `You've spent ₦${spent.toLocaleString()}, over your ₦${b.limit.toLocaleString()} budget.`
+                : `You've spent your full ₦${b.limit.toLocaleString()} budget.`,
               sound: true,
             },
             trigger: null,

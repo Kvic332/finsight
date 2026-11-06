@@ -27,6 +27,21 @@ test('a budget also counts matching keywords, and never counts a transaction twi
   assert.equal(spent, 10500);
 });
 
+test("a budget counts purchases that mention its name, whatever their category", () => {
+  const budget = { name: 'Laptop', cat: 'Shopping', limit: 350000 };
+  const spent = budgetSpent(budget, [
+    tx({ amount: 350000, cat: 'Food', desc: 'Laptop from Slot' }),
+    tx({ amount: 900, cat: 'Other', desc: 'Laptops bag' }),
+    tx({ amount: 400, cat: 'Other', desc: 'laptop stand' }),
+  ], now);
+  assert.equal(spent, 350400);
+});
+
+test('a short or symbol-filled budget name matches safely', () => {
+  assert.equal(budgetSpent({ name: 'TV', cat: 'Shopping' }, [tx({ cat: 'Other', desc: 'tv licence' })], now), 0);
+  assert.equal(budgetSpent({ name: 'Data (MTN)', cat: 'Utilities' }, [tx({ cat: 'Other', desc: 'data (mtn) bundle' })], now), 1000);
+});
+
 test('budget status warns at 80% and flags going over', () => {
   assert.equal(budgetStatus(50, 100).tone, 'accent');
   assert.equal(budgetStatus(80, 100).tone, 'warning');

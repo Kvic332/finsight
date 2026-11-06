@@ -32,6 +32,7 @@ export function detectCategory(text) {
   if (lower.includes('netflix') || lower.includes('spotify') || lower.includes('dstv') || lower.includes('showmax')) return 'Entertainment';
   if (lower.includes('electricity') || lower.includes('water') || lower.includes('nepa') || lower.includes('ikedc') || lower.includes('ekedc')) return 'Utilities';
   if (lower.includes('hospital') || lower.includes('pharmacy') || lower.includes('health') || lower.includes('doctor')) return 'Health';
+  if (/\b(shopping|jumia|konga|laptop|clothes|shoes?)\b/.test(lower)) return 'Shopping';
   if (lower.includes('savings') || lower.includes('cowrywise') || lower.includes('piggyvest') || lower.includes('piggy')) return 'Savings';
   if (lower.includes('salary') || lower.includes('credit alert') || lower.includes('payment received')) return 'Income';
   return 'Other';

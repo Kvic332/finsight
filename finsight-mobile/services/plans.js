@@ -14,19 +14,25 @@ const DEFAULT_TARGETS = {
 };
 const FALLBACK_TARGET = 500000;
 
+const escapeRegExp = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // A budget counts this month's debits in its category, plus any whose description
-// contains one of its keywords, such as "netflix".
+// contains one of its keywords, such as "netflix", or the budget's own name as a
+// whole word, so a "Laptop" budget counts "Laptop from Slot" whatever its category.
 export function budgetSpent(budget, transactions, now = new Date()) {
   const category = (budget.cat || '').toLowerCase();
   const keywords = (budget.keywords || [])
     .map(k => (k || '').trim().toLowerCase())
     .filter(k => k.length >= 2);
+  const name = (budget.name || '').trim().toLowerCase();
+  // Not \b, which fails beside symbols such as the bracket in "Data (MTN)".
+  const nameWord = name.length >= 3 ? new RegExp(`(^|[^a-z0-9])${escapeRegExp(name)}($|[^a-z0-9])`) : null;
   return transactions
     .filter(tx => {
       if (tx.type !== 'debit' || !isSameMonth(tx.date, now)) return false;
       if ((tx.cat || '').toLowerCase() === category) return true;
       const desc = (tx.desc || '').toLowerCase();
-      return keywords.some(k => desc.includes(k));
+      return keywords.some(k => desc.includes(k)) || !!nameWord?.test(desc);
     })
     .reduce((sum, tx) => sum + (tx.amount || 0), 0);
 }
