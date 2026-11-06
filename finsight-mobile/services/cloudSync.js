@@ -148,6 +148,7 @@ const BACKUP_KEYS = [
   'finsight_xp_log',
   'finsight_investments',
   'finsight_debts',
+  'finsight_payee_rules',
 ];
 
 // This phone's record of its last backup or restore: { uid, at, hash }. Kept on

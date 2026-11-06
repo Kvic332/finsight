@@ -1,6 +1,7 @@
 import { NativeModules, Platform } from 'react-native';
 import AsyncStorage from './dataStore';
 import { mergeBankAlerts } from './alerts';
+import { withRememberedCategories } from './payeeRuleStore';
 import { BANK_APPS, BANK_SENDERS } from './bankAlertParser';
 
 const { NotificationPermission } = NativeModules;
@@ -77,8 +78,14 @@ export async function syncBankAlerts() {
     const alerts = JSON.parse(await NotificationPermission.getPendingAlerts() || '[]');
     if (!alerts.length) return;
     const raw = await AsyncStorage.getItem('finsight_transactions');
-    const { added, merged } = mergeBankAlerts(raw ? JSON.parse(raw) : [], alerts);
-    if (added.length) await AsyncStorage.setItem('finsight_transactions', JSON.stringify(merged));
+    const existing = raw ? JSON.parse(raw) : [];
+    const { added } = mergeBankAlerts(existing, alerts);
+    if (added.length) {
+      // New alerts use categories the user chose before, and wait in the new-transactions
+      // inbox until they're confirmed. Newest first, as in mergeBankAlerts.
+      const fresh = (await withRememberedCategories(added)).map(tx => ({ ...tx, unconfirmed: true }));
+      await AsyncStorage.setItem('finsight_transactions', JSON.stringify([...fresh.reverse(), ...existing]));
+    }
     await NotificationPermission.removePendingAlerts(JSON.stringify(alerts.map(a => a.id)));
   } catch (e) {
     // The alerts stay queued for the next try.

@@ -14,7 +14,8 @@ FinSight is run by [legal name and registered address]. To contact us about your
 - Your name and any profile details you add, such as your email, phone number, date of birth, sex, nationality, job and photo
 - Your income, payday, banks, budgets and savings goals
 - Debts you add, such as who you owe, how much, the cost and due dates
-- Transactions you enter, paste from bank SMS, import from a statement, or capture from bank notifications if you turn that on
+- Transactions you enter, paste from bank SMS, import from a statement, or capture from bank notifications if you turn that on, including the balance a bank alert reports
+- The categories you choose for payees, so later imports from them are sorted the same way
 
 Your transactions, budgets, goals, debts and profile are encrypted on your phone.
 

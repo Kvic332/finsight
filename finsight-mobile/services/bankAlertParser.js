@@ -108,6 +108,15 @@ function describe(text, bank) {
   return cleaned.slice(0, 60) || (bank ? `${bank} alert` : 'Bank alert');
 }
 
+// The balance the bank reports after this payment, such as "Avail Bal: NGN12,345.67".
+// It's the one real balance FinSight sees, so it's kept to check the estimate against.
+export function reportedBalance(text) {
+  const match = String(text || '').match(new RegExp(`\\b(?:avail(?:able)?\\.?\\s*)?bal(?:ance)?\\.?\\s*(?:is)?\\s*[:\\-]?\\s*${CURRENCY}?\\s?(-?${NUMBER})`, 'i'));
+  if (!match) return null;
+  const value = toNumber(match[1]);
+  return Number.isFinite(value) ? Math.round(value * 100) / 100 : null;
+}
+
 function bankFrom({ pkg, title }) {
   if (BANK_APPS[pkg]) return BANK_APPS[pkg];
   const sender = (title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -135,7 +144,9 @@ export function parseBankAlert(alert) {
 
   const bank = bankFrom(alert);
   const cat = detectCategory(text);
+  const balance = reportedBalance(combined);
   return {
+    ...(balance !== null ? { balance } : null),
     id: `alert_${alert.id}`,
     desc: describe(text, bank),
     amount: Math.round(amount),

@@ -5,6 +5,7 @@ import {
   Button, Card, CategoryTile, EmptyState, Icon, Money, Text, tapFeedback, useTheme, useToast,
 } from '../components/ui';
 import { newImports } from '../services/alerts';
+import { withRememberedCategories } from '../services/payeeRuleStore';
 import { formatMoney } from '../services/format';
 import { parseSMS } from '../services/smsParser';
 import { loadTransactions, saveTransactions } from '../services/transactions';
@@ -51,7 +52,7 @@ export default function SMSScreen({ navigation }) {
     try {
       const existing = await loadTransactions();
       const chosen = parsed.filter(p => selected.includes(p.id));
-      const fresh = newImports(existing, chosen);
+      const fresh = await withRememberedCategories(newImports(existing, chosen));
       await saveTransactions([...fresh, ...existing]);
       setAdded(fresh.length);
       setSkipped(chosen.length - fresh.length);

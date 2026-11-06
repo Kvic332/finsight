@@ -102,6 +102,33 @@ test('applying a fix changes the transaction and marks it checked', () => {
   assert.equal(suspectTransactions(after).length, 0);
 });
 
+test('the same payment from two sources is a duplicate, keeping the better copy', () => {
+  const list = [
+    tx({ id: 'stmt', source: 'import', desc: 'POS SHOPRITE IKEJA', amount: 12400, date: '05/11/2026' }),
+    tx({ id: 'alert', source: 'push', desc: 'Shoprite', amount: 12400, date: '04/11/2026' }),
+    tx({ id: 'typed', source: 'manual', desc: 'Groceries', amount: 8000, date: '05/11/2026' }),
+    tx({ id: 'sms', source: 'sms', desc: 'POS purchase', amount: 8000, date: '05/11/2026' }),
+  ];
+  const found = Object.fromEntries(suspectTransactions(list).map(i => [i.tx.id, i]));
+  assert.deepEqual(Object.keys(found).sort(), ['sms', 'stmt']);
+  assert.match(found.stmt.reason, /second copy of "Shoprite"/);
+  assert.match(found.sms.reason, /second copy of "Groceries"/);
+});
+
+test('real repeats are not called duplicates', () => {
+  const list = [
+    // Two identical alerts are two real payments.
+    tx({ id: 'a', source: 'push', amount: 500, date: '05/11/2026' }),
+    tx({ id: 'b', source: 'push', amount: 500, date: '05/11/2026' }),
+    // Different amount, direction or more than a day apart.
+    tx({ id: 'c', source: 'sms', amount: 501, date: '05/11/2026' }),
+    tx({ id: 'd', source: 'sms', amount: 500, type: 'credit', date: '05/11/2026' }),
+    tx({ id: 'e', source: 'import', amount: 700, date: '01/11/2026' }),
+    tx({ id: 'f', source: 'push', amount: 700, date: '05/11/2026' }),
+  ];
+  assert.deepEqual(suspectTransactions(list), []);
+});
+
 test('reviewing removes the chosen and marks the rest as checked', () => {
   const list = [tx({ id: 'a', desc: '40% OFF' }), tx({ id: 'b', desc: 'get your code' }), tx({ id: 'c', desc: 'Uber' })];
   assert.equal(suspectTransactions(list).length, 2);

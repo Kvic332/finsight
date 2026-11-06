@@ -8,6 +8,7 @@ import {
   Button, Card, CategoryTile, IconButton, IconTile, Money, Sheet, Text, useTheme, useToast,
 } from '../components/ui';
 import { newImports } from '../services/alerts';
+import { withRememberedCategories } from '../services/payeeRuleStore';
 import { formatMoney } from '../services/format';
 import {
   csvToRows, parseRows, pdfRowsToTransactions, statementKind, xlsxToRows,
@@ -106,7 +107,7 @@ export default function BankImportScreen({ onClose }) {
     try {
       setImporting(true);
       const existing = await loadTransactions();
-      const fresh = newImports(existing, preview);
+      const fresh = await withRememberedCategories(newImports(existing, preview));
       if (!fresh.length) {
         toast.show('These transactions are already in your activity.');
         setImporting(false);

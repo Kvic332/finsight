@@ -16,6 +16,7 @@ import { trackEvent } from '../services/cloudSync';
 import { detectCategory } from '../services/smsParser';
 import Voice from '../services/voice';
 import { parseSpokenTransaction } from '../services/voiceEntry';
+import { rememberCategory } from '../services/payeeRuleStore';
 
 const OUT_CATEGORIES = ['Food', 'Transport', 'Utilities', 'Shopping', 'Entertainment', 'Health', 'Savings', 'Other'];
 const IN_CATEGORIES = ['Income', 'Savings', 'Other'];
@@ -157,7 +158,10 @@ export default function AddTransactionScreen({ navigation, route, user }) {
     if (Object.keys(nextErrors).length) return;
     const fields = { desc: desc.trim(), amount: value, type, cat };
     if (editing) {
-      await updateTransaction(editing.id, fields);
+      // Editing also confirms an imported transaction, and a changed category is
+      // remembered for the next import from the same payee.
+      await updateTransaction(editing.id, { ...fields, unconfirmed: false });
+      if (editing.source !== 'manual' && cat !== editing.cat) await rememberCategory(fields.desc, cat);
     } else {
       await addTransaction(fields);
       awardXP('tx_log');

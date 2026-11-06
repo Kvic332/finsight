@@ -8,6 +8,7 @@ import {
   useTheme, useToast, IconTile,
 } from '../components/ui';
 import { computePaydayPlan, parseTxDate } from '../services/finance';
+import { latestBalances } from '../services/balances';
 import { formatDayLabel, formatMoney } from '../services/format';
 import { loadTransactions } from '../services/transactions';
 import { checkAchievements, updateStreak } from '../services/notificationService';
@@ -145,6 +146,8 @@ export default function HomeScreen({ navigation, user }) {
       ? `${formatMoney(plan.safePerDay)} to spend before payday tomorrow`
       : `${formatMoney(plan.safePerDay)} a day for the next ${plan.cycle.daysToGo} days`;
   const recent = transactions.slice(0, 4);
+  const toCheck = transactions.filter(t => t.unconfirmed).length;
+  const banks = latestBalances(transactions);
 
   return (
     <View style={{ flex: 1, backgroundColor: c.canvas }}>
@@ -211,6 +214,33 @@ export default function HomeScreen({ navigation, user }) {
             <Text variant="label" family="semibold" color="accent">Insights</Text>
             <Icon name="chevron-forward" size={16} color="accent" />
           </Pressable>
+
+          {banks.length ? (
+            <Card style={{ padding: space.lg, gap: space.sm }}>
+              <Text variant="label" family="semibold" color="inkMuted">What your bank alerts last said</Text>
+              {banks.slice(0, 3).map(b => (
+                <View key={b.bank} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+                  <Text variant="bodyStrong" family="semibold" style={{ flex: 1 }} numberOfLines={1}>{b.bank}</Text>
+                  <Text variant="caption" color="inkMuted">{formatDayLabel(new Date(b.capturedAt))}</Text>
+                  <Money value={b.balance} family="bold" />
+                </View>
+              ))}
+              <Text variant="caption" color="inkMuted">
+                Real balances from your bank. "Left until payday" is FinSight's estimate from your income and spending, so the two can differ.
+              </Text>
+            </Card>
+          ) : null}
+
+          {toCheck ? (
+            <Card onPress={() => navigation.navigate('NewTransactions')} accessibilityLabel={`${toCheck} new from your bank. Check them`} style={{ padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+              <IconTile name="notifications-outline" tone="accent" />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text variant="bodyStrong" family="bold">{toCheck === 1 ? '1 new from your bank' : `${toCheck} new from your bank`}</Text>
+                <Text variant="label" family="regular" color="inkMuted">Check the category, so your figures stay right</Text>
+              </View>
+              <Icon name="chevron-forward" size={18} color="inkSubtle" />
+            </Card>
+          ) : null}
 
           <View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.xs }}>

@@ -1,3 +1,5 @@
+import { parseTxDate } from './finance.js';
+
 // ── Imported transactions that look wrong ─────────────────────────────────────
 // Older imports read some adverts, failed payments and balance warnings as money
 // moving. These rules find them so the user can remove them. Pure functions only.
@@ -66,12 +68,52 @@ export function suspectFix(tx) {
   return null;
 }
 
+// Which copy of a payment to keep when it was recorded twice: what the user typed,
+// then the bank alert, then the pasted SMS, then the statement.
+const KEEP_ORDER = ['manual', 'push', 'sms', 'import'];
+const rank = tx => {
+  const i = KEEP_ORDER.indexOf(tx.source);
+  return i === -1 ? KEEP_ORDER.length : i;
+};
+const DAY_MS = 86400000;
+
+// The same payment recorded from two sources, such as a bank alert and the same
+// line in a statement: same amount and direction, at most a day apart. Two from the
+// same source are left alone, because they can really be two identical payments.
+// Returns a map of the extra copy's id to the copy kept.
+export function findDuplicates(transactions) {
+  const pending = transactions
+    .filter(tx => !tx.reviewedOk && tx.amount > 0)
+    .map(tx => ({ tx, day: parseTxDate(tx.date)?.getTime() }))
+    .filter(item => item.day !== undefined)
+    .sort((a, b) => rank(a.tx) - rank(b.tx));
+  const used = new Set();
+  const extras = new Map();
+  for (const keep of pending) {
+    if (used.has(keep.tx.id)) continue;
+    for (const other of pending) {
+      if (other === keep || used.has(other.tx.id) || other.tx.source === keep.tx.source) continue;
+      if (rank(other.tx) <= rank(keep.tx)) continue;
+      if (other.tx.amount !== keep.tx.amount || other.tx.type !== keep.tx.type) continue;
+      if (Math.abs(other.day - keep.day) > DAY_MS) continue;
+      used.add(keep.tx.id);
+      used.add(other.tx.id);
+      extras.set(other.tx.id, keep.tx);
+      break;
+    }
+  }
+  return extras;
+}
+
 // Things to remove come first; only a transaction that isn't junk is checked for a fix.
 export function suspectTransactions(transactions) {
+  const duplicates = findDuplicates(transactions);
   return transactions
     .map(tx => {
       const reason = suspectReason(tx);
       if (reason) return { tx, reason, action: 'remove' };
+      const kept = duplicates.get(tx.id);
+      if (kept) return { tx, reason: `Looks like a second copy of "${kept.desc}"`, action: 'remove' };
       const fix = suspectFix(tx);
       return fix ? { tx, reason: fix.reason, action: 'fix', changes: fix.changes, change: fix.change } : null;
     })
