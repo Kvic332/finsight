@@ -10,6 +10,14 @@ test('a whole spoken transaction fills every field', () => {
   assert.deepEqual(parseSpokenTransaction('I spent 2,500 on lunch', OUT), { cat: 'Food', amount: 2500, desc: 'Lunch' });
 });
 
+test('a corrected sentence uses the last amount and drops the filler words', () => {
+  // What a Redmi 14C heard during testing.
+  assert.deepEqual(
+    parseSpokenTransaction("okay 10,000 is for 8,000 sorry it's for feeding", OUT),
+    { cat: 'Food', amount: 8000, desc: 'Feeding' },
+  );
+});
+
 test('saying just a category picks it', () => {
   assert.equal(parseSpokenTransaction('transport', OUT).cat, 'Transport');
   assert.equal(parseSpokenTransaction('Health', OUT).cat, 'Health');
