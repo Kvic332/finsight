@@ -22,6 +22,7 @@ import SMSScreen from '../screens/SMSScreen';
 import BankImportScreen from '../screens/BankImportScreen';
 import ReviewTransactionsScreen from '../screens/ReviewTransactionsScreen';
 import NewTransactionsScreen from '../screens/NewTransactionsScreen';
+import PaydayScreen from '../screens/PaydayScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -115,7 +116,7 @@ function PaydayReminderTaps() {
   useEffect(() => {
     if (response?.notification?.request?.content?.data?.type !== PAYDAY_REMINDER_TYPE) return;
     Notifications.clearLastNotificationResponse();
-    navigation.navigate('Main', { screen: 'Plan', params: { view: 'Payday' } });
+    navigation.navigate('PaydayPlan');
   }, [response, navigation]);
   return null;
 }
@@ -146,6 +147,7 @@ export default function AppNavigator({ theme, toggleTheme, user, setUser }) {
       <Stack.Screen name="Insights">{back('Insights', p => <DashboardScreen {...p} user={user} />)}</Stack.Screen>
       <Stack.Screen name="Settings">{back('Settings', p => <SettingsScreen {...p} theme={theme} toggleTheme={toggleTheme} user={user} setUser={setUser} />)}</Stack.Screen>
       <Stack.Screen name="ImportSMS">{back('Import bank SMS', p => <SMSScreen {...p} />)}</Stack.Screen>
+      <Stack.Screen name="PaydayPlan">{back('Payday plan', p => <PaydayScreen {...p} user={user} setUser={setUser} />)}</Stack.Screen>
       <Stack.Screen name="NewTransactions">{back('New from your bank', p => <NewTransactionsScreen {...p} />)}</Stack.Screen>
       <Stack.Screen name="ReviewTransactions">{back('Check imported transactions', p => <ReviewTransactionsScreen {...p} />)}</Stack.Screen>
       <Stack.Screen name="ImportStatement">

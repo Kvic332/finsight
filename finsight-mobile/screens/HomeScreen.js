@@ -4,16 +4,25 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, space } from '../constants/tokens';
 import {
-  Button, Card, CategoryTile, EmptyState, Gradient, Icon, ListRow, Money, Sheet, Text, tapFeedback,
+  Badge, Button, Card, CategoryTile, EmptyState, Gradient, Icon, ListRow, Money, Sheet, Text, tapFeedback,
   useTheme, useToast, IconTile,
 } from '../components/ui';
 import { computePaydayPlan, parseTxDate } from '../services/finance';
 import { latestBalances } from '../services/balances';
+import AsyncStorage from '../services/dataStore';
+import { DEFAULT_SAVE_PERCENT, planPayday, planPeriod } from '../services/paydayPlan';
 import { formatDayLabel, formatMoney } from '../services/format';
 import { loadTransactions } from '../services/transactions';
 import { checkAchievements, updateStreak } from '../services/notificationService';
 import { awardXP, getXPState } from '../services/xpService';
 import { syncFinScore, syncXP, trackEvent } from '../services/cloudSync';
+
+function nextPayLabel(period) {
+  if (!period.hasPayday) return 'Your plan for this month';
+  if (period.payIn === 0) return 'Payday is today';
+  const date = period.start.toLocaleDateString('en-NG', { day: 'numeric', month: 'short' });
+  return `Next pay, ${date}`;
+}
 
 function greeting(hour = new Date().getHours()) {
   return hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -104,6 +113,7 @@ export default function HomeScreen({ navigation, user }) {
   const [streak, setStreak] = useState({ count: 0 });
   const [refreshing, setRefreshing] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [planData, setPlanData] = useState({ debts: [], budgets: [] });
 
   const firstName = user?.name?.split(' ')[0] || '';
   const plan = computePaydayPlan(user, transactions);
@@ -113,6 +123,8 @@ export default function HomeScreen({ navigation, user }) {
   async function load() {
     const txs = await loadTransactions();
     setTransactions(txs);
+    const [dRaw, bRaw] = await Promise.all([AsyncStorage.getItem('finsight_debts'), AsyncStorage.getItem('finsight_budgets')]);
+    setPlanData({ debts: dRaw ? JSON.parse(dRaw) : [], budgets: bRaw ? JSON.parse(bRaw) : [] });
     const updated = await updateStreak();
     setStreak(updated);
     const score = computePaydayPlan(user, txs).finScore;
@@ -148,6 +160,18 @@ export default function HomeScreen({ navigation, user }) {
   const recent = transactions.slice(0, 4);
   const toCheck = transactions.filter(t => t.unconfirmed).length;
   const banks = latestBalances(transactions);
+  // The same plan as the Payday plan screen, for the next pay.
+  const nextPayPeriod = planPeriod(user?.salaryDay);
+  const nextPay = {
+    period: nextPayPeriod,
+    ...planPayday({
+      pay: Number(user?.income) || 0,
+      debts: planData.debts,
+      budgets: planData.budgets,
+      savePercent: user?.paydaySavePercent ?? DEFAULT_SAVE_PERCENT,
+      period: nextPayPeriod,
+    }),
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: c.canvas }}>
@@ -197,6 +221,30 @@ export default function HomeScreen({ navigation, user }) {
           </Card>
 
           <BrokeClock plan={plan} onSetPayday={() => navigation.navigate('Settings')} />
+
+          {nextPay.pay ? (
+            <Card onPress={() => navigation.navigate('PaydayPlan')} accessibilityLabel={`Your next pay plan: ${formatMoney(nextPay.free)} to spend freely. See full plan`} style={{ padding: space.lg, gap: space.md }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.md }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text variant="label" family="medium" color="inkMuted">{nextPayLabel(nextPay.period)}</Text>
+                  <Money value={nextPay.free} variant="heading" family="bold" />
+                  <Text variant="caption" color="inkMuted">{`to spend freely, about ${formatMoney(nextPay.perDay)} a day`}</Text>
+                </View>
+                {nextPay.short ? <Badge label={`${formatMoney(nextPay.short)} short`} tone="negative" /> : null}
+              </View>
+              <View style={{ flexDirection: 'row', height: 8, borderRadius: radius.pill, overflow: 'hidden', backgroundColor: c.sunken }}>
+                {[[nextPay.debtTotal, c.negative], [nextPay.budgetTotal, c.warning], [nextPay.saving, c.accent], [nextPay.free, c.positive]].map(([value, color], i) => (
+                  value > 0 ? <View key={i} style={{ flex: value, backgroundColor: color }} /> : null
+                ))}
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: space.md, rowGap: 2 }}>
+                <Text variant="caption" color="inkMuted">{`Debts ${formatMoney(nextPay.debtTotal)}`}</Text>
+                <Text variant="caption" color="inkMuted">{`Budgets ${formatMoney(nextPay.budgetTotal)}`}</Text>
+                <Text variant="caption" color="inkMuted">{`Savings ${formatMoney(nextPay.saving)}`}</Text>
+              </View>
+              <Text variant="label" family="semibold" color="accent">See full plan</Text>
+            </Card>
+          ) : null}
 
           <Pressable
             onPress={() => navigation.navigate('Insights')}
