@@ -51,7 +51,14 @@ export function budgetSpent(budget, transactions, now = new Date(), period = nul
   const nameWord = name.length >= 3 ? new RegExp(`(^|[^a-z0-9])${escapeRegExp(name)}($|[^a-z0-9])`) : null;
   return transactions
     .filter(tx => {
-      if (tx.type !== 'debit' || !inRange(tx.date)) return false;
+      if (tx.type !== 'debit') return false;
+      // A transaction the user linked to a budget belongs to that budget alone. A
+      // one-off budget counts it even from before its start, because it was chosen.
+      if (tx.budgetId) {
+        if (tx.budgetId !== budget.id) return false;
+        return budget.oneOff ? !!parseTxDate(tx.date) : inRange(tx.date);
+      }
+      if (!inRange(tx.date)) return false;
       if (category !== null && (tx.cat || '').toLowerCase() === category) return true;
       const desc = (tx.desc || '').toLowerCase();
       return keywords.some(k => desc.includes(k)) || !!nameWord?.test(desc);

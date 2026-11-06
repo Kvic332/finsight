@@ -92,6 +92,27 @@ test('an old one-off budget with no dates starts this month, not with all histor
   assert.equal(spent, 500000);
 });
 
+test('a transaction linked to a budget counts there, and only there', () => {
+  const laptop = { id: 'lap', name: 'Laptop', cat: 'Other', limit: 590000, oneOff: true, startDate: '2026-11-01' };
+  const food = { id: 'food', name: 'Food', cat: 'Food', limit: 60000 };
+  const txs = [
+    // A bank transfer for the laptop, before the budget started, linked by hand.
+    tx({ id: '1', amount: 560000, cat: 'Transfer', desc: 'TRF TO SLOT SYSTEMS', date: '28/10/2026', budgetId: 'lap' }),
+    // Food-category spending linked to the laptop doesn't count as food too.
+    tx({ id: '2', amount: 5000, cat: 'Food', desc: 'Laptop bag', date: '05/11/2026', budgetId: 'lap' }),
+    tx({ id: '3', amount: 2000, cat: 'Food', desc: 'Lunch', date: '05/11/2026' }),
+  ];
+  assert.equal(budgetSpent(laptop, txs, now), 565000);
+  assert.equal(budgetSpent(food, txs, now), 2000);
+});
+
+test('a linked transaction still respects a monthly budget\'s period', () => {
+  const food = { id: 'food', name: 'Food', cat: 'Food', limit: 60000 };
+  const period = { start: new Date(2026, 10, 1), end: new Date(2026, 11, 1) };
+  const txs = [tx({ amount: 3000, cat: 'Other', desc: 'Groceries', date: '20/10/2026', budgetId: 'food' })];
+  assert.equal(budgetSpent(food, txs, now, period), 0);
+});
+
 test('goal names lose stray spaces', () => {
   assert.equal(normalizeGoals([{ id: '1', name: 'Investment ', target: 100 }])[0].name, 'Investment');
   assert.equal(normalizeGoals([{ id: '1', name: '  ', target: 100 }])[0].name, 'Goal');

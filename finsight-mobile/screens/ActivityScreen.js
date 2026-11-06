@@ -9,7 +9,8 @@ import {
 } from '../components/ui';
 import { computePaydayPlan, parseTxDate } from '../services/finance';
 import { formatDayLabel, formatMoney } from '../services/format';
-import { deleteTransaction, loadTransactions } from '../services/transactions';
+import { deleteTransaction, loadTransactions, updateTransaction } from '../services/transactions';
+import AsyncStorage from '../services/dataStore';
 import { suspectTransactions } from '../services/transactionReview';
 import { TransactionRow } from './HomeScreen';
 
@@ -32,8 +33,28 @@ export default function ActivityScreen({ navigation, user }) {
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [budgets, setBudgets] = useState([]);
+  const [linking, setLinking] = useState(false);
 
-  useFocusEffect(useCallback(() => { loadTransactions().then(setTransactions).catch(() => {}); }, []));
+  useFocusEffect(useCallback(() => {
+    loadTransactions().then(setTransactions).catch(() => {});
+    AsyncStorage.getItem('finsight_budgets').then(raw => setBudgets(raw ? JSON.parse(raw) : [])).catch(() => {});
+  }, []));
+
+  const linkedBudget = selected?.budgetId ? budgets.find(b => b.id === selected.budgetId) : null;
+
+  async function saveLink(budgetId) {
+    try {
+      const updated = await updateTransaction(selected.id, { budgetId: budgetId || null });
+      setTransactions(updated);
+      setSelected(s => ({ ...s, budgetId: budgetId || null }));
+      setLinking(false);
+      const budget = budgets.find(b => b.id === budgetId);
+      toast.show(budget ? `Counted towards ${budget.name}` : 'No longer linked to a budget', { tone: 'success' });
+    } catch (e) {
+      toast.show("Couldn't save this. Try again.", { tone: 'error' });
+    }
+  }
   const suspects = useMemo(() => suspectTransactions(transactions).length, [transactions]);
 
   const plan = computePaydayPlan(user, transactions);
@@ -181,7 +202,7 @@ export default function ActivityScreen({ navigation, user }) {
       </View>
 
       <Sheet
-        visible={!!selected && !confirmDelete}
+        visible={!!selected && !confirmDelete && !linking}
         onClose={() => setSelected(null)}
         footer={(
           <>
@@ -204,8 +225,57 @@ export default function ActivityScreen({ navigation, user }) {
             <Text variant="label" family="regular" color="inkMuted" align="center">
               {[selected.cat, formatDayLabel(parseTxDate(selected.date) || undefined), selected.bank].filter(Boolean).join(' · ')}
             </Text>
+            {selected.type === 'debit' && budgets.length ? (
+              <Pressable
+                onPress={() => setLinking(true)}
+                accessibilityRole="button"
+                accessibilityLabel={linkedBudget ? `Counts towards ${linkedBudget.name}. Change budget` : 'Count towards a budget'}
+                style={({ pressed }) => ({
+                  alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: space.md, marginTop: space.md,
+                  padding: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: c.line,
+                  backgroundColor: pressed ? c.sunken : c.surface,
+                })}
+              >
+                <Icon name="pie-chart-outline" size={20} color={linkedBudget ? 'accent' : 'inkMuted'} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text variant="label" family="semibold">{linkedBudget ? `Counts towards ${linkedBudget.name}` : 'Count towards a budget'}</Text>
+                  <Text variant="caption" color="inkMuted">{linkedBudget ? 'Tap to change' : 'For a payment its category or name misses'}</Text>
+                </View>
+                <Icon name="chevron-forward" size={18} color="inkSubtle" />
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
+      </Sheet>
+
+      <Sheet visible={linking} onClose={() => setLinking(false)} title="Count towards a budget">
+        <ScrollView style={{ maxHeight: 420 }}>
+          <View style={{ gap: space.xs }}>
+            {[...budgets.map(b => ({ id: b.id, label: b.name, note: b.oneOff ? 'One-off' : 'Every month' })),
+              { id: null, label: "Don't link to a budget", note: 'Count it by category and name as usual' }].map(option => {
+              const on = (selected?.budgetId || null) === option.id;
+              return (
+                <Pressable
+                  key={option.id || 'none'}
+                  onPress={() => saveLink(option.id)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md,
+                    borderRadius: radius.md, borderWidth: on ? 1.5 : 0, borderColor: c.accent,
+                    backgroundColor: on ? c.accentSoft : pressed ? c.sunken : 'transparent',
+                  })}
+                >
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text variant="bodyStrong" family="semibold">{option.label}</Text>
+                    <Text variant="caption" color="inkMuted">{option.note}</Text>
+                  </View>
+                  {on ? <Icon name="checkmark-circle" size={22} color="accent" /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </ScrollView>
       </Sheet>
 
       <ConfirmSheet
