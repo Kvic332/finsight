@@ -55,42 +55,91 @@ export function savingsFlows(transactions) {
   return { contributed, withdrawn, saved: Math.max(0, contributed - withdrawn) };
 }
 
-// Days until the next salary, or null if no salary day is set. Salary day 31 in
-// a 30-day month lands on the last day of that month.
-export function daysUntilSalary(salaryDay, now = new Date()) {
-  const day = parseInt(salaryDay, 10);
-  if (!(day >= 1 && day <= 31)) return null;
-  const payday = (year, month) => {
+// The days of the month someone is paid, sorted: [] when their income varies.
+// salaryDay is the main payday and secondPayday an optional second one, for
+// people paid twice a month. Day 31 means the last day of the month.
+export function paydaysOf(user) {
+  return toPaydays([user?.salaryDay, user?.secondPayday]);
+}
+
+function toPaydays(input) {
+  const list = Array.isArray(input) ? input : [input];
+  const days = list.map(d => parseInt(d, 10)).filter(d => d >= 1 && d <= 31);
+  return [...new Set(days)].sort((a, b) => a - b);
+}
+
+// Every payday from `fromMonth` months before today's month to `toMonth` after.
+// Two paydays can land on the same date in a short month, so dates are unique.
+function paydayDates(days, today, fromMonth, toMonth) {
+  const seen = new Map();
+  for (let i = fromMonth; i <= toMonth; i++) {
+    const year = today.getFullYear();
+    const month = today.getMonth() + i;
     const lastDay = new Date(year, month + 1, 0).getDate();
-    return new Date(year, month, Math.min(day, lastDay));
-  };
+    for (const day of days) {
+      const at = new Date(year, month, Math.min(day, lastDay));
+      seen.set(at.getTime(), at);
+    }
+  }
+  return [...seen.values()].sort((a, b) => a - b);
+}
+
+// Days until the next payday, or null with no fixed payday. salaryDay can be one
+// day or a list of days.
+export function daysUntilSalary(salaryDay, now = new Date()) {
+  const days = toPaydays(salaryDay);
+  if (!days.length) return null;
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  let next = payday(today.getFullYear(), today.getMonth());
-  if (next < today) next = payday(today.getFullYear(), today.getMonth() + 1);
+  const next = paydayDates(days, today, 0, 2).find(d => d >= today);
   return Math.round((next - today) / 86400000);
 }
 
 // The pay period around today: from the last payday up to the next one. With no
-// salary day set, it falls back to the calendar month.
+// fixed payday, it falls back to the calendar month. payCount is how many pays
+// fall in a month, so a monthly income can be split across them.
 export function payCycle(salaryDay, now = new Date()) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const y = today.getFullYear();
-  const m = today.getMonth();
-  const day = parseInt(salaryDay, 10);
-  const hasPayday = day >= 1 && day <= 31;
-  const payday = (year, month) => {
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    return new Date(year, month, Math.min(day, lastDay));
-  };
-  let start = new Date(y, m, 1);
-  let end = new Date(y, m + 1, 1);
+  const paydays = toPaydays(salaryDay);
+  const hasPayday = paydays.length > 0;
+  let start = new Date(today.getFullYear(), today.getMonth(), 1);
+  let end = new Date(today.getFullYear(), today.getMonth() + 1, 1);
   if (hasPayday) {
-    const thisMonth = payday(y, m);
-    start = today >= thisMonth ? thisMonth : payday(y, m - 1);
-    end = today >= thisMonth ? payday(y, m + 1) : thisMonth;
+    const dates = paydayDates(paydays, today, -2, 2);
+    const next = dates.findIndex(d => d > today);
+    start = dates[next - 1];
+    end = dates[next];
   }
   const days = (a, b) => Math.round((b - a) / 86400000);
-  return { start, end, hasPayday, length: days(start, end), elapsed: days(start, today) + 1, daysToGo: days(today, end) };
+  return {
+    start, end, hasPayday, payCount: hasPayday ? paydays.length : 1,
+    length: days(start, end), elapsed: days(start, today) + 1, daysToGo: days(today, end),
+  };
+}
+
+// For income that varies: the average income received over the last few full
+// calendar months that had any, or null with no history yet.
+const TYPICAL_MONTHS = 3;
+export function typicalIncome(transactions, now = new Date()) {
+  const totals = [];
+  for (let i = 1; i <= TYPICAL_MONTHS; i++) {
+    const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+    const total = sumAmounts(transactions.filter(t => t.type === 'credit' && t.cat === 'Income' && inPeriod(t.date, { start, end })));
+    if (total > 0) totals.push(total);
+  }
+  if (!totals.length) return null;
+  return { amount: Math.round(totals.reduce((a, b) => a + b, 0) / totals.length), months: totals.length };
+}
+
+// The income to plan one pay with. A monthly income is split across the pays in
+// a month. With no fixed payday, recent months beat a figure typed in long ago.
+export function expectedPay(user, transactions, now = new Date()) {
+  const monthly = Number(user?.income) || 0;
+  const paydays = paydaysOf(user);
+  if (paydays.length) return { amount: Math.round(monthly / paydays.length), basis: 'salary', months: 0 };
+  const typical = typicalIncome(transactions, now);
+  if (typical) return { amount: typical.amount, basis: 'average', months: typical.months };
+  return { amount: monthly, basis: 'declared', months: 0 };
 }
 
 // Share of the declared income that counts as the salary having arrived.
@@ -143,7 +192,12 @@ export function computeStats(user, transactions, now = new Date(), period = null
   const { contributed, withdrawn, saved: totalSaved } = savingsFlows(monthTxs);
   const totalSpend = sumAmounts(spending);
   const receivedIncome = sumAmounts(monthTxs.filter(t => t.type === 'credit' && t.cat === 'Income'));
-  const declared = Number(user?.income) || 0;
+  // The income expected in this range: a monthly income split across the pays
+  // in a month, or for income that varies, the recent average when there is one.
+  const monthlyIncome = Number(user?.income) || 0;
+  const varies = !paydaysOf(user).length;
+  const typical = varies ? typicalIncome(transactions, now) : null;
+  const declared = typical ? typical.amount : Math.round(monthlyIncome / (period?.payCount || 1));
   // Once salary-sized money has arrived (at least half the declared income), what
   // actually came in is used, even if it's less. Before then, the declared income
   // stands in, so one small credit can't replace a salary that hasn't landed yet.
@@ -159,7 +213,7 @@ export function computeStats(user, transactions, now = new Date(), period = null
   const daysLeft = runwayDays(left, dailySpend);
   const daysLeftIfCut20 = runwayDays(left, dailySpend * 0.8);
 
-  const salaryIn = daysUntilSalary(user?.salaryDay, now);
+  const salaryIn = daysUntilSalary(paydaysOf(user), now);
   const projectedOnPayday = salaryIn === null ? null : Math.max(0, Math.round(left - dailySpend * salaryIn));
   const willMakePayday = salaryIn === null ? null : left >= dailySpend * salaryIn;
 
@@ -203,18 +257,24 @@ export function computeStats(user, transactions, now = new Date(), period = null
   });
 
   return {
-    income, salarySeen, estimateLeft, correction, left, totalSpend, totalSaved, savingsRate, dailySpend,
+    income, salarySeen, incomeVaries: varies, typicalIncome: typical, estimateLeft, correction, left, totalSpend, totalSaved, savingsRate, dailySpend,
     daysLeft, daysLeftIfCut20,
     daysUntilSalary: salaryIn, projectedOnPayday, willMakePayday,
     categoryTotals, spendTrend, finScore,
     scoreBreakdown: { spendScore, saveScore, txScore, investScore },
+    // What each part of the score was worked out from, so it can be explained.
+    scoreInputs: {
+      spendRatio, savingsRate, categoryCount: catValues.length, topCategoryShare: totalSpend > 0 ? maxCatPct : 0,
+      trackedCount: transactions.length, hasGoals, hasSavingsTx,
+      diversityPoints, balancePoints, trackingPoints,
+    },
   };
 }
 
 // Figures for the pay period around today, so every screen counts from the same
 // day: the last payday, or the 1st of the month with no fixed payday.
 export function computePeriodStats(user, transactions, now = new Date()) {
-  const cycle = payCycle(user?.salaryDay, now);
+  const cycle = payCycle(paydaysOf(user), now);
   return { ...computeStats(user, transactions, now, cycle), cycle };
 }
 
@@ -227,7 +287,7 @@ export function periodLabel(cycle) {
 
 // Everything the Home screen says about reaching the next payday.
 export function computePaydayPlan(user, transactions, now = new Date()) {
-  const cycle = payCycle(user?.salaryDay, now);
+  const cycle = payCycle(paydaysOf(user), now);
   const stats = computeStats(user, transactions, now, cycle);
   const { left, dailySpend, daysLeft } = stats;
   const safePerDay = cycle.daysToGo > 0 ? Math.floor(left / cycle.daysToGo) : left;

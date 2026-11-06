@@ -159,6 +159,27 @@ test('the system prompt asks for plain text, since the app shows replies as they
   assert.match(buildSystemPrompt(''), /Write plain text/);
 });
 
+test('the chosen reply language reaches the system prompt', async () => {
+  const { handler, calls } = harness();
+  await handler(request({ ...goodBody, language: 'pcm' }));
+  assert.match(calls.model[0].system, /Nigerian Pidgin/);
+  assert.match(calls.model[0].system, /<financial_context>/);
+});
+
+test('no language, English or an unknown language adds no language line', () => {
+  for (const language of [undefined, 'en', 'fr', 'toString', 'constructor', 42]) {
+    const parsed = parseRequest(JSON.stringify({ ...goodBody, language }));
+    assert.equal(parsed.language, 'en');
+    assert.doesNotMatch(buildSystemPrompt('x', parsed.language), /Reply in/);
+  }
+});
+
+test('Yoruba, Hausa and Igbo are each offered', () => {
+  assert.match(buildSystemPrompt('x', 'yo'), /Reply in Yoruba/);
+  assert.match(buildSystemPrompt('x', 'ha'), /Reply in Hausa/);
+  assert.match(buildSystemPrompt('x', 'ig'), /Reply in Igbo/);
+});
+
 test('the naira sign survives from request to model', async () => {
   let sent;
   const client = new Anthropic({

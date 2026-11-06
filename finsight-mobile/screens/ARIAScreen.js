@@ -9,13 +9,13 @@ import AsyncStorage from '../services/dataStore';
 import * as Speech from 'expo-speech';
 import { fontFamily, radius, space, type } from '../constants/tokens';
 import {
-  Chip, Gradient, Icon, IconButton, Text, tapFeedback, useTheme, useToast,
+  Chip, Gradient, Icon, IconButton, ListRow, Sheet, Text, tapFeedback, useTheme, useToast,
 } from '../components/ui';
 import Voice from '../services/voice';
 import { trackEvent } from '../services/cloudSync';
 import { askAria } from '../services/ariaClient';
 import { debtsContext } from '../services/debts';
-import { computePaydayPlan, formatRunway } from '../services/finance';
+import { computePaydayPlan, formatRunway, paydaysOf } from '../services/finance';
 import { budgetSpent } from '../services/plans';
 
 const QUICK_QUESTIONS = [
@@ -26,6 +26,16 @@ const QUICK_QUESTIONS = [
   'How do I improve my FinScore?',
   'How do I start investing?',
 ];
+
+// Reply languages. The keys must match LANGUAGES in the ARIA server function.
+const LANGUAGES = [
+  { key: 'en', label: 'English', native: 'English' },
+  { key: 'pcm', label: 'Pidgin', native: 'Naija Pidgin' },
+  { key: 'yo', label: 'Yoruba', native: 'Yorùbá' },
+  { key: 'ha', label: 'Hausa', native: 'Hausa' },
+  { key: 'ig', label: 'Igbo', native: 'Igbo' },
+];
+const LANGUAGE_KEY = 'finsight_aria_language';
 
 const VOICE_OPTIONS = { language: 'en-US', pitch: 1, rate: 0.95 };
 
@@ -85,6 +95,9 @@ export default function ARIAScreen({ navigation, user }) {
   // Off by default: reading someone's money out loud shouldn't happen unasked.
   const [autoSpeak, setAutoSpeak] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
+  const [language, setLanguage] = useState('en');
+  const [showLanguages, setShowLanguages] = useState(false);
+  const languageLabel = (LANGUAGES.find(l => l.key === language) || LANGUAGES[0]).label;
 
   const scrollRef = useRef(null);
   const micScale = useRef(new Animated.Value(1)).current;
@@ -95,7 +108,9 @@ export default function ARIAScreen({ navigation, user }) {
       AsyncStorage.getItem('finsight_transactions'),
       AsyncStorage.getItem('finsight_budgets'),
       AsyncStorage.getItem('finsight_debts'),
-    ]).then(([tRaw, bRaw, dRaw]) => {
+      AsyncStorage.getItem(LANGUAGE_KEY),
+    ]).then(([tRaw, bRaw, dRaw, lang]) => {
+      if (LANGUAGES.some(l => l.key === lang)) setLanguage(lang);
       setTransactions(tRaw ? JSON.parse(tRaw) : []);
       setBudgets(bRaw ? JSON.parse(bRaw) : []);
       setDebts(dRaw ? JSON.parse(dRaw) : []);
@@ -132,6 +147,10 @@ export default function ARIAScreen({ navigation, user }) {
 
   function buildContext() {
     const stats = computePaydayPlan(user, transactions);
+    const paydays = paydaysOf(user);
+    const payLine = paydays.length
+      ? paydays.map(d => (d === 31 ? 'last day' : `day ${d}`)).join(' and ') + ' of each month'
+      : `income varies${stats.typicalIncome ? `, averaging ₦${stats.typicalIncome.amount.toLocaleString()} a month over the last ${stats.typicalIncome.months} months` : ''}`;
     const catSummary = Object.entries(stats.categoryTotals)
       .sort((a, b) => b[1] - a[1])
       .map(([cat, amt]) => `${cat} ₦${amt.toLocaleString()}`)
@@ -151,7 +170,7 @@ export default function ARIAScreen({ navigation, user }) {
     return `
 USER PROFILE:
 Name: ${user?.name || 'User'} | Employment: ${user?.employmentType || 'Not specified'}
-Monthly Income: ₦${stats.income.toLocaleString()} | Salary Day: Day ${user?.salaryDay || 'not set'}
+Income this pay period: ₦${stats.income.toLocaleString()} | Monthly income set: ₦${(Number(user?.income) || 0).toLocaleString()} | Paydays: ${payLine}
 Banks: ${(user?.banks || []).join(', ') || 'Not specified'}
 
 THIS PAY PERIOD (${transactions.length} transactions tracked in total, ${stats.cycle.daysToGo} days until the next payday):
@@ -197,6 +216,14 @@ DEBTS, MOST EXPENSIVE FIRST: ${debtsContext(debts)}
     });
   }
 
+  function chooseLanguage(key) {
+    setLanguage(key);
+    setShowLanguages(false);
+    AsyncStorage.setItem(LANGUAGE_KEY, key).catch(() => {});
+    const chosen = LANGUAGES.find(l => l.key === key);
+    toast.show(`ARIA will reply in ${chosen.label}`);
+  }
+
   function toggleSpeak() {
     if (isSpeaking) { Speech.stop(); setIsSpeaking(false); }
     toast.show(autoSpeak ? 'ARIA will stop reading replies aloud' : 'ARIA will read replies aloud');
@@ -213,7 +240,7 @@ DEBTS, MOST EXPENSIVE FIRST: ${debtsContext(debts)}
     setMessages(next);
     trackEvent('aria_messages').catch(() => {});
     try {
-      const reply = await askAria(next, buildContext());
+      const reply = await askAria(next, buildContext(), language);
       setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
       speak(reply);
     } catch (e) {
@@ -242,6 +269,15 @@ DEBTS, MOST EXPENSIVE FIRST: ${debtsContext(debts)}
           <Text variant="heading" family="bold" color="#FFFFFF" accessibilityRole="header">ARIA</Text>
           <Text variant="caption" color="#FFFFFF" accessibilityLiveRegion="polite">{status}</Text>
         </View>
+        <Pressable
+          onPress={() => setShowLanguages(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`Reply language: ${languageLabel}. Change`}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.sm + 2, minHeight: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.22)' }}
+        >
+          <Icon name="language-outline" size={16} color="#FFFFFF" />
+          <Text variant="caption" family="semibold" color="#FFFFFF">{languageLabel}</Text>
+        </Pressable>
         <IconButton
           icon={autoSpeak ? 'volume-high-outline' : 'volume-mute-outline'}
           label={autoSpeak ? 'Stop reading replies aloud' : 'Read replies aloud'}
@@ -328,6 +364,23 @@ DEBTS, MOST EXPENSIVE FIRST: ${debtsContext(debts)}
           <Text variant="caption" color="inkSubtle" align="center">ARIA can make mistakes. General information, not financial advice.</Text>
         </View>
       </KeyboardAvoidingView>
+
+      <Sheet visible={showLanguages} onClose={() => setShowLanguages(false)} title="ARIA's reply language">
+        <Text variant="label" family="regular" color="inkMuted" style={{ marginBottom: space.sm }}>
+          You can type in any language. ARIA replies in the one you choose. Amounts stay in ₦ and digits.
+        </Text>
+        {LANGUAGES.map((l, i) => (
+          <ListRow
+            key={l.key}
+            title={l.label}
+            subtitle={l.native !== l.label ? l.native : undefined}
+            value={language === l.key ? <Icon name="checkmark" size={20} color="accent" /> : undefined}
+            divider={i < LANGUAGES.length - 1}
+            accessibilityLabel={`${l.label}${language === l.key ? ', selected' : ''}`}
+            onPress={() => chooseLanguage(l.key)}
+          />
+        ))}
+      </Sheet>
     </View>
   );
 }

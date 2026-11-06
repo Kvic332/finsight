@@ -47,6 +47,19 @@ const LOCK_TIMEOUT_OPTIONS = [
   { label: 'Never', value: -1 },
 ];
 const COMMON_PAYDAYS = ['1', '5', '10', '15', '20', '25', '28', '30'];
+const PAY_PATTERNS = [
+  { value: 'monthly', label: 'Once a month' },
+  { value: 'twice', label: 'Twice a month' },
+  { value: 'varies', label: 'It varies, no fixed payday' },
+];
+const dayName = d => (String(d) === '31' ? 'the last day' : `day ${d}`);
+
+// How the Payday row describes someone's pay.
+function paydaySummary(user) {
+  if (!user?.salaryDay) return user?.salaryDay === '' ? 'Income varies' : 'Not set';
+  if (user.secondPayday) return `Twice a month, ${dayName(user.salaryDay)} and ${dayName(user.secondPayday)}`;
+  return String(user.salaryDay) === '31' ? 'The last day of every month' : `Day ${user.salaryDay} of every month`;
+}
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const MONTH_VALS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
 const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'));
@@ -243,6 +256,9 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
   const [incomeError, setIncomeError] = useState('');
   const [salaryDayInput, setSalaryDayInput] = useState('25');
   const [salaryError, setSalaryError] = useState('');
+  const [payPattern, setPayPattern] = useState('monthly');
+  const [secondDayInput, setSecondDayInput] = useState('');
+  const [secondError, setSecondError] = useState('');
   const [lockTimeout, setLockTimeout] = useState(0);
   const [tempLockTimeout, setTempLockTimeout] = useState(0);
 
@@ -392,20 +408,33 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
     toast.show(`Monthly income set to ${formatMoney(value)}`, { tone: 'success' });
   }
 
-  async function saveSalaryDay() {
-    const day = parseInt(salaryDayInput, 10);
-    if (!(day >= 1 && day <= 31)) { setSalaryError('Enter a day from 1 to 31'); return; }
-    await saveUser({ salaryDay: String(day) });
-    syncPaydayReminder({ ...user, salaryDay: String(day) });
-    setShowSalaryDay(false);
-    toast.show(`Payday set to day ${day}`, { tone: 'success' });
+  function openPayday() {
+    setPayPattern(user?.salaryDay ? (user?.secondPayday ? 'twice' : 'monthly') : user?.salaryDay === '' ? 'varies' : 'monthly');
+    setSalaryDayInput(user?.salaryDay || '25');
+    setSecondDayInput(user?.secondPayday || '');
+    setSalaryError('');
+    setSecondError('');
+    setShowSalaryDay(true);
   }
 
-  async function clearSalaryDay() {
-    await saveUser({ salaryDay: '' });
-    syncPaydayReminder({ ...user, salaryDay: '' });
+  async function saveSalaryDay() {
+    let updates = { salaryDay: '', secondPayday: '' };
+    if (payPattern !== 'varies') {
+      const day = parseInt(salaryDayInput, 10);
+      if (!(day >= 1 && day <= 31)) { setSalaryError('Enter a day from 1 to 31'); return; }
+      updates = { salaryDay: String(day), secondPayday: '' };
+      if (payPattern === 'twice') {
+        const second = parseInt(secondDayInput, 10);
+        if (!(second >= 1 && second <= 31)) { setSecondError('Enter a day from 1 to 31'); return; }
+        if (second === day) { setSecondError('Pick a different day from your first payday'); return; }
+        // Kept in date order, so the first payday is always the earlier one.
+        updates = { salaryDay: String(Math.min(day, second)), secondPayday: String(Math.max(day, second)) };
+      }
+    }
+    await saveUser(updates);
+    syncPaydayReminder({ ...user, ...updates });
     setShowSalaryDay(false);
-    toast.show('Payday removed. Figures now follow the calendar month.');
+    toast.show(payPattern === 'varies' ? 'Saved. Figures now follow the calendar month.' : `Payday saved: ${paydaySummary({ ...user, ...updates }).toLowerCase()}`, { tone: 'success' });
   }
 
   async function setPaydayReminder(on) {
@@ -558,8 +587,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
         <Section title="Your money">
           <Row icon="cash-outline" title="Monthly income" subtitle={user?.income ? formatMoney(Number(user.income)) : 'Not set'}
             onPress={() => { setIncomeInput(user?.income ? String(user.income) : ''); setIncomeError(''); setShowIncome(true); }} />
-          <Row icon="calendar-outline" title="Payday" subtitle={user?.salaryDay ? `Day ${user.salaryDay} of every month` : 'Not set'}
-            onPress={() => { setSalaryDayInput(user?.salaryDay || '25'); setSalaryError(''); setShowSalaryDay(true); }} />
+          <Row icon="calendar-outline" title="Payday" subtitle={paydaySummary(user)} onPress={openPayday} />
           <Row icon="flag-outline" title="Savings goals" subtitle={goalCount ? `${goalCount} ${goalCount === 1 ? 'goal' : 'goals'}` : 'None yet'}
             onPress={() => navigation?.navigate('Main', { screen: 'Plan', params: { view: 'Savings' } })} />
           <Row icon="business-outline" title="My banks" subtitle={bankSummary} onPress={() => setShowBanks(true)} last />
@@ -577,7 +605,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
             right={<Toggle value={reminderEnabled} onValueChange={setReminder} label="Daily reminder" />} />
           <Row icon="time-outline" title="Reminder time" subtitle={clock(reminderHour, reminderMinute)}
             onPress={() => { setPickerHour(reminderHour); setPickerMinute(reminderMinute); setShowTimePicker(true); }} />
-          <Row icon="calendar-outline" title="Payday reminder" subtitle={user?.salaryDay ? 'At 9am on payday, to plan your pay' : 'Set a payday above to get this'}
+          <Row icon="calendar-outline" title="Payday reminder" subtitle={user?.salaryDay ? (user?.secondPayday ? 'At 9am on both paydays, to plan your pay' : 'At 9am on payday, to plan your pay') : 'Set a payday above to get this'}
             right={<Toggle value={user?.paydayReminder !== false} onValueChange={setPaydayReminder} label="Payday reminder" />} last />
         </Section>
 
@@ -691,20 +719,36 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
       <Sheet
         visible={showSalaryDay}
         onClose={() => setShowSalaryDay(false)}
-        title="Payday"
-        footer={(
-          <>
-            <Button full title="Save payday" onPress={saveSalaryDay} />
-            {user?.salaryDay ? <Button full title="I don't have a fixed payday" variant="ghost" onPress={clearSalaryDay} /> : null}
-          </>
-        )}
+        title="How you're paid"
+        footer={<Button full title="Save" onPress={saveSalaryDay} />}
       >
-        <View style={{ gap: space.md }}>
-          <Input label="Day of the month" placeholder="25" keyboardType="numeric" value={salaryDayInput} error={salaryError} hint="In shorter months, day 31 counts as the last day" onChangeText={v => { setSalaryDayInput(v); setSalaryError(''); }} />
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-            {COMMON_PAYDAYS.map(d => <Chip key={d} label={`Day ${d}`} selected={salaryDayInput === d} onPress={() => { setSalaryDayInput(d); setSalaryError(''); }} />)}
+        <ScrollView style={{ maxHeight: 460 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <View style={{ gap: space.md }}>
+            <View accessibilityRole="radiogroup" style={{ gap: space.sm }}>
+              {PAY_PATTERNS.map(p => <Choice key={p.value} label={p.label} selected={payPattern === p.value} onPress={() => setPayPattern(p.value)} />)}
+            </View>
+            {payPattern === 'varies' ? (
+              <Text variant="label" family="regular" color="inkMuted">
+                FinSight follows the calendar month and counts the money as it comes in. Once you have a few months of income recorded, plans use your average month.
+              </Text>
+            ) : (
+              <>
+                <Input label={payPattern === 'twice' ? 'First payday' : 'Day of the month'} placeholder="25" keyboardType="numeric" value={salaryDayInput} error={salaryError} hint="In shorter months, day 31 counts as the last day" onChangeText={v => { setSalaryDayInput(v); setSalaryError(''); }} />
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+                  {COMMON_PAYDAYS.map(d => <Chip key={d} label={`Day ${d}`} selected={salaryDayInput === d} onPress={() => { setSalaryDayInput(d); setSalaryError(''); }} />)}
+                </View>
+                {payPattern === 'twice' ? (
+                  <>
+                    <Input label="Second payday" placeholder="30" keyboardType="numeric" value={secondDayInput} error={secondError} hint="Your monthly income is split evenly between the two pays" onChangeText={v => { setSecondDayInput(v); setSecondError(''); }} />
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+                      {COMMON_PAYDAYS.map(d => <Chip key={d} label={`Day ${d}`} selected={secondDayInput === d} onPress={() => { setSecondDayInput(d); setSecondError(''); }} />)}
+                    </View>
+                  </>
+                ) : null}
+              </>
+            )}
           </View>
-        </View>
+        </ScrollView>
       </Sheet>
 
       <Sheet visible={showLockTimeout} onClose={() => setShowLockTimeout(false)} title="Auto-lock" footer={<Button full title="Save" onPress={saveLockTimeout} />}>

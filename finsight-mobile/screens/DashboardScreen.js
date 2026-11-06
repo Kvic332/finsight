@@ -9,6 +9,7 @@ import {
   useToast,
 } from '../components/ui';
 import { computePeriodStats, periodLabel } from '../services/finance';
+import { explainFinScore } from '../services/finScoreExplain';
 import { formatMoney, formatMoneyCompact } from '../services/format';
 import { loadTransactions } from '../services/transactions';
 import { checkAchievements, getStreak } from '../services/notificationService';
@@ -92,10 +93,11 @@ export default function DashboardScreen({ user }) {
   const when = periodLabel(stats.cycle);
   const { finScore, totalSpend, totalSaved, categoryTotals, spendTrend, income, scoreBreakdown } = stats;
   const parts = scoreParts(scoreBreakdown);
+  // The reasons behind each part, using this pay period's real figures.
+  const explained = explainFinScore(stats, when);
   const g = grade(finScore);
   const categories = Object.entries(categoryTotals).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   const weekTotal = spendTrend.reduce((s, d) => s + d.spend, 0);
-  const tips = [...parts].sort((a, b) => a.score - b.score).slice(0, 2);
 
   async function load() {
     const txs = await loadTransactions();
@@ -247,21 +249,25 @@ export default function DashboardScreen({ user }) {
         </View>
       </ScrollView>
 
-      <Sheet visible={showScore} onClose={() => setShowScore(false)} title="How your FinScore works">
-        <ScrollView style={{ maxHeight: 440 }} showsVerticalScrollIndicator={false}>
-          <View style={{ gap: space.md }}>
-            {parts.map(p => (
-              <View key={p.label}>
+      <Sheet visible={showScore} onClose={() => setShowScore(false)} title={`Why your FinScore is ${finScore}`}>
+        <ScrollView style={{ maxHeight: 480 }} showsVerticalScrollIndicator={false}>
+          <View style={{ gap: space.lg }}>
+            <Text variant="label" family="regular" color="inkMuted">
+              {`Your score is made of four parts: Spending and Savings count for 35% each, Tracking and Building for 15% each. Figures are ${when}.`}
+            </Text>
+            {explained.parts.map(p => (
+              <View key={p.label} style={{ gap: 2 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text variant="bodyStrong" family="semibold">{p.label}</Text>
-                  <Text variant="bodyStrong" family="bold" tabular>{p.score}</Text>
+                  <Text variant="bodyStrong" family="semibold">{`${p.label} · ${p.weight}%`}</Text>
+                  <Text variant="bodyStrong" family="bold" tabular color={scoreTone(p.score)}>{`${p.score}/100`}</Text>
                 </View>
-                <Text variant="label" family="regular" color="inkMuted">{p.about}</Text>
+                <Text variant="label" family="regular">{p.reason}</Text>
+                <Text variant="label" family="regular" color="inkMuted">{p.next}</Text>
               </View>
             ))}
             <View style={{ backgroundColor: c.accentSoft, borderRadius: radius.md, padding: space.lg, gap: space.sm }}>
-              <Text variant="bodyStrong" family="bold" color="onAccentSoft">Start here</Text>
-              {tips.map(t => <Text key={t.label} variant="label" family="regular" color="onAccentSoft">{t.tip}</Text>)}
+              <Text variant="bodyStrong" family="bold" color="onAccentSoft">What would raise it most</Text>
+              {explained.focus.map(t => <Text key={t.label} variant="label" family="regular" color="onAccentSoft">{`${t.label}: ${t.next}`}</Text>)}
             </View>
           </View>
         </ScrollView>

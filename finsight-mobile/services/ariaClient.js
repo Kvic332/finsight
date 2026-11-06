@@ -20,7 +20,7 @@ export async function getIdToken() {
   return user.getIdToken();
 }
 
-export async function askAria(messages, context) {
+export async function askAria(messages, context, language = 'en') {
   if (!ARIA_URL) throw new Error(GENERIC_ERROR);
   let response;
   try {
@@ -34,6 +34,7 @@ export async function askAria(messages, context) {
       body: JSON.stringify({
         messages: messages.map(m => ({ role: m.role, content: m.content })),
         context: context.slice(0, MAX_CONTEXT_CHARS),
+        language,
       }),
     });
   } catch {

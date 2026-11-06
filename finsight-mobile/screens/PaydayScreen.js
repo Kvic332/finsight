@@ -9,6 +9,7 @@ import {
   DEFAULT_SAVE_PERCENT, nextGoalEta, planPayday, planPeriod, SAVE_PERCENTS,
 } from '../services/paydayPlan';
 import { normalizeGoals } from '../services/plans';
+import { expectedPay, paydaysOf } from '../services/finance';
 
 const monthsLabel = months => (months === 1 ? '1 month' : `${months} months`);
 
@@ -37,12 +38,16 @@ export default function PaydayScreen({ user, setUser }) {
   const [debts, setDebts] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [payText, setPayText] = useState('');
+  const [transactions, setTransactions] = useState([]);
 
   useFocusEffect(useCallback(() => {
-    Promise.all([AsyncStorage.getItem('finsight_debts'), AsyncStorage.getItem('finsight_budgets')])
-      .then(([dRaw, bRaw]) => {
+    Promise.all([
+      AsyncStorage.getItem('finsight_debts'), AsyncStorage.getItem('finsight_budgets'), AsyncStorage.getItem('finsight_transactions'),
+    ])
+      .then(([dRaw, bRaw, tRaw]) => {
         setDebts(dRaw ? JSON.parse(dRaw) : []);
         setBudgets(bRaw ? JSON.parse(bRaw) : []);
+        setTransactions(tRaw ? JSON.parse(tRaw) : []);
       })
       .catch(() => toast.show("Couldn't load your plan. Try again.", { tone: 'error' }));
   }, [toast]));
@@ -57,10 +62,12 @@ export default function PaydayScreen({ user, setUser }) {
     }
   }
 
-  const income = Number(user?.income) || 0;
+  const expected = expectedPay(user, transactions);
+  const income = expected.amount;
   const pay = parseAmount(payText) || income;
+  const payCount = paydaysOf(user).length;
   const savePercent = user?.paydaySavePercent ?? DEFAULT_SAVE_PERCENT;
-  const period = planPeriod(user?.salaryDay);
+  const period = planPeriod(paydaysOf(user));
   const plan = planPayday({ pay, debts, budgets, savePercent, period });
   const eta = nextGoalEta(normalizeGoals(user?.goals), plan.saving);
   const debtDetail = plan.debtLines.map(d => `${d.lender} ${formatMoney(d.amount)}`).join(' · ');
@@ -75,7 +82,7 @@ export default function PaydayScreen({ user, setUser }) {
         <Text variant="label" family="medium" color="inkMuted">{period.hasPayday ? 'Your next pay' : 'Your pay'}</Text>
         <Text variant="heading" family="bold">{whenLabel(period)}</Text>
         {!period.hasPayday ? (
-          <Text variant="label" family="regular" color="inkMuted">Set a payday in Settings to plan around it.</Text>
+          <Text variant="label" family="regular" color="inkMuted">Your income varies, so this plans the calendar month. Set paydays in Settings if you have them.</Text>
         ) : null}
       </Card>
 
@@ -85,7 +92,10 @@ export default function PaydayScreen({ user, setUser }) {
         keyboardType="numeric"
         placeholder={income ? income.toLocaleString() : '450,000'}
         value={payText}
-        hint={income ? 'Uses your income from Settings. Enter a different amount if this pay is different.' : 'Enter what you expect to receive.'}
+        hint={!income ? 'Enter what you expect to receive.'
+          : expected.basis === 'average' ? `Your average income over the last ${monthsLabel(expected.months)}. Enter a different amount if this pay is different.`
+          : payCount > 1 ? "Half your monthly income, since you're paid twice a month. Enter a different amount if this pay is different."
+          : 'Uses your income from Settings. Enter a different amount if this pay is different.'}
         onChangeText={setPayText}
       />
 

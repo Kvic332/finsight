@@ -7,7 +7,7 @@ import {
   Badge, Button, Card, CategoryTile, EmptyState, Gradient, Icon, Input, ListRow, Money, Sheet, Text, tapFeedback,
   useTheme, useToast, IconTile,
 } from '../components/ui';
-import { computePaydayPlan, makeBalanceCheck, parseTxDate } from '../services/finance';
+import { computePaydayPlan, expectedPay, makeBalanceCheck, paydaysOf, parseTxDate } from '../services/finance';
 import { latestBalances } from '../services/balances';
 import AsyncStorage from '../services/dataStore';
 import { DEFAULT_SAVE_PERCENT, planPayday, planPeriod } from '../services/paydayPlan';
@@ -203,11 +203,11 @@ export default function HomeScreen({ navigation, user, setUser }) {
     }
   }
   // The same plan as the Payday plan screen, for the next pay.
-  const nextPayPeriod = planPeriod(user?.salaryDay);
+  const nextPayPeriod = planPeriod(paydaysOf(user));
   const nextPay = {
     period: nextPayPeriod,
     ...planPayday({
-      pay: Number(user?.income) || 0,
+      pay: expectedPay(user, transactions).amount,
       debts: planData.debts,
       budgets: planData.budgets,
       savePercent: user?.paydaySavePercent ?? DEFAULT_SAVE_PERCENT,

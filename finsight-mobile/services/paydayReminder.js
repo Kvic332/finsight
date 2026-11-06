@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { requestNotificationPermission } from './notificationService';
 import { paydayReminderTimes } from './paydayPlan';
+import { paydaysOf } from './finance';
 
 export const PAYDAY_REMINDER_TYPE = 'payday';
 
@@ -16,7 +17,7 @@ export async function syncPaydayReminder(user) {
       .map(n => Notifications.cancelScheduledNotificationAsync(n.identifier)));
 
     if (!user || user.paydayReminder === false) return;
-    const times = paydayReminderTimes(user.salaryDay);
+    const times = paydayReminderTimes(paydaysOf(user));
     if (!times.length || !(await requestNotificationPermission())) return;
 
     await Promise.all(times.map(date => Notifications.scheduleNotificationAsync({

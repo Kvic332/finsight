@@ -22,12 +22,25 @@ const MAX_CONTEXT_CHARS = 16_000;
 
 const REFUSAL_REPLY = "I can't help with that one. Ask me anything about your money and I'll do my best.";
 
-export function buildSystemPrompt(context: string): string {
+// Reply languages the app offers. Only these keys are accepted, so the field
+// can't carry anything else into the prompt.
+export const LANGUAGES: Record<string, string> = {
+  en: '',
+  pcm: 'Reply in Nigerian Pidgin, the way people speak it in Lagos, warm and natural. Keep ₦ amounts and numbers exactly as they are.',
+  yo: 'Reply in Yoruba. Keep ₦ amounts and numbers as digits. If a money term has no common Yoruba word, use the English word.',
+  ha: 'Reply in Hausa. Keep ₦ amounts and numbers as digits. If a money term has no common Hausa word, use the English word.',
+  ig: 'Reply in Igbo. Keep ₦ amounts and numbers as digits. If a money term has no common Igbo word, use the English word.',
+};
+
+export function buildSystemPrompt(context: string, language = 'en'): string {
+  const languageLine = Object.hasOwn(LANGUAGES, language) && LANGUAGES[language] ? `
+
+${LANGUAGES[language]} If the user writes in another language, reply in the language they wrote in.` : '';
   return `You are ARIA, the personal finance assistant inside FinSight, for a Nigerian user. You are direct, warm and smart, like a friend who is good with money.
 
 Always use ₦ for Nigerian amounts. Keep replies concise: 3-5 sentences unless asked for detail. Use specific numbers from the user's data. Only help with personal finance; for anything else, say so briefly and steer back.
 
-Write plain text. The app shows your reply as it is and may read it aloud, so don't use markdown such as asterisks, headings or bullet symbols.
+Write plain text. The app shows your reply as it is and may read it aloud, so don't use markdown such as asterisks, headings or bullet symbols.${languageLine}
 
 You are not a licensed financial adviser. Explain options and trade-offs, and don't promise returns.
 
@@ -46,11 +59,13 @@ const json = (status: number, body: unknown) =>
 
 const fail = (status: number, code: string) => json(status, { error: code });
 
-export function parseRequest(raw: string): { messages: ChatMessage[]; context: string } | null {
+export function parseRequest(raw: string): { messages: ChatMessage[]; context: string; language: string } | null {
   let body: unknown;
   try { body = JSON.parse(raw); } catch { return null; }
   if (typeof body !== 'object' || body === null) return null;
-  const { messages, context } = body as { messages?: unknown; context?: unknown };
+  const { messages, context, language } = body as { messages?: unknown; context?: unknown; language?: unknown };
+  // Older apps send no language. An unknown one is ignored rather than refused.
+  const lang = typeof language === 'string' && Object.hasOwn(LANGUAGES, language) ? language : 'en';
 
   if (typeof context !== 'string' || context.length > MAX_CONTEXT_CHARS) return null;
   if (!Array.isArray(messages)) return null;
@@ -73,7 +88,7 @@ export function parseRequest(raw: string): { messages: ChatMessage[]; context: s
   const trimmed = recent.slice(firstUser);
   if (trimmed[trimmed.length - 1].role !== 'user') return null;
 
-  return { messages: trimmed, context };
+  return { messages: trimmed, context, language: lang };
 }
 
 export function createHandler(deps: Deps) {
@@ -107,7 +122,7 @@ export function createHandler(deps: Deps) {
     if (quota !== 'ok') return fail(429, quota);
 
     try {
-      const reply = await deps.callModel(buildSystemPrompt(parsed.context), parsed.messages);
+      const reply = await deps.callModel(buildSystemPrompt(parsed.context, parsed.language), parsed.messages);
       if (reply.refused) return json(200, { reply: REFUSAL_REPLY });
       if (!reply.text) {
         deps.logError('empty_reply');

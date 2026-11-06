@@ -10,7 +10,7 @@ import {
 } from '../components/ui';
 import { formatMoney, parseAmount } from '../services/format';
 import { budgetSpent, budgetStatus } from '../services/plans';
-import { payCycle, periodLabel } from '../services/finance';
+import { payCycle, paydaysOf, periodLabel } from '../services/finance';
 
 const CATEGORIES = ['Food', 'Transport', 'Utilities', 'Shopping', 'Entertainment', 'Health', 'Savings', 'Other'];
 const PRESETS = [
@@ -57,7 +57,7 @@ function BudgetRow({ budget, spent, onPress }) {
 export default function BudgetScreen({ user }) {
   const toast = useToast();
   // Budgets count the same pay period as Home and Activity.
-  const cycle = payCycle(user?.salaryDay);
+  const cycle = payCycle(paydaysOf(user));
   const spentOn = (b, txs) => budgetSpent(b, txs, undefined, cycle);
   const [budgets, setBudgets] = useState([]);
   const [transactions, setTransactions] = useState([]);

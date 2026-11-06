@@ -12,19 +12,27 @@ const REMINDERS_AHEAD = 3;
 
 // The next few paydays at 9am. Scheduled ahead and refreshed whenever the app
 // opens, so a reminder still arrives if the app isn't opened for a while.
+// salaryDay can be one day or a list, for people paid twice a month.
 export function paydayReminderTimes(salaryDay, now = new Date()) {
-  const day = parseInt(salaryDay, 10);
-  if (!(day >= 1 && day <= 31)) return [];
-  return Array.from({ length: REMINDERS_AHEAD + 1 }, (_, i) => {
+  const days = (Array.isArray(salaryDay) ? salaryDay : [salaryDay])
+    .map(d => parseInt(d, 10)).filter(d => d >= 1 && d <= 31);
+  if (!days.length) return [];
+  const times = new Map();
+  for (let i = 0; i <= REMINDERS_AHEAD; i++) {
     const year = now.getFullYear();
     const month = now.getMonth() + i;
     const lastDay = new Date(year, month + 1, 0).getDate();
-    return new Date(year, month, Math.min(day, lastDay), REMINDER_HOUR);
-  }).filter(at => at > now).slice(0, REMINDERS_AHEAD);
+    for (const day of days) {
+      const at = new Date(year, month, Math.min(day, lastDay), REMINDER_HOUR);
+      times.set(at.getTime(), at);
+    }
+  }
+  return [...times.values()].sort((a, b) => a - b).filter(at => at > now).slice(0, REMINDERS_AHEAD * days.length);
 }
 
 // The month this pay has to last: starting today on payday, otherwise from the
-// next payday. With no fixed payday it's the calendar month.
+// next payday. With no fixed payday it's the calendar month. salaryDay can be
+// one day or a list of days.
 export function planPeriod(salaryDay, now = new Date()) {
   const cycle = payCycle(salaryDay, now);
   const { start, end, hasPayday } = cycle.hasPayday && cycle.elapsed > 1 ? payCycle(salaryDay, cycle.end) : cycle;
