@@ -14,7 +14,7 @@
  * can be corrected in an app update. The list of bank apps is sent from there too.
  */
 
-const { withAndroidManifest, withDangerousMod } = require('@expo/config-plugins');
+const { withAndroidManifest, withDangerousMod } = require('expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 

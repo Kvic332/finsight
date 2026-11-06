@@ -5,7 +5,7 @@
  * <queries>. Without this, voice input reports "not available" on most phones,
  * so ARIA's microphone and "Say it" on Add transaction stay hidden.
  */
-const { withAndroidManifest } = require('@expo/config-plugins');
+const { withAndroidManifest } = require('expo/config-plugins');
 
 const ACTIONS = ['android.speech.RecognitionService', 'android.speech.action.RECOGNIZE_SPEECH'];
 

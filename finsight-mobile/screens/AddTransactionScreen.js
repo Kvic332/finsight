@@ -116,8 +116,12 @@ export default function AddTransactionScreen({ navigation, route, user }) {
   useEffect(() => {
     Voice.onSpeechResults = e => { setListening(false); applySpoken(e.value?.[0] || ''); };
     Voice.onSpeechEnd = () => setListening(false);
-    Voice.onSpeechError = () => { setListening(false); setHeard({ text: '', found: false }); };
-    Voice.isAvailable().then(available => setVoiceReady(!!available)).catch(() => setVoiceReady(false));
+    Voice.onSpeechError = e => { console.log('[voice] error', e?.error?.error, e?.error?.message); setListening(false); setHeard({ text: '', found: false }); };
+    // Some phones say no here yet still listen, so on Android the button always shows
+    // and a real failure is reported when it's tapped.
+    Voice.isAvailable()
+      .then(available => setVoiceReady(!!available || Platform.OS === 'android'))
+      .catch(() => setVoiceReady(Platform.OS === 'android'));
     return () => { Voice.destroy().then(Voice.removeAllListeners).catch(() => {}); };
   }, []);
 
@@ -133,6 +137,7 @@ export default function AddTransactionScreen({ navigation, route, user }) {
       await Voice.start('en-US');
       setListening(true);
     } catch (e) {
+      console.log('[voice] start failed', e?.message || JSON.stringify(e));
       setHeard({ text: '', found: false, unavailable: true });
     }
   }

@@ -38,11 +38,11 @@
           }
         }
       ],
-      "./plugins/withAndroidExclusion",
       "./plugins/withNativeBankCapture",
       "./plugins/withSpeechRecognition",
       "expo-font",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-speech-recognition"
     ],
     "extra": {
       "eas": {
