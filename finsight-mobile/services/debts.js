@@ -24,6 +24,23 @@ export function annualFromRepayment(borrowed, totalRepay, days) {
 
 const roundRate = value => Math.round(value * 10) / 10;
 
+// The repayment that clears a loan in `months` equal monthly payments.
+// 'reducing': interest is charged each month on what's still owed, the usual
+// way for bank loans. 'flat': interest is charged every month on the whole
+// amount, as many loan apps do, which costs more for the same rate.
+// rate is a percentage per `period` ('monthly' or 'annual').
+export function monthlyRepayment({ principal, rate, period = 'monthly', months, interestType = 'reducing' }) {
+  if (!(principal > 0) || !(rate >= 0) || !(months >= 1) || !Number.isInteger(months)) return null;
+  const perMonth = period === 'annual' ? rate / 12 / 100 : rate / 100;
+  let payment;
+  if (interestType === 'flat') payment = principal / months + principal * perMonth;
+  else if (perMonth === 0) payment = principal / months;
+  else payment = (principal * perMonth) / (1 - (1 + perMonth) ** -months);
+  const rounded = Math.ceil(payment);
+  const totalRepay = rounded * months;
+  return { payment: rounded, totalRepay, totalInterest: Math.max(0, totalRepay - Math.round(principal)) };
+}
+
 // Dates are stored as YYYY-MM-DD. Returns null unless it's a real calendar date.
 export function parseDueDate(text) {
   const match = String(text ?? '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -107,6 +124,9 @@ export function recordPayment(debts, id, amount) {
       owed,
       paid: (debt.paid || 0) + applied,
       dueDate: owed > 0 && debt.repeatsMonthly ? nextMonthlyDue(debt.dueDate) : debt.dueDate,
+      // A full monthly payment means one month fewer left on the loan.
+      termMonths: debt.termMonths && debt.repeatsMonthly && debt.payment && applied >= debt.payment
+        ? Math.max(0, debt.termMonths - 1) : debt.termMonths,
     };
   });
 }
@@ -188,6 +208,9 @@ export function debtsContext(debts) {
   return active.map(d => {
     const rate = hasRate(d) ? `about ${d.annualRate}% a year` : 'rate not given';
     const due = d.dueDate ? `, next due ${d.dueDate}` : '';
-    return `${d.lender}: ₦${d.owed.toLocaleString()} owed, ${rate}${due}`;
+    const pay = d.payment ? `, paying ₦${d.payment.toLocaleString()}${d.repeatsMonthly ? ' a month' : ''}` : '';
+    const term = d.termMonths ? `, ${d.termMonths} months left` : '';
+    const flat = d.interestType === 'flat' ? ', flat interest on the full loan' : '';
+    return `${d.lender}: ₦${d.owed.toLocaleString()} owed, ${rate}${flat}${pay}${term}${due}`;
   }).join(' | ');
 }

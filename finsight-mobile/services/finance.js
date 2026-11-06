@@ -265,7 +265,7 @@ export function computeStats(user, transactions, now = new Date(), period = null
     // What each part of the score was worked out from, so it can be explained.
     scoreInputs: {
       spendRatio, savingsRate, categoryCount: catValues.length, topCategoryShare: totalSpend > 0 ? maxCatPct : 0,
-      trackedCount: transactions.length, hasGoals, hasSavingsTx,
+      trackedCount: transactions.length, hasGoals, hasSavingsTx, declaredIncome: declared,
       diversityPoints, balancePoints, trackingPoints,
     },
   };

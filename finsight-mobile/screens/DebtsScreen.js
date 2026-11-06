@@ -10,7 +10,7 @@ import {
 import { parseNumber } from '../services/catalogRules';
 import { syncDebtReminders } from '../services/debtReminders';
 import {
-  annualFromRate, annualFromRepayment, debtSummary, dueStatus, parseDueDate, payoffOrder, payoffPlan, recordPayment,
+  annualFromRate, annualFromRepayment, debtSummary, monthlyRepayment, dueStatus, parseDueDate, payoffOrder, payoffPlan, recordPayment,
 } from '../services/debts';
 import { formatMoney, parseAmount } from '../services/format';
 import { addTransaction } from '../services/transactions';
@@ -25,6 +25,11 @@ const COST_METHODS = [
 const PERIODS = [
   { value: 'monthly', label: 'A month' },
   { value: 'annual', label: 'A year' },
+];
+
+const INTEREST_TYPES = [
+  { value: 'reducing', label: "On what's left" },
+  { value: 'flat', label: 'On the full loan' },
 ];
 
 const monthsLabel = months => (months === 1 ? '1 month' : `${months} months`);
@@ -49,10 +54,17 @@ function DebtForm({ debt, onClose, onSave, onDelete }) {
   const [borrowed, setBorrowed] = useState(debt?.borrowed ? String(debt.borrowed) : '');
   const [totalRepay, setTotalRepay] = useState(debt?.totalRepay ? String(debt.totalRepay) : '');
   const [days, setDays] = useState(debt?.termDays ? String(debt.termDays) : '');
+  const [months, setMonths] = useState(debt?.termMonths ? String(debt.termMonths) : '');
+  const [interestType, setInterestType] = useState(debt?.interestType || 'reducing');
   const [payment, setPayment] = useState(debt?.payment ? String(debt.payment) : '');
   const [dueDate, setDueDate] = useState(debt?.dueDate || '');
   const [repeats, setRepeats] = useState(debt ? (debt.repeatsMonthly ? 'yes' : 'no') : 'yes');
   const [errors, setErrors] = useState({});
+
+  const monthsValue = parseNumber(months);
+  const repayment = method === 'rate'
+    ? monthlyRepayment({ principal: parseAmount(owed), rate: parseNumber(rate), period, months: monthsValue, interestType })
+    : null;
 
   function save() {
     const owedValue = parseAmount(owed);
@@ -60,7 +72,8 @@ function DebtForm({ debt, onClose, onSave, onDelete }) {
     const borrowedValue = parseAmount(borrowed);
     const totalValue = parseAmount(totalRepay);
     const daysValue = parseNumber(days);
-    const paymentValue = payment.trim() ? parseAmount(payment) : null;
+    // With no payment typed, the worked-out repayment is used.
+    const paymentValue = payment.trim() ? parseAmount(payment) : repayment ? repayment.payment : null;
     const date = dueDate.trim();
 
     const costFromRate = method === 'rate' ? annualFromRate(rateValue, period) : null;
@@ -73,6 +86,7 @@ function DebtForm({ debt, onClose, onSave, onDelete }) {
       ...(method === 'repay' && !borrowedValue ? { borrowed: 'Enter what you borrowed' } : null),
       ...(method === 'repay' && borrowedValue && (!totalValue || totalValue < borrowedValue) ? { totalRepay: "This can't be less than you borrowed" } : null),
       ...(method === 'repay' && !(daysValue > 0) ? { days: 'Enter the length in days, like 30' } : null),
+      ...(method === 'rate' && months.trim() && !(Number.isInteger(monthsValue) && monthsValue >= 1) ? { months: 'Enter whole months, like 12' } : null),
       ...(payment.trim() && !paymentValue ? { payment: 'Enter an amount, like 10,000' } : null),
       ...(date && !parseDueDate(date) ? { dueDate: 'Use year-month-day, like 2026-11-30' } : null),
     };
@@ -90,6 +104,8 @@ function DebtForm({ debt, onClose, onSave, onDelete }) {
       borrowed: method === 'repay' ? borrowedValue : null,
       totalRepay: method === 'repay' ? totalValue : null,
       termDays: method === 'repay' ? daysValue : null,
+      termMonths: method === 'rate' && monthsValue >= 1 ? monthsValue : null,
+      interestType: method === 'rate' ? interestType : null,
       annualRate: method === 'rate' ? costFromRate : method === 'repay' ? costFromRepay : null,
       payment: paymentValue,
       dueDate: date || null,
@@ -117,6 +133,25 @@ function DebtForm({ debt, onClose, onSave, onDelete }) {
           <>
             <Input label="Interest rate, %" keyboardType="decimal-pad" placeholder="5" value={rate} error={errors.rate} onChangeText={setRate} />
             <ChoiceRow label="The rate is per" options={PERIODS} value={period} onChange={setPeriod} />
+            <Input label="Months left to repay" keyboardType="number-pad" placeholder="12" value={months} error={errors.months} hint="Optional. With it, FinSight works out your monthly repayment." onChangeText={setMonths} />
+            <ChoiceRow label="Interest is charged" options={INTEREST_TYPES} value={interestType} onChange={setInterestType} />
+            <Text variant="caption" color="inkMuted">
+              {interestType === 'flat'
+                ? 'Each month, interest on the whole loan, even as you pay it down. Common with loan apps. Your loan agreement says which.'
+                : 'Each month, interest only on what you still owe, so it falls as you pay. Usual for bank loans. Your loan agreement says which.'}
+            </Text>
+            {repayment ? (
+              <Card style={{ padding: space.lg, gap: space.xs }}>
+                <Text variant="label" family="medium" color="inkMuted">Your monthly repayment</Text>
+                <Money value={repayment.payment} family="bold" variant="heading" />
+                <Text variant="label" family="regular" color="inkMuted">
+                  {`For ${monthsLabel(monthsValue)}: ${formatMoney(repayment.totalRepay)} in all, ${formatMoney(repayment.totalInterest)} of it interest.`}
+                </Text>
+                {payment.trim() && parseAmount(payment) !== repayment.payment ? (
+                  <Button title="Use this amount" variant="secondary" onPress={() => setPayment(String(repayment.payment))} />
+                ) : null}
+              </Card>
+            ) : null}
           </>
         ) : null}
         {method === 'repay' ? (
@@ -129,7 +164,9 @@ function DebtForm({ debt, onClose, onSave, onDelete }) {
         {method === 'unknown' ? (
           <Text variant="label" family="regular" color="inkMuted">It'll be listed after debts with a known cost. Your loan agreement or app should show the rate.</Text>
         ) : null}
-        <Input label="Payment amount" prefix="₦" keyboardType="numeric" placeholder="10,000" value={payment} error={errors.payment} hint="Optional. Needed for the payoff plan." onChangeText={setPayment} />
+        <Input label="Payment amount" prefix="₦" keyboardType="numeric" placeholder="10,000" value={payment} error={errors.payment}
+          hint={repayment && !payment.trim() ? `Leave empty to use ${formatMoney(repayment.payment)}, worked out above. Enter your own if your lender says a different amount.` : 'Optional. Needed for the payoff plan.'}
+          onChangeText={setPayment} />
         <Input label="Next due date" placeholder="YYYY-MM-DD" value={dueDate} error={errors.dueDate} hint="Optional. We'll remind you 3 days before, the day before and on the day." onChangeText={setDueDate} />
         <ChoiceRow
           label="Is this payment monthly?"
@@ -179,7 +216,10 @@ function DebtCard({ debt, rank, onEdit, onPay }) {
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text variant="bodyStrong" family="bold" numberOfLines={1}>{debt.lender}</Text>
           <Text variant="label" family="regular" color="inkMuted" numberOfLines={1}>
-            {typeof debt.annualRate === 'number' ? `About ${debt.annualRate}% a year` : 'Cost not known'}
+            {[
+              typeof debt.annualRate === 'number' ? `About ${debt.annualRate}% a year` : 'Cost not known',
+              debt.termMonths ? `${monthsLabel(debt.termMonths)} left` : null,
+            ].filter(Boolean).join(' · ')}
           </Text>
         </View>
         <Money value={debt.owed} family="bold" />

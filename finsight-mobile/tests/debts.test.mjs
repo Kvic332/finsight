@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  annualFromRate, annualFromRepayment, daysUntilDue, debtsContext, debtSummary, dueStatus, nextMonthlyDue, parseDueDate,
+  annualFromRate, annualFromRepayment, daysUntilDue, monthlyRepayment, debtsContext, debtSummary, dueStatus, nextMonthlyDue, parseDueDate,
   payoffOrder, payoffPlan, recordPayment, reminderBody, reminderTimes,
 } from '../services/debts.js';
 
@@ -239,4 +239,36 @@ test('ARIA gets a short summary, most expensive first', () => {
   assert.match(text, /about 200% a year/);
   assert.match(text, /rate not given/);
   assert.equal(debtsContext([]), 'None recorded');
+});
+
+test('a ₦1m loan at 10% a month over 12 months, on the reducing balance', () => {
+  const r = monthlyRepayment({ principal: 1000000, rate: 10, period: 'monthly', months: 12 });
+  assert.equal(r.payment, 146764);
+  assert.equal(r.totalRepay, 146764 * 12);
+  assert.equal(r.totalInterest, 146764 * 12 - 1000000);
+});
+
+test('the same loan with flat interest costs more', () => {
+  const r = monthlyRepayment({ principal: 1000000, rate: 10, months: 12, interestType: 'flat' });
+  assert.equal(r.payment, 183334);
+  assert.equal(r.totalInterest, 183334 * 12 - 1000000);
+});
+
+test('an annual rate is spread over the months, and zero interest just divides', () => {
+  assert.equal(monthlyRepayment({ principal: 1200000, rate: 24, period: 'annual', months: 12 }).payment, 113472);
+  assert.equal(monthlyRepayment({ principal: 1200000, rate: 0, months: 12 }).payment, 100000);
+});
+
+test('missing or impossible inputs give no repayment', () => {
+  assert.equal(monthlyRepayment({ principal: 0, rate: 10, months: 12 }), null);
+  assert.equal(monthlyRepayment({ principal: 1000, rate: 10, months: 0 }), null);
+  assert.equal(monthlyRepayment({ principal: 1000, rate: 10, months: 2.5 }), null);
+  assert.equal(monthlyRepayment({ principal: 1000, rate: -1, months: 3 }), null);
+});
+
+test('a full monthly payment takes a month off the months left, a part payment does not', () => {
+  const loan = { id: 'a', lender: 'Bank', owed: 1000000, payment: 146764, repeatsMonthly: true, termMonths: 12, dueDate: '2026-11-30' };
+  assert.equal(recordPayment([loan], 'a', 146764)[0].termMonths, 11);
+  assert.equal(recordPayment([loan], 'a', 50000)[0].termMonths, 12);
+  assert.equal(recordPayment([{ ...loan, termMonths: null }], 'a', 146764)[0].termMonths, null);
 });

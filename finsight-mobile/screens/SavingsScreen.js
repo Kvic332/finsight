@@ -154,14 +154,19 @@ export default function SavingsScreen({ user, setUser }) {
   }
 
   const totalSaved = savingsFlows(transactions).saved;
-  const { income, savingsRate, totalSpend, totalSaved: savedThisMonth, cycle } = computePeriodStats(user, transactions);
+  const { income, salarySeen, savingsRate, totalSpend, totalSaved: savedThisMonth, cycle } = computePeriodStats(user, transactions);
   const when = periodLabel(cycle);
   const recent = transactions.filter(t => t.cat === 'Savings').slice(0, 4);
   const toTarget = Math.max(0, Math.round(income * (TARGET_RATE / 100)) - savedThisMonth);
   const unassigned = unassignedSavings(totalSaved, goals);
 
-  let insight = `You're saving ${savingsRate}% of your income. Moving ${formatMoney(toTarget)} more before payday would reach ${TARGET_RATE}%.`;
-  if (savingsRate >= TARGET_RATE) insight = `You're saving ${savingsRate}% of your income, above the ${TARGET_RATE}% many people aim for.`;
+  // Before the salary is recorded, the income from Settings stands in for it.
+  const expectedPay = !salarySeen && Number(user?.income) > 0;
+  const incomeWords = expectedPay
+    ? `your expected ${formatMoney(income)} pay, as no salary has been recorded yet`
+    : `the ${formatMoney(income)} that came in`;
+  let insight = `${when[0].toUpperCase()}${when.slice(1)} you've saved ${formatMoney(savedThisMonth)}, ${savingsRate}% of ${incomeWords}. Moving ${formatMoney(toTarget)} more before payday would reach ${TARGET_RATE}%.`;
+  if (savingsRate >= TARGET_RATE) insight = `${when[0].toUpperCase()}${when.slice(1)} you've saved ${savingsRate}% of your income, above the ${TARGET_RATE}% many people aim for.`;
   else if (income === 0) insight = 'Add your monthly income in Settings to see your savings rate.';
 
   return (
@@ -172,15 +177,15 @@ export default function SavingsScreen({ user, setUser }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} colors={[c.accent]} />}
       >
         <Card style={{ padding: space.xl }}>
-          <Text variant="label" family="medium" color="inkMuted">Total saved</Text>
+          <Text variant="label" family="medium" color="inkMuted">Total saved, all time</Text>
           <Money value={totalSaved} variant="display" family="bold" adjustsFontSizeToFit style={{ fontSize: 36, lineHeight: 46, letterSpacing: -0.8 }} />
           <Text variant="label" family="medium" color="inkMuted" style={{ marginBottom: space.lg }}>
-            {`${savingsRate}% of your income ${when} · aiming for ${TARGET_RATE}%`}
+            {`${formatMoney(savedThisMonth)} saved ${when}, ${savingsRate}% of your ${expectedPay ? 'expected pay' : 'income'} · aiming for ${TARGET_RATE}%`}
           </Text>
           <View style={{ gap: space.md }}>
-            <SnapshotRow label={`Income ${when}`} value={income} of={income} tone="positive" />
+            <SnapshotRow label={expectedPay ? 'Expected pay, from Settings' : `Income ${when}`} value={income} of={income} tone="positive" />
             <SnapshotRow label="Spent" value={totalSpend} of={income} tone="negative" />
-            <SnapshotRow label="Saved" value={savedThisMonth} of={income} tone="accent" />
+            <SnapshotRow label={`Saved ${when}`} value={savedThisMonth} of={income} tone="accent" />
           </View>
         </Card>
 

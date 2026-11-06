@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeStats } from '../services/finance.js';
+import { computePeriodStats, computeStats } from '../services/finance.js';
 import { explainFinScore } from '../services/finScoreExplain.js';
 
 const tx = over => ({ id: Math.random().toString(36), type: 'debit', cat: 'Food', amount: 1000, date: '05/06/2026', desc: 'x', ...over });
@@ -35,4 +35,17 @@ test('the focus is the parts that would raise the score most', () => {
   const stats = computeStats({ income: 100000 }, [tx({ amount: 1000 })], NOW);
   const { focus } = explainFinScore(stats);
   assert.equal(focus[0].label, 'Savings');
+});
+
+test('before the salary is recorded, the reasons say the income is the expected pay', () => {
+  const user = { income: 1200000, salaryDay: '23' };
+  const NOV = new Date(2026, 10, 6);
+  const stats = computePeriodStats(user, [tx({ amount: 90000, cat: 'Savings', date: '01/11/2026' })], NOV);
+  const { parts } = explainFinScore(stats, 'since 23 Oct');
+  assert.match(parts.find(p => p.label === 'Savings').reason, /8% of your expected pay, as no salary has been recorded yet/);
+  const paid = computePeriodStats(user, [
+    tx({ amount: 90000, cat: 'Savings', date: '01/11/2026' }),
+    tx({ type: 'credit', cat: 'Income', amount: 1200000, date: '23/10/2026' }),
+  ], NOV);
+  assert.match(explainFinScore(paid, 'since 23 Oct').parts.find(p => p.label === 'Savings').reason, /8% of your income\./);
 });
