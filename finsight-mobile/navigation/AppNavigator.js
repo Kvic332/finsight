@@ -125,7 +125,7 @@ function MainTabs({ theme, user, setUser }) {
   return (
     <>
       <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={props => <AppTabBar {...props} />}>
-        <Tab.Screen name="Home">{p => <HomeScreen {...p} user={user} />}</Tab.Screen>
+        <Tab.Screen name="Home">{p => <HomeScreen {...p} user={user} setUser={setUser} />}</Tab.Screen>
         <Tab.Screen name="Activity">{p => <ActivityScreen {...p} user={user} />}</Tab.Screen>
         <Tab.Screen name="Plan">{p => <PlanScreen {...p} user={user} setUser={setUser} />}</Tab.Screen>
         <Tab.Screen name="Grow" component={GrowScreen} />

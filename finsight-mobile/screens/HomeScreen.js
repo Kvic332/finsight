@@ -4,10 +4,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, space } from '../constants/tokens';
 import {
-  Badge, Button, Card, CategoryTile, EmptyState, Gradient, Icon, ListRow, Money, Sheet, Text, tapFeedback,
+  Badge, Button, Card, CategoryTile, EmptyState, Gradient, Icon, Input, ListRow, Money, Sheet, Text, tapFeedback,
   useTheme, useToast, IconTile,
 } from '../components/ui';
-import { computePaydayPlan, parseTxDate } from '../services/finance';
+import { computePaydayPlan, makeBalanceCheck, parseTxDate } from '../services/finance';
 import { latestBalances } from '../services/balances';
 import AsyncStorage from '../services/dataStore';
 import { DEFAULT_SAVE_PERCENT, planPayday, planPeriod } from '../services/paydayPlan';
@@ -105,7 +105,7 @@ function BrokeClock({ plan, onSetPayday }) {
   return card;
 }
 
-export default function HomeScreen({ navigation, user }) {
+export default function HomeScreen({ navigation, user, setUser }) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const toast = useToast();
@@ -114,6 +114,9 @@ export default function HomeScreen({ navigation, user }) {
   const [refreshing, setRefreshing] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [planData, setPlanData] = useState({ debts: [], budgets: [] });
+  const [checking, setChecking] = useState(false);
+  const [realText, setRealText] = useState('');
+  const [realError, setRealError] = useState('');
 
   const firstName = user?.name?.split(' ')[0] || '';
   const plan = computePaydayPlan(user, transactions);
@@ -160,6 +163,45 @@ export default function HomeScreen({ navigation, user }) {
   const recent = transactions.slice(0, 4);
   const toCheck = transactions.filter(t => t.unconfirmed).length;
   const banks = latestBalances(transactions);
+  const banksTotal = banks.reduce((sum, b) => sum + b.balance, 0);
+  // A correction made in this pay period, shown so the user knows the figure is anchored.
+  const check = user?.balanceCheck && plan.correction !== 0 ? user.balanceCheck : null;
+
+  function openBalanceCheck() {
+    setRealText(banks.length ? String(Math.round(banksTotal)) : '');
+    setRealError('');
+    setChecking(true);
+  }
+
+  async function saveUserFields(fields) {
+    const updated = { ...user, ...fields };
+    await AsyncStorage.setItem('finsight_user', JSON.stringify(updated));
+    setUser?.(updated);
+  }
+
+  async function saveBalanceCheck() {
+    // Unlike most amounts, nothing at all is a real answer here.
+    const cleaned = realText.replace(/[₦,\s]/g, '');
+    const value = /^\d+(\.\d+)?$/.test(cleaned) ? Math.round(Number(cleaned)) : null;
+    if (value === null) { setRealError('Enter the total you have, like 250,000'); return; }
+    try {
+      await saveUserFields({ balanceCheck: makeBalanceCheck(value, plan.estimateLeft, plan.cycle) });
+      setChecking(false);
+      toast.show('Matched to your real balance', { tone: 'success' });
+    } catch (e) {
+      toast.show("Couldn't save this. Try again.", { tone: 'error' });
+    }
+  }
+
+  async function clearBalanceCheck() {
+    try {
+      await saveUserFields({ balanceCheck: null });
+      setChecking(false);
+      toast.show('Back to the estimate');
+    } catch (e) {
+      toast.show("Couldn't save this. Try again.", { tone: 'error' });
+    }
+  }
   // The same plan as the Payday plan screen, for the next pay.
   const nextPayPeriod = planPeriod(user?.salaryDay);
   const nextPay = {
@@ -212,6 +254,14 @@ export default function HomeScreen({ navigation, user }) {
             </Text>
             <Money value={plan.left} variant="display" family="bold" adjustsFontSizeToFit style={{ fontSize: 40, lineHeight: 50, letterSpacing: -1 }} />
             <Text variant="label" family="medium" color="inkMuted">{subtitle}</Text>
+            <Pressable onPress={openBalanceCheck} accessibilityRole="button" hitSlop={8} style={{ marginTop: space.xs, flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+              <Icon name={check ? 'checkmark-circle' : 'scale-outline'} size={16} color="accent" />
+              <Text variant="caption" family="semibold" color="accent">
+                {check
+                  ? `Matched to your real balance on ${new Date(check.checkedAt).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })}`
+                  : 'Match my real balance'}
+              </Text>
+            </Pressable>
             <View style={{ flexDirection: 'row', marginTop: space.lg + 2 }}>
               <ActionButton icon="add" label="Add" onPress={() => navigation.navigate('Add')} />
               <ActionButton icon="download-outline" label="Import" onPress={() => setShowImport(true)} />
@@ -314,6 +364,39 @@ export default function HomeScreen({ navigation, user }) {
       </ScrollView>
       {/* Keeps scrolled content out from under the clock and battery icons. */}
       <Gradient pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top }} />
+
+      <Sheet
+        visible={checking}
+        onClose={() => setChecking(false)}
+        title="Match your real balance"
+        footer={(
+          <>
+            <Button full title="Save" onPress={saveBalanceCheck} />
+            {check ? <Button full title="Go back to the estimate" variant="ghost" onPress={clearBalanceCheck} /> : null}
+          </>
+        )}
+      >
+        <View style={{ gap: space.md }}>
+          <Text color="inkMuted">
+            FinSight estimates what's left from your income and the spending it knows about. Enter what you really have now, across all your accounts, and it corrects the estimate until your next payday.
+          </Text>
+          <Input
+            label="What you have now"
+            prefix="₦"
+            keyboardType="numeric"
+            placeholder="250,000"
+            value={realText}
+            error={realError}
+            hint={banks.length
+              ? `Your bank alerts last reported ${formatMoney(banksTotal)} across ${banks.map(b => b.bank).join(', ')}. Add any other accounts or cash.`
+              : 'Check your banking apps and add up what you have, including cash.'}
+            onChangeText={v => { setRealText(v); setRealError(''); }}
+          />
+          <Text variant="caption" color="inkMuted">
+            {`The estimate says ${formatMoney(Math.max(0, plan.estimateLeft))}. Spending you add after this still comes off.`}
+          </Text>
+        </View>
+      </Sheet>
 
       <Sheet visible={showImport} onClose={() => setShowImport(false)} title="Import transactions">
         <Card padded={false} tone="sunken">

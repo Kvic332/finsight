@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseTxDate, isSameMonth, savingsFlows, spendingOf,
-  daysUntilSalary, runwayDays, formatRunway, computeStats, payCycle, computePaydayPlan,
+  daysUntilSalary, runwayDays, formatRunway, computeStats, payCycle, computePaydayPlan, makeBalanceCheck,
 } from '../services/finance.js';
 
 const date = (y, m, d) => new Date(y, m - 1, d);
@@ -101,6 +101,35 @@ test('a small credit cannot replace declared income, a bigger one can', () => {
   const big = tx({ type: 'credit', cat: 'Income', amount: 150000, date: '02/06/2026' });
   assert.equal(computeStats({ income: 100000 }, [small], now).income, 100000);
   assert.equal(computeStats({ income: 100000 }, [big], now).income, 150000);
+});
+
+test('once the salary arrives, the amount actually received is used, even if lower', () => {
+  const now = date(2026, 6, 20);
+  const paid = tx({ type: 'credit', cat: 'Income', amount: 90000, date: '02/06/2026' });
+  const s = computeStats({ income: 100000 }, [paid], now);
+  assert.equal(s.income, 90000);
+  assert.equal(s.salarySeen, true);
+  assert.equal(computeStats({ income: 100000 }, [], now).salarySeen, false);
+});
+
+test('a real-balance correction applies only to the pay period it was made in', () => {
+  const user = { income: 100000, salaryDay: 25 };
+  const txs = [tx({ amount: 20000, date: '26/05/2026' })];
+  const now = date(2026, 6, 10);
+  const period = payCycle(25, now);
+  const before = computeStats(user, txs, now, period);
+  assert.equal(before.left, 80000);
+  // The user really has ₦95,000: ₦15,000 the estimate couldn't see.
+  const check = makeBalanceCheck(95000, before.estimateLeft, period, now);
+  assert.equal(check.correction, 15000);
+  const after = computeStats({ ...user, balanceCheck: check }, txs, now, period);
+  assert.equal(after.left, 95000);
+  // Spending after the check still comes off the corrected figure.
+  const more = computeStats({ ...user, balanceCheck: check }, [...txs, tx({ amount: 5000, date: '05/06/2026' })], now, period);
+  assert.equal(more.left, 90000);
+  // At the next payday the correction no longer applies.
+  const later = date(2026, 6, 26);
+  assert.equal(computeStats({ ...user, balanceCheck: check }, [], later, payCycle(25, later)).correction, 0);
 });
 
 test('burn rate uses days elapsed, not a flat 30', () => {

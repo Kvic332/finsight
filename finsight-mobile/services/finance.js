@@ -93,6 +93,31 @@ export function payCycle(salaryDay, now = new Date()) {
   return { start, end, hasPayday, length: days(start, end), elapsed: days(start, today) + 1, daysToGo: days(today, end) };
 }
 
+// Share of the declared income that counts as the salary having arrived.
+const SALARY_SEEN_SHARE = 0.5;
+
+const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// A correction the user made by entering their real balance. It covers what the
+// estimate can't see, such as money carried over from before payday, cash or a
+// missed alert, and applies only to the pay period it was made in.
+function balanceCorrectionFor(user, range) {
+  const check = user?.balanceCheck;
+  if (!check || typeof check.correction !== 'number' || !range?.start) return 0;
+  return check.periodStart === dayKey(range.start) ? check.correction : 0;
+}
+
+// What to store when the user says how much they really have now. The estimate
+// passed in is computeStats(...).estimateLeft, before any earlier correction.
+export function makeBalanceCheck(realBalance, estimateLeft, period, now = new Date()) {
+  return {
+    periodStart: dayKey(period.start),
+    correction: Math.round(realBalance - estimateLeft),
+    realBalance: Math.round(realBalance),
+    checkedAt: now.toISOString(),
+  };
+}
+
 export function runwayDays(left, dailySpend) {
   if (!(dailySpend > 0)) return null;
   return Math.min(CAP_DAYS, Math.floor(left / dailySpend));
@@ -118,11 +143,17 @@ export function computeStats(user, transactions, now = new Date(), period = null
   const { contributed, withdrawn, saved: totalSaved } = savingsFlows(monthTxs);
   const totalSpend = sumAmounts(spending);
   const receivedIncome = sumAmounts(monthTxs.filter(t => t.type === 'credit' && t.cat === 'Income'));
-  // The higher of the declared income and what actually arrived, so one small
-  // credit can't replace a monthly salary before it lands.
-  const income = Math.max(user?.income || 0, receivedIncome);
+  const declared = Number(user?.income) || 0;
+  // Once salary-sized money has arrived (at least half the declared income), what
+  // actually came in is used, even if it's less. Before then, the declared income
+  // stands in, so one small credit can't replace a salary that hasn't landed yet.
+  const salarySeen = declared > 0 && receivedIncome >= declared * SALARY_SEEN_SHARE;
+  const income = declared > 0 ? (salarySeen ? receivedIncome : declared) : receivedIncome;
 
-  const left = Math.max(0, income - totalSpend - contributed + withdrawn);
+  // The estimate before any correction to the user's real balance.
+  const estimateLeft = income - totalSpend - contributed + withdrawn;
+  const correction = balanceCorrectionFor(user, range);
+  const left = Math.max(0, estimateLeft + correction);
 
   const dailySpend = totalSpend / Math.max(MIN_BURN_WINDOW_DAYS, daysSoFar);
   const daysLeft = runwayDays(left, dailySpend);
@@ -172,7 +203,7 @@ export function computeStats(user, transactions, now = new Date(), period = null
   });
 
   return {
-    income, left, totalSpend, totalSaved, savingsRate, dailySpend,
+    income, salarySeen, estimateLeft, correction, left, totalSpend, totalSaved, savingsRate, dailySpend,
     daysLeft, daysLeftIfCut20,
     daysUntilSalary: salaryIn, projectedOnPayday, willMakePayday,
     categoryTotals, spendTrend, finScore,
