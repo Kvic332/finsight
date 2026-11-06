@@ -27,7 +27,7 @@ If you turn on bank alert capture, Android gives FinSight access to your notific
 | Asking ARIA a question | Your question, and a summary of your finances: name, income, recent transactions, budgets, goals, debts and banks | Our server (Supabase) and our AI provider (Anthropic) |
 | Using ARIA | An anonymous ID or your account ID, and a daily message count, to apply usage limits | Google Firebase and Supabase |
 | Creating a cloud account | Your name, email and password | Google Firebase |
-| Backing up | Your transactions, budgets, goals, debts, profile and progress | Google Firebase |
+| Backing up, when you tap Back up now, and automatically about once a day while you're signed in, if something changed. You can turn automatic backup off in Cloud backup | Your transactions, budgets, goals, debts, profile and progress | Google Firebase |
 | Being signed in | Basic usage counts, FinScore and level | Google Firebase |
 | Reading a PDF statement, after you agree | The whole PDF, including your name, account number and transactions | Our server (Supabase) and our AI provider (Anthropic) |
 | Reading a PDF statement | An anonymous ID or your account ID, and a daily count, to apply usage limits | Google Firebase and Supabase |

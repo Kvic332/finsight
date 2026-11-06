@@ -20,6 +20,7 @@ import { checkAndSendDigests } from './services/notificationService';
 import { syncBankAlerts } from './services/notificationPermission';
 import { syncDebtReminders, syncStoredDebtReminders } from './services/debtReminders';
 import { syncPaydayReminder } from './services/paydayReminder';
+import { runAutoBackup } from './services/cloudSync';
 import { isPickingMedia } from './services/appState';
 
 const Stack = createNativeStackNavigator();
@@ -72,6 +73,8 @@ export default function App() {
       }
       await syncBankAlerts();
       syncStoredDebtReminders();
+      // After the bank alerts are in, so the backup includes them.
+      runAutoBackup();
     } catch(e){
       // Never fall through to onboarding here: it would overwrite the unreadable data.
       if (e?.code === DATA_LOCKED) setDataLocked(true);
@@ -95,7 +98,7 @@ export default function App() {
     }
     // Coming to foreground
     if (next === 'active') {
-      syncBankAlerts();
+      syncBankAlerts().then(runAutoBackup);
       const bg = backgroundedAt.current;
       backgroundedAt.current = null;
       // If we recorded a background time and a picker isn't responsible, check timeout.

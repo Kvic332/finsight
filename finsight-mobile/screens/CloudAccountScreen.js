@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, View,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, View,
 } from 'react-native';
+import { autoBackupNote } from '../services/autoBackupRules';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { space } from '../constants/tokens';
 import {
@@ -9,7 +10,8 @@ import {
   useToast,
 } from '../components/ui';
 import {
-  backupToCloud, deleteAccount, getCloudProfile, onAuthChange, resetPassword, restoreFromCloud, signIn, signOut, signUp,
+  backupToCloud, deleteAccount, getBackupState, getCloudProfile, isAutoBackupOn, onAuthChange, resetPassword,
+  restoreFromCloud, setAutoBackup, signIn, signOut, signUp,
 } from '../services/cloudSync';
 
 const AUTH_ERRORS = {
@@ -97,6 +99,13 @@ export default function CloudAccountScreen({ onBack }) {
   const [confirmRestore, setConfirmRestore] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [autoOn, setAutoOn] = useState(true);
+  const [backupState, setBackupState] = useState(null);
+
+  async function refreshAuto() {
+    setAutoOn(await isAutoBackupOn());
+    setBackupState(await getBackupState());
+  }
 
   useEffect(() => onAuthChange(async u => {
     setUser(u);
@@ -104,8 +113,14 @@ export default function CloudAccountScreen({ onBack }) {
       const p = await getCloudProfile().catch(() => null);
       setProfile(p);
       setLastSync(p?.lastBackup?.toDate?.()?.toLocaleDateString('en-NG') || null);
+      refreshAuto().catch(() => {});
     }
   }), []);
+
+  async function toggleAuto(on) {
+    setAutoOn(on);
+    await setAutoBackup(on);
+  }
 
   async function submit() {
     const next = {
@@ -144,6 +159,7 @@ export default function CloudAccountScreen({ onBack }) {
     try {
       await backupToCloud();
       setLastSync(new Date().toLocaleDateString('en-NG'));
+      refreshAuto().catch(() => {});
       toast.show('Backup complete', { tone: 'success' });
     } catch (err) {
       toast.show("Couldn't back up. Check your connection and try again.", { tone: 'error' });
@@ -157,6 +173,7 @@ export default function CloudAccountScreen({ onBack }) {
     try {
       const { date } = await restoreFromCloud();
       setRestored(date);
+      refreshAuto().catch(() => {});
     } catch (err) {
       toast.show(err.message || "Couldn't restore your backup. Try again.", { tone: 'error' });
     }
@@ -208,6 +225,22 @@ export default function CloudAccountScreen({ onBack }) {
             <Button full title="Restore from backup" variant="secondary" disabled={syncing} onPress={() => setConfirmRestore(true)} />
             {syncing ? <ActivityIndicator color={c.accent} accessibilityLabel="Working" /> : null}
           </View>
+
+          <Card style={{ padding: space.lg, gap: space.xs }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+              <Text variant="bodyStrong" family="bold" style={{ flex: 1 }}>Automatic backup</Text>
+              <Switch
+                value={autoOn}
+                onValueChange={toggleAuto}
+                accessibilityLabel="Automatic backup"
+                trackColor={{ false: c.lineStrong, true: c.accent }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
+            <Text variant="label" family="regular" color="inkMuted">
+              {autoBackupNote({ enabled: autoOn, uid: user.uid, state: backupState })}
+            </Text>
+          </Card>
 
           <Card style={{ padding: space.lg, gap: space.xs }}>
             <Text variant="bodyStrong" family="bold">What's stored</Text>
