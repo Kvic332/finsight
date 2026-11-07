@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StatusBar, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StatusBar, useWindowDimensions, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, space } from '../constants/tokens';
@@ -19,7 +19,9 @@ import { checkAchievements, updateStreak } from '../services/notificationService
 import { awardXP, getXPState } from '../services/xpService';
 import { syncFinScore, syncXP, trackEvent } from '../services/cloudSync';
 import { isTrackingOnly } from '../services/usage';
-import { businessMonth, hasBusiness } from '../services/business';
+import { homeCards, startingCard } from '../services/homeCards';
+import { isBusinessTx } from '../services/categories';
+import { businessMonth } from '../services/business';
 import { loadOwed } from '../services/owedReminders';
 import { owedSummary } from '../services/receivables';
 
@@ -75,10 +77,10 @@ function Runway({ plan }) {
   );
 }
 
-// For someone only tracking spending: what went out this month, how the pace
-// compares with last month, and where the money went.
-function TrackingSummary({ stats, transactions, actions }) {
-  const { c } = useTheme();
+const HOME_CARD_KEY = 'finsight_home_card';
+
+// What went out this month and how the pace compares with last month.
+function SpendingCardBody({ stats }) {
   const daysSoFar = new Date().getDate();
   const perDay = stats.totalSpend / Math.max(1, daysSoFar);
   const change = stats.spendChange === null ? null : Math.round((stats.spendChange - 1) * 100);
@@ -86,39 +88,116 @@ function TrackingSummary({ stats, transactions, actions }) {
     ? (stats.totalSpend ? 'Nothing from last month to compare with yet' : 'Nothing recorded this month yet')
     : change === 0 ? 'The same pace as last month'
       : change < 0 ? `${-change}% less than last month's pace` : `${change}% more than last month's pace`;
-  const categories = Object.entries(stats.categoryTotals).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  const top = Object.entries(stats.categoryTotals).sort((a, b) => b[1] - a[1])[0];
   return (
     <>
-      <Card style={{ padding: space.xl }}>
-        <Text variant="label" family="medium" color="inkMuted">Spent this month</Text>
-        <Money value={stats.totalSpend} variant="display" family="bold" adjustsFontSizeToFit style={{ fontSize: 40, lineHeight: 50, letterSpacing: -1 }} />
-        <Text variant="label" family="medium" color="inkMuted">{`About ${formatMoney(Math.round(perDay))} a day`}</Text>
-        <Text variant="label" family="semibold" color={change === null ? 'inkMuted' : change <= 0 ? 'positive' : 'negative'} style={{ marginTop: space.xs }}>{pace}</Text>
-        <View style={{ flexDirection: 'row', marginTop: space.lg + 2 }}>{actions}</View>
-      </Card>
-      {categories.length ? (
-        <Card style={{ padding: space.lg, gap: space.md }}>
-          <Text variant="label" family="semibold" color="inkMuted">Where it went this month</Text>
-          {categories.map(([cat, amount]) => (
-            <View key={cat} style={{ gap: space.xs }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-                <CategoryTile category={cat} size={32} />
-                <Text variant="bodyStrong" family="semibold" style={{ flex: 1 }}>{cat}</Text>
-                <Text variant="caption" color="inkMuted">{`${Math.round((amount / stats.totalSpend) * 100)}%`}</Text>
-                <Money value={amount} family="bold" />
-              </View>
-              <View style={{ height: 6, borderRadius: radius.pill, backgroundColor: c.sunken, overflow: 'hidden' }}>
-                <View style={{ width: `${Math.max(2, (amount / stats.totalSpend) * 100)}%`, height: '100%', backgroundColor: c.accent }} />
-              </View>
-            </View>
-          ))}
-          <Text variant="caption" color="inkMuted">{weeklySummary(transactions).text}</Text>
-          {stats.biggest ? (
-            <Text variant="caption" color="inkMuted">{`Biggest single expense: ${stats.biggest.desc}, ${formatMoney(stats.biggest.amount)}`}</Text>
-          ) : null}
-        </Card>
-      ) : null}
+      <Text variant="label" family="medium" color="inkMuted">Spent this month</Text>
+      <Money value={stats.totalSpend} variant="display" family="bold" adjustsFontSizeToFit style={{ fontSize: 40, lineHeight: 50, letterSpacing: -1 }} />
+      <Text variant="label" family="medium" color="inkMuted">{`About ${formatMoney(Math.round(perDay))} a day${top ? `, most on ${top[0]}` : ''}`}</Text>
+      <Text variant="label" family="semibold" color={change === null ? 'inkMuted' : change <= 0 ? 'positive' : 'negative'} style={{ marginTop: space.xs }}>{pace}</Text>
     </>
+  );
+}
+
+// Where the money went this month, for someone only tracking spending.
+function WhereItWent({ stats, transactions }) {
+  const { c } = useTheme();
+  const categories = Object.entries(stats.categoryTotals).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  if (!categories.length) return null;
+  return (
+    <Card style={{ padding: space.lg, gap: space.md }}>
+      <Text variant="label" family="semibold" color="inkMuted">Where it went this month</Text>
+      {categories.map(([cat, amount]) => (
+        <View key={cat} style={{ gap: space.xs }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+            <CategoryTile category={cat} size={32} />
+            <Text variant="bodyStrong" family="semibold" style={{ flex: 1 }}>{cat}</Text>
+            <Text variant="caption" color="inkMuted">{`${Math.round((amount / stats.totalSpend) * 100)}%`}</Text>
+            <Money value={amount} family="bold" />
+          </View>
+          <View style={{ height: 6, borderRadius: radius.pill, backgroundColor: c.sunken, overflow: 'hidden' }}>
+            <View style={{ width: `${Math.max(2, (amount / stats.totalSpend) * 100)}%`, height: '100%', backgroundColor: c.accent }} />
+          </View>
+        </View>
+      ))}
+      <Text variant="caption" color="inkMuted">{weeklySummary(transactions).text}</Text>
+      {stats.biggest ? (
+        <Text variant="caption" color="inkMuted">{`Biggest single expense: ${stats.biggest.desc}, ${formatMoney(stats.biggest.amount)}`}</Text>
+      ) : null}
+    </Card>
+  );
+}
+
+// The top cards, side by side. Each snaps into place, the next one peeks in at
+// the edge so it's clear there's more, and dots show which one is open.
+function CardCarousel({ cards, render, onChange }) {
+  const { c } = useTheme();
+  const { width } = useWindowDimensions();
+  const scrollRef = useRef(null);
+  const [index, setIndex] = useState(0);
+  const [ready, setReady] = useState(false);
+  const gap = space.md;
+  const peek = cards.length > 1 ? space.xl : 0;
+  const cardWidth = width - space.xl * 2 - peek;
+  const step = cardWidth + gap;
+  const keys = cards.map(card => card.key).join(',');
+
+  // Opens on the card last looked at.
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(HOME_CARD_KEY).then(saved => {
+      if (cancelled) return;
+      const start = Math.max(0, cards.findIndex(card => card.key === startingCard(cards.map(k => k.key), saved)));
+      setIndex(start);
+      requestAnimationFrame(() => scrollRef.current?.scrollTo({ x: start * step, animated: false }));
+      setReady(true);
+    }).catch(() => setReady(true));
+    return () => { cancelled = true; };
+  }, [keys, step]);
+
+  // Only a swipe by the user is remembered. Scrolls the app makes itself, such as
+  // when the cards load or change, must never change which card opens next time.
+  const swiped = useRef(false);
+
+  function settle(x) {
+    const next = Math.max(0, Math.min(cards.length - 1, Math.round(x / step)));
+    if (next !== index) setIndex(next);
+    if (!swiped.current) return;
+    swiped.current = false;
+    onChange?.(cards[next].key);
+    AsyncStorage.setItem(HOME_CARD_KEY, cards[next].key).catch(() => {});
+  }
+
+  return (
+    <View style={{ gap: space.sm, opacity: ready ? 1 : 0 }}>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        decelerationRate="fast"
+        snapToOffsets={cards.map((_, i) => i * step)}
+        disableIntervalMomentum
+        contentContainerStyle={{ paddingHorizontal: space.xl, gap }}
+        onScrollBeginDrag={() => { swiped.current = true; }}
+        onMomentumScrollEnd={e => settle(e.nativeEvent.contentOffset.x)}
+      >
+        {cards.map((card, i) => (
+          <View key={card.key} style={{ width: cardWidth }} accessibilityLabel={`${card.label}, card ${i + 1} of ${cards.length}`}>
+            {render(card)}
+          </View>
+        ))}
+      </ScrollView>
+      {cards.length > 1 ? (
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }} accessibilityLabel={`Showing ${cards[index]?.label}. Swipe for more`}>
+          {cards.map((card, i) => (
+            <View key={card.key} style={{
+              width: i === index ? 18 : 6, height: 6, borderRadius: 3,
+              backgroundColor: i === index ? c.accent : c.lineStrong,
+            }} />
+          ))}
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -177,8 +256,8 @@ export default function HomeScreen({ navigation, user, setUser }) {
   const firstName = user?.name?.split(' ')[0] || '';
   const plan = computePaydayPlan(user, transactions);
   const tracking = isTrackingOnly(user);
-  // The calendar month, for someone only tracking spending.
-  const month = tracking ? computeStats(user, transactions) : null;
+  // The calendar month, for the spending card.
+  const month = computeStats(user, transactions);
   // The pay-period score, so Home and Insights always show the same number.
   const { finScore } = plan;
 
@@ -188,7 +267,7 @@ export default function HomeScreen({ navigation, user, setUser }) {
     const [dRaw, bRaw] = await Promise.all([AsyncStorage.getItem('finsight_debts'), AsyncStorage.getItem('finsight_budgets')]);
     setPlanData({ debts: dRaw ? JSON.parse(dRaw) : [], budgets: bRaw ? JSON.parse(bRaw) : [] });
     const w = await loadWallets();
-    if (hasBusiness(user)) loadOwed().then(setOwed).catch(() => {});
+    loadOwed().then(setOwed).catch(() => {});
     setWallets(w);
     if (w.length) currentRates().then(saved => setFxRates(saved?.rates || null)).catch(() => {});
     const updated = await updateStreak();
@@ -310,44 +389,94 @@ export default function HomeScreen({ navigation, user, setUser }) {
           </Pressable>
         </View>
 
-        <View style={{ paddingHorizontal: space.xl, gap: space.md + 2 }}>
-          {tracking ? (
-            <TrackingSummary
-              stats={month}
-              transactions={transactions}
-              actions={(
-                <>
-                  <ActionButton icon="add" label="Add" onPress={() => navigation.navigate('Add')} />
-                  <ActionButton icon="download-outline" label="Import" onPress={() => setShowImport(true)} />
-                  <ActionButton icon="pie-chart-outline" label="Budget" onPress={() => navigation.navigate('Plan')} />
-                  <ActionButton icon="chatbubble-ellipses-outline" label="Ask ARIA" onPress={() => navigation.navigate('ARIA')} />
-                </>
-              )}
-            />
-          ) : (
-          <>
-          <Card style={{ padding: space.xl }}>
-            <Text variant="label" family="medium" color="inkMuted">
-              {plan.cycle.hasPayday ? 'Left until payday' : 'Left this month'}
-            </Text>
-            <Money value={plan.left} variant="display" family="bold" adjustsFontSizeToFit style={{ fontSize: 40, lineHeight: 50, letterSpacing: -1 }} />
-            <Text variant="label" family="medium" color="inkMuted">{subtitle}</Text>
-            <Pressable onPress={openBalanceCheck} accessibilityRole="button" hitSlop={8} style={{ marginTop: space.xs, flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
-              <Icon name={check ? 'checkmark-circle' : 'scale-outline'} size={16} color="accent" />
-              <Text variant="caption" family="semibold" color="accent">
-                {check
-                  ? `Matched to your real balance on ${new Date(check.checkedAt).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })}`
-                  : 'Match my real balance'}
-              </Text>
+        {(() => {
+          const biz = businessMonth(transactions);
+          const due = owedSummary(owed);
+          const keys = homeCards(user, {
+            hasIncome: plan.income > 0,
+            hasBusinessMoney: transactions.some(isBusinessTx),
+            walletCount: wallets.length,
+          });
+          const labels = { personal: plan.cycle.hasPayday ? 'Left until payday' : 'Left this month', business: 'Business profit', spending: 'Spent this month', foreign: 'Foreign accounts' };
+          const cards = keys.map(key => ({ key, label: labels[key] }));
+          const cardStyle = { padding: space.xl, flex: 1, minHeight: 196 };
+          const more = (text, onPress) => (
+            <Pressable onPress={onPress} accessibilityRole="button" hitSlop={8} style={{ marginTop: 'auto', paddingTop: space.sm, flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+              <Text variant="caption" family="semibold" color="accent">{text}</Text>
+              <Icon name="chevron-forward" size={14} color="accent" />
             </Pressable>
-            <View style={{ flexDirection: 'row', marginTop: space.lg + 2 }}>
-              <ActionButton icon="add" label="Add" onPress={() => navigation.navigate('Add')} />
-              <ActionButton icon="download-outline" label="Import" onPress={() => setShowImport(true)} />
-              <ActionButton icon="pie-chart-outline" label="Budget" onPress={() => navigation.navigate('Plan')} />
-              <ActionButton icon="chatbubble-ellipses-outline" label="Ask ARIA" onPress={() => navigation.navigate('ARIA')} />
-            </View>
+          );
+          return (
+            <CardCarousel
+              cards={cards}
+              render={card => {
+                if (card.key === 'personal') {
+                  return (
+                    <Card style={cardStyle}>
+                      <Text variant="label" family="medium" color="inkMuted">{card.label}</Text>
+                      <Money value={plan.left} variant="display" family="bold" adjustsFontSizeToFit style={{ fontSize: 40, lineHeight: 50, letterSpacing: -1 }} />
+                      <Text variant="label" family="medium" color="inkMuted">{subtitle}</Text>
+                      <Pressable onPress={openBalanceCheck} accessibilityRole="button" hitSlop={8} style={{ marginTop: 'auto', paddingTop: space.sm, flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                        <Icon name={check ? 'checkmark-circle' : 'scale-outline'} size={16} color="accent" />
+                        <Text variant="caption" family="semibold" color="accent">
+                          {check
+                            ? `Matched to your real balance on ${new Date(check.checkedAt).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })}`
+                            : 'Match my real balance'}
+                        </Text>
+                      </Pressable>
+                    </Card>
+                  );
+                }
+                if (card.key === 'business') {
+                  return (
+                    <Card style={cardStyle} onPress={() => navigation.navigate('Business')} accessibilityLabel={`Business profit this month ${formatMoney(biz.profit)}. Open your business`}>
+                      <Text variant="label" family="medium" color="inkMuted">Business profit this month</Text>
+                      <Money value={biz.profit} variant="display" family="bold" tone={biz.profit < 0 ? 'negative' : 'ink'} adjustsFontSizeToFit style={{ fontSize: 40, lineHeight: 50, letterSpacing: -1 }} />
+                      <Text variant="label" family="medium" color="inkMuted">
+                        {biz.count ? `Sales ${formatMoney(biz.sales + biz.otherIn)} · Costs ${formatMoney(biz.costs)}` : 'Record sales and costs to see your profit'}
+                      </Text>
+                      {due.count ? (
+                        <Text variant="label" family="semibold" color={due.late ? 'negative' : 'inkMuted'} style={{ marginTop: space.xs }}>
+                          {`Owed to you: ${formatMoney(due.total)}${due.late ? `, ${due.late} late` : ''}`}
+                        </Text>
+                      ) : null}
+                      {more('Open your business', () => navigation.navigate('Business'))}
+                    </Card>
+                  );
+                }
+                if (card.key === 'foreign') {
+                  return (
+                    <Card style={cardStyle} onPress={() => navigation.navigate('ForeignMoney')} accessibilityLabel="Foreign accounts. Open foreign money">
+                      <Text variant="label" family="medium" color="inkMuted">Foreign accounts, in naira</Text>
+                      <Money value={walletsInNaira(wallets, transactions, fxRates, user?.fxOwnRates)} variant="display" family="bold" adjustsFontSizeToFit style={{ fontSize: 40, lineHeight: 50, letterSpacing: -1 }} />
+                      <Text variant="label" family="medium" color="inkMuted" numberOfLines={2}>
+                        {wallets.slice(0, 3).map(w => `${w.name} ${formatForeign(walletBalance(w, transactions), w.currency)}`).join(' · ')}
+                      </Text>
+                      {more('Rates and accounts', () => navigation.navigate('ForeignMoney'))}
+                    </Card>
+                  );
+                }
+                return (
+                  <Card style={cardStyle} onPress={() => navigation.navigate('Insights')} accessibilityLabel={`Spent this month ${formatMoney(month.totalSpend)}. See your insights`}>
+                    <SpendingCardBody stats={month} />
+                    {more('See where it went', () => navigation.navigate('Insights'))}
+                  </Card>
+                );
+              }}
+            />
+          );
+        })()}
+
+        <View style={{ paddingHorizontal: space.xl, gap: space.md + 2, marginTop: space.md }}>
+          <Card style={{ paddingVertical: space.md, paddingHorizontal: space.sm, flexDirection: 'row' }}>
+            <ActionButton icon="add" label="Add" onPress={() => navigation.navigate('Add')} />
+            <ActionButton icon="download-outline" label="Import" onPress={() => setShowImport(true)} />
+            <ActionButton icon="pie-chart-outline" label="Budget" onPress={() => navigation.navigate('Plan')} />
+            <ActionButton icon="chatbubble-ellipses-outline" label="Ask ARIA" onPress={() => navigation.navigate('ARIA')} />
           </Card>
 
+          {tracking ? <WhereItWent stats={month} transactions={transactions} /> : (
+          <>
           <BrokeClock plan={plan} onSetPayday={() => navigation.navigate('Settings')} />
 
           {nextPay.pay ? (
@@ -375,35 +504,6 @@ export default function HomeScreen({ navigation, user, setUser }) {
           ) : null}
           </>
           )}
-
-          {hasBusiness(user) ? (() => {
-            const biz = businessMonth(transactions);
-            return (
-              <Card onPress={() => navigation.navigate('Business')} accessibilityLabel={`Your business this month. Profit ${formatMoney(biz.profit)}. Open business`} style={{ padding: space.lg, gap: space.sm }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-                  <IconTile name="storefront-outline" tone="accent" />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text variant="label" family="medium" color="inkMuted">Business profit this month</Text>
-                    <Money value={biz.profit} variant="heading" family="bold" tone={biz.profit < 0 ? 'negative' : 'ink'} />
-                  </View>
-                  <Icon name="chevron-forward" size={18} color="inkSubtle" />
-                </View>
-                <Text variant="caption" color="inkMuted">
-                  {biz.count
-                    ? `Sales ${formatMoney(biz.sales + biz.otherIn)} · Costs ${formatMoney(biz.costs)}${biz.ownerPay ? ` · Paid yourself ${formatMoney(biz.ownerPay)}` : ''}`
-                    : 'Record sales and costs to see your profit. Business money stays out of your personal figures.'}
-                </Text>
-                {(() => {
-                  const due = owedSummary(owed);
-                  return due.count ? (
-                    <Text variant="caption" family="semibold" color={due.late ? 'negative' : 'inkMuted'}>
-                      {`Owed to you: ${formatMoney(due.total)} from ${due.count === 1 ? '1 customer' : `${due.count} customers`}${due.late ? `, ${due.late} late` : ''}`}
-                    </Text>
-                  ) : null;
-                })()}
-              </Card>
-            );
-          })() : null}
 
           <Pressable
             onPress={() => navigation.navigate('Insights')}
@@ -434,21 +534,6 @@ export default function HomeScreen({ navigation, user, setUser }) {
               ))}
               <Text variant="caption" color="inkMuted">
                 Real balances from your bank. "Left until payday" is FinSight's estimate from your income and spending, so the two can differ.
-              </Text>
-            </Card>
-          ) : null}
-
-          {wallets.length ? (
-            <Card onPress={() => navigation.navigate('ForeignMoney')} accessibilityLabel="Foreign accounts. Open foreign money" style={{ padding: space.lg, gap: space.sm }}>
-              <Text variant="label" family="semibold" color="inkMuted">Foreign accounts</Text>
-              {wallets.slice(0, 3).map(w => (
-                <View key={w.id} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-                  <Text variant="bodyStrong" family="semibold" style={{ flex: 1 }} numberOfLines={1}>{w.name}</Text>
-                  <Text variant="bodyStrong" family="bold">{formatForeign(walletBalance(w, transactions), w.currency)}</Text>
-                </View>
-              ))}
-              <Text variant="caption" color="inkMuted">
-                {`Worth about ${formatMoney(walletsInNaira(wallets, transactions, fxRates, user?.fxOwnRates))} at today's rates.`}
               </Text>
             </Card>
           ) : null}
