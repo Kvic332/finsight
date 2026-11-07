@@ -7,7 +7,7 @@ import {
   Badge, Button, Card, CategoryTile, EmptyState, Gradient, Icon, Input, ListRow, Money, Sheet, Text, tapFeedback,
   useTheme, useToast, IconTile,
 } from '../components/ui';
-import { computePaydayPlan, expectedPay, makeBalanceCheck, paydaysOf, parseTxDate } from '../services/finance';
+import { computePaydayPlan, computeStats, weeklySummary, expectedPay, makeBalanceCheck, paydaysOf, parseTxDate } from '../services/finance';
 import { foreignNote, formatForeign, walletBalance, walletsInNaira } from '../services/currency';
 import { currentRates, loadWallets } from '../services/fxStore';
 import { latestBalances } from '../services/balances';
@@ -18,6 +18,7 @@ import { loadTransactions } from '../services/transactions';
 import { checkAchievements, updateStreak } from '../services/notificationService';
 import { awardXP, getXPState } from '../services/xpService';
 import { syncFinScore, syncXP, trackEvent } from '../services/cloudSync';
+import { isTrackingOnly } from '../services/usage';
 
 function nextPayLabel(period) {
   if (!period.hasPayday) return 'Your plan for this month';
@@ -68,6 +69,53 @@ function Runway({ plan }) {
         );
       })}
     </View>
+  );
+}
+
+// For someone only tracking spending: what went out this month, how the pace
+// compares with last month, and where the money went.
+function TrackingSummary({ stats, transactions, actions }) {
+  const { c } = useTheme();
+  const daysSoFar = new Date().getDate();
+  const perDay = stats.totalSpend / Math.max(1, daysSoFar);
+  const change = stats.spendChange === null ? null : Math.round((stats.spendChange - 1) * 100);
+  const pace = change === null
+    ? (stats.totalSpend ? 'Nothing from last month to compare with yet' : 'Nothing recorded this month yet')
+    : change === 0 ? 'The same pace as last month'
+      : change < 0 ? `${-change}% less than last month's pace` : `${change}% more than last month's pace`;
+  const categories = Object.entries(stats.categoryTotals).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  return (
+    <>
+      <Card style={{ padding: space.xl }}>
+        <Text variant="label" family="medium" color="inkMuted">Spent this month</Text>
+        <Money value={stats.totalSpend} variant="display" family="bold" adjustsFontSizeToFit style={{ fontSize: 40, lineHeight: 50, letterSpacing: -1 }} />
+        <Text variant="label" family="medium" color="inkMuted">{`About ${formatMoney(Math.round(perDay))} a day`}</Text>
+        <Text variant="label" family="semibold" color={change === null ? 'inkMuted' : change <= 0 ? 'positive' : 'negative'} style={{ marginTop: space.xs }}>{pace}</Text>
+        <View style={{ flexDirection: 'row', marginTop: space.lg + 2 }}>{actions}</View>
+      </Card>
+      {categories.length ? (
+        <Card style={{ padding: space.lg, gap: space.md }}>
+          <Text variant="label" family="semibold" color="inkMuted">Where it went this month</Text>
+          {categories.map(([cat, amount]) => (
+            <View key={cat} style={{ gap: space.xs }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+                <CategoryTile category={cat} size={32} />
+                <Text variant="bodyStrong" family="semibold" style={{ flex: 1 }}>{cat}</Text>
+                <Text variant="caption" color="inkMuted">{`${Math.round((amount / stats.totalSpend) * 100)}%`}</Text>
+                <Money value={amount} family="bold" />
+              </View>
+              <View style={{ height: 6, borderRadius: radius.pill, backgroundColor: c.sunken, overflow: 'hidden' }}>
+                <View style={{ width: `${Math.max(2, (amount / stats.totalSpend) * 100)}%`, height: '100%', backgroundColor: c.accent }} />
+              </View>
+            </View>
+          ))}
+          <Text variant="caption" color="inkMuted">{weeklySummary(transactions).text}</Text>
+          {stats.biggest ? (
+            <Text variant="caption" color="inkMuted">{`Biggest single expense: ${stats.biggest.desc}, ${formatMoney(stats.biggest.amount)}`}</Text>
+          ) : null}
+        </Card>
+      ) : null}
+    </>
   );
 }
 
@@ -124,6 +172,9 @@ export default function HomeScreen({ navigation, user, setUser }) {
 
   const firstName = user?.name?.split(' ')[0] || '';
   const plan = computePaydayPlan(user, transactions);
+  const tracking = isTrackingOnly(user);
+  // The calendar month, for someone only tracking spending.
+  const month = tracking ? computeStats(user, transactions) : null;
   // The pay-period score, so Home and Insights always show the same number.
   const { finScore } = plan;
 
@@ -255,6 +306,21 @@ export default function HomeScreen({ navigation, user, setUser }) {
         </View>
 
         <View style={{ paddingHorizontal: space.xl, gap: space.md + 2 }}>
+          {tracking ? (
+            <TrackingSummary
+              stats={month}
+              transactions={transactions}
+              actions={(
+                <>
+                  <ActionButton icon="add" label="Add" onPress={() => navigation.navigate('Add')} />
+                  <ActionButton icon="download-outline" label="Import" onPress={() => setShowImport(true)} />
+                  <ActionButton icon="pie-chart-outline" label="Budget" onPress={() => navigation.navigate('Plan')} />
+                  <ActionButton icon="chatbubble-ellipses-outline" label="Ask ARIA" onPress={() => navigation.navigate('ARIA')} />
+                </>
+              )}
+            />
+          ) : (
+          <>
           <Card style={{ padding: space.xl }}>
             <Text variant="label" family="medium" color="inkMuted">
               {plan.cycle.hasPayday ? 'Left until payday' : 'Left this month'}
@@ -302,6 +368,8 @@ export default function HomeScreen({ navigation, user, setUser }) {
               <Text variant="label" family="semibold" color="accent">See full plan</Text>
             </Card>
           ) : null}
+          </>
+          )}
 
           <Pressable
             onPress={() => navigation.navigate('Insights')}

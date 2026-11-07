@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from './dataStore';
-import { computePeriodStats, computeStats, formatRunway, parseTxDate, savingsFlows, spendingOf } from './finance';
+import { computePeriodStats, computeStats, formatRunway, parseTxDate, savingsFlows, spendingOf, weeklySummary } from './finance';
 
 // ── Permission ────────────────────────────────────────────────────────────────
 export async function requestNotificationPermission() {
@@ -160,13 +160,15 @@ export async function sendWeeklyDigestNow(userName = 'there') {
     const streakBadge = streak.count >= 7 ? '🔥' : streak.count >= 3 ? '⚡' : '🌱';
     const dateStr = new Date().toLocaleDateString('en-NG', { month: 'short', day: 'numeric' });
 
-    const body =
-      `Spent:        ${formatAmount(weekSpend)}\n` +
-      `Saved:        ${formatAmount(weekSaved)}\n` +
-      `Top category: ${topCat ? `${topCat[0]} ${formatAmount(topCat[1])}` : 'None'}\n` +
-      `Broke Clock:  ${formatRunway(stats.daysLeft)} (${brokeArrow})\n` +
-      `Streak:       ${streak.count}d ${streakBadge}\n\n` +
-      `ARIA: ${ariaLine}`;
+    // Someone only tracking spending gets the spending summary without income
+    // advice or the Broke Clock, which need an income.
+    const summary = weeklySummary(allTxs).text;
+    const body = user.usage === 'tracking'
+      ? `${summary}\nStreak: ${streak.count}d ${streakBadge}`
+      : `${summary}\n` +
+        `Broke Clock:  ${formatRunway(stats.daysLeft)} (${brokeArrow})\n` +
+        `Streak:       ${streak.count}d ${streakBadge}\n\n` +
+        `ARIA: ${ariaLine}`;
 
     await Notifications.scheduleNotificationAsync({
       content: {

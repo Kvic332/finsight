@@ -222,12 +222,32 @@ export function computeStats(user, transactions, now = new Date(), period = null
   const categoryTotals = {};
   spending.forEach(t => { categoryTotals[t.cat] = (categoryTotals[t.cat] || 0) + t.amount; });
 
+  // The same length of time just before this period, to compare spending with.
+  const lengthDays = Math.round((range.end - range.start) / 86400000);
+  const previous = { start: new Date(range.start.getFullYear(), range.start.getMonth(), range.start.getDate() - lengthDays), end: range.start };
+  const previousTxs = transactions.filter(t => inPeriod(t.date, previous));
+  const previousSpend = sumAmounts(spendingOf(previousTxs));
+  // Spending per day so far, against the whole of the period before.
+  const spendChange = previousSpend > 0 && totalSpend > 0
+    ? (totalSpend / daysSoFar) / (previousSpend / lengthDays)
+    : null;
+  const biggest = [...spending].sort((a, b) => b.amount - a.amount)[0] || null;
+
   // ── FinScore ───────────────────────────────────────────────────────────────
-  // Spend discipline: ratio 0 → 100, ratio 1.0 → 17, ratio ≥ 1.2 → 0
+  // Without an income to measure against, as for someone only tracking spending,
+  // spending is compared with the period before, and saving with what was spent.
+  const scoreMode = user?.usage === 'tracking' || !(income > 0) ? 'spending' : 'income';
+  const saveShare = totalSpend + totalSaved > 0 ? Math.round((totalSaved / (totalSpend + totalSaved)) * 100) : 0;
+  // Spend discipline: ratio 0 → 100, ratio 1.0 → 17, ratio ≥ 1.2 → 0. Without income:
+  // spending at most 90% of last period's pace scores 100, the same pace 85, half as
+  // much again 10, and with nothing to compare yet, a neutral 70.
   const spendRatio = income > 0 ? totalSpend / income : 1;
-  const spendScore = Math.max(0, Math.min(100, Math.round((1.2 - spendRatio) / 1.2 * 100)));
-  // Savings rate: saving 20% or more scores 100
-  const saveScore = Math.min(100, savingsRate * 5);
+  const spendScore = scoreMode === 'income'
+    ? Math.max(0, Math.min(100, Math.round((1.2 - spendRatio) / 1.2 * 100)))
+    : spendChange === null ? 70 : Math.max(10, Math.min(100, Math.round(100 - Math.max(0, spendChange - 0.9) * 150)));
+  // Saving 20% of income, or without income 20% of everything going out, scores 100.
+  const saveRate = scoreMode === 'income' ? savingsRate : saveShare;
+  const saveScore = Math.min(100, saveRate * 5);
   // Budget adherence: more categories, none dominating, and consistent tracking
   const catValues = Object.values(categoryTotals);
   const maxCatPct = totalSpend > 0 ? Math.max(...catValues) / totalSpend : 1;
@@ -241,7 +261,7 @@ export function computeStats(user, transactions, now = new Date(), period = null
     t.cat === 'Savings' || /cowrywise|piggyvest|invest|risevest|bamboo/i.test(t.desc || ''));
   const investScore = Math.min(100,
     (hasGoals ? 35 : 0) + (hasSavingsTx ? 45 : 0) +
-    (savingsRate >= 10 ? 20 : savingsRate >= 5 ? 10 : 0));
+    (saveRate >= 10 ? 20 : saveRate >= 5 ? 10 : 0));
   const finScore = Math.max(10, Math.min(100, Math.round(
     spendScore * 0.35 + saveScore * 0.35 + txScore * 0.15 + investScore * 0.15
   )));
@@ -260,10 +280,11 @@ export function computeStats(user, transactions, now = new Date(), period = null
     income, salarySeen, incomeVaries: varies, typicalIncome: typical, estimateLeft, correction, left, totalSpend, totalSaved, savingsRate, dailySpend,
     daysLeft, daysLeftIfCut20,
     daysUntilSalary: salaryIn, projectedOnPayday, willMakePayday,
-    categoryTotals, spendTrend, finScore,
+    categoryTotals, spendTrend, finScore, previousSpend, spendChange, biggest,
     scoreBreakdown: { spendScore, saveScore, txScore, investScore },
     // What each part of the score was worked out from, so it can be explained.
     scoreInputs: {
+      scoreMode, spendChange, previousSpend, saveShare,
       spendRatio, savingsRate, categoryCount: catValues.length, topCategoryShare: totalSpend > 0 ? maxCatPct : 0,
       trackedCount: transactions.length, hasGoals, hasSavingsTx, declaredIncome: declared,
       diversityPoints, balancePoints, trackingPoints,
@@ -296,4 +317,27 @@ export function computePaydayPlan(user, transactions, now = new Date()) {
   const cutPerDay = shortDays > 0 ? Math.ceil((dailySpend - safePerDay) / 100) * 100 : 0;
   const moneyIn = sumAmounts(transactions.filter(t => t.type === 'credit' && t.cat !== 'Savings' && inPeriod(t.date, cycle)));
   return { ...stats, cycle, safePerDay, shortDays, cutPerDay, moneyIn };
+}
+
+// The last 7 days against the 7 before, for the weekly summary.
+export function weeklySummary(transactions, now = new Date()) {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const week = { start: new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6), end: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1) };
+  const before = { start: new Date(today.getFullYear(), today.getMonth(), today.getDate() - 13), end: week.start };
+  const spentIn = range => spendingOf(transactions.filter(t => inPeriod(t.date, range)));
+  const thisWeek = spentIn(week);
+  const spent = sumAmounts(thisWeek);
+  const previous = sumAmounts(spentIn(before));
+  const byCat = {};
+  thisWeek.forEach(t => { byCat[t.cat] = (byCat[t.cat] || 0) + t.amount; });
+  const [topCat, topAmount] = Object.entries(byCat).sort((a, b) => b[1] - a[1])[0] || [null, 0];
+  const changePct = previous > 0 ? Math.round(((spent - previous) / previous) * 100) : null;
+  const saved = savingsFlows(transactions.filter(t => inPeriod(t.date, week))).saved;
+  const fmt = n => `₦${String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+  let text = spent ? `You spent ${fmt(spent)} this week` : 'Nothing spent this week';
+  if (topCat) text += `, most on ${topCat} (${fmt(topAmount)})`;
+  text += '.';
+  if (changePct !== null && spent) text += changePct === 0 ? ' The same as last week.' : changePct < 0 ? ` ${-changePct}% less than last week.` : ` ${changePct}% more than last week.`;
+  if (saved > 0) text += ` You saved ${fmt(saved)}.`;
+  return { spent, previous, changePct, topCat, topAmount, saved, text };
 }

@@ -33,6 +33,7 @@ import {
   CURRENCIES, FOREIGN_CURRENCIES, formatForeign, formatRate, isForeign, NAIRA, nairaIncome, rateFor,
 } from '../services/currency';
 import { currentRates } from '../services/fxStore';
+import { USAGES, usageLabel, usageOf } from '../services/usage';
 
 const NIGERIAN_BANKS = [
   'GTBank', 'Access Bank', 'Zenith Bank', 'First Bank', 'UBA', 'Fidelity Bank',
@@ -219,6 +220,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showBanks, setShowBanks] = useState(false);
   const [showIncome, setShowIncome] = useState(false);
+  const [showUsage, setShowUsage] = useState(false);
   const [showSalaryDay, setShowSalaryDay] = useState(false);
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [showLockTimeout, setShowLockTimeout] = useState(false);
@@ -610,6 +612,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
         </Card>
 
         <Section title="Your money">
+          <Row icon="compass-outline" title="How you use FinSight" subtitle={usageLabel(user)} onPress={() => setShowUsage(true)} />
           <Row icon="cash-outline" title="Monthly income"
             subtitle={isForeign(user?.incomeCurrency) && user?.incomeForeign
               ? `${formatForeign(Number(user.incomeForeign), user.incomeCurrency)}, about ${formatMoney(Number(user.income))}`
@@ -738,6 +741,24 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
           ))}
         </View>
       </FormModal>
+
+      <Sheet visible={showUsage} onClose={() => setShowUsage(false)} title="How you use FinSight">
+        <View accessibilityRole="radiogroup" style={{ gap: space.sm }}>
+          <Text color="inkMuted">This shapes your Home screen and your FinScore. Nothing you've recorded changes.</Text>
+          {USAGES.map(u => (
+            <Choice
+              key={u.value}
+              label={`${u.label}. ${u.about}`}
+              selected={usageOf(user) === u.value}
+              onPress={async () => {
+                await saveUser({ usage: u.value });
+                setShowUsage(false);
+                toast.show(`Set to: ${u.label}`, { tone: 'success' });
+              }}
+            />
+          ))}
+        </View>
+      </Sheet>
 
       <Sheet visible={showIncome} onClose={() => setShowIncome(false)} title="Monthly income" footer={<Button full title="Save income" onPress={saveIncome} />}>
         <View style={{ gap: space.md }}>

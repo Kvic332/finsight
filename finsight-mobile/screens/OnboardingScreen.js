@@ -8,6 +8,7 @@ import {
 import { parseAmount } from '../services/format';
 import { normalizeGoals } from '../services/plans';
 import PinScreen from './PinScreen';
+import { USAGES } from '../services/usage';
 
 const BANKS = [
   'Access Bank', 'Zenith Bank', 'GTBank', 'First Bank', 'UBA', 'Fidelity Bank', 'Sterling Bank', 'Kuda Bank',
@@ -62,15 +63,21 @@ export default function OnboardingScreen({ onComplete }) {
   const [step, setStep] = useState(0);
   const [showPin, setShowPin] = useState(false);
   const [errors, setErrors] = useState({});
-  const [data, setData] = useState({ name: '', income: '', salaryDay: '25', banks: [], goals: [] });
+  const [data, setData] = useState({ name: '', usage: 'salary', income: '', salaryDay: '25', banks: [], goals: [] });
+  const tracking = data.usage === 'tracking';
+  const business = data.usage === 'business';
+  const LAST = 4;
 
   const set = patch => setData(d => ({ ...d, ...patch }));
 
   function next() {
     if (step === 0 && !data.name.trim()) { setErrors({ name: 'Enter your name to continue' }); return; }
-    if (step === 1 && !parseAmount(data.income)) { setErrors({ income: 'Enter your monthly income, like 450,000' }); return; }
+    // Business income is optional: it varies, and recent months are used once recorded.
+    if (step === 2 && !business && !parseAmount(data.income)) { setErrors({ income: 'Enter your monthly income, like 450,000' }); return; }
     setErrors({});
-    if (step < 3) setStep(s => s + 1);
+    // Someone only tracking spending isn't asked about income or payday.
+    if (step === 1 && tracking) setStep(3);
+    else if (step < LAST) setStep(s => s + 1);
     else setShowPin(true);
   }
 
@@ -81,8 +88,9 @@ export default function OnboardingScreen({ onComplete }) {
         onCancel={() => setShowPin(false)}
         onSuccess={() => onComplete({
           name: data.name.trim(),
-          income: parseAmount(data.income) || 0,
-          salaryDay: data.salaryDay,
+          usage: data.usage,
+          income: tracking ? 0 : parseAmount(data.income) || 0,
+          salaryDay: tracking ? '' : data.salaryDay,
           banks: data.banks,
           goals: normalizeGoals(data.goals),
           setupComplete: true,
@@ -98,12 +106,44 @@ export default function OnboardingScreen({ onComplete }) {
 
   const steps = {
     1: {
-      title: 'What comes in each month?',
-      body: 'This lets FinSight work out what you can safely spend.',
+      title: 'How will you use FinSight?',
+      body: 'This shapes your Home screen. You can change it any time in Settings.',
+      content: (
+        <View accessibilityRole="radiogroup" style={{ gap: space.sm }}>
+          {USAGES.map(u => {
+            const on = data.usage === u.value;
+            return (
+              <Pressable
+                key={u.value}
+                onPress={() => { tapFeedback(); set({ usage: u.value, ...(u.value === 'business' ? { salaryDay: '' } : null) }); }}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: on }}
+                style={({ pressed }) => ({
+                  flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, borderRadius: radius.lg,
+                  borderWidth: on ? 1.5 : 1, borderColor: on ? c.accent : c.line,
+                  backgroundColor: on ? c.accentSoft : pressed ? c.sunken : c.surface,
+                })}
+              >
+                <Icon name={u.icon} size={24} color={on ? 'accent' : 'inkMuted'} />
+                <View style={{ flex: 1 }}>
+                  <Text variant="bodyStrong" family="semibold">{u.label}</Text>
+                  <Text variant="label" family="regular" color="inkMuted">{u.about}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      ),
+    },
+    2: {
+      title: business ? 'What does the business bring in?' : 'What comes in each month?',
+      body: business
+        ? 'Optional. Roughly what you take home in a usual month. Once you record a few months of income, FinSight uses your real average.'
+        : 'This lets FinSight work out what you can safely spend.',
       content: (
         <View style={{ gap: space.xl }}>
           <Input
-            label="Monthly income"
+            label={business ? 'Usual monthly income (optional)' : 'Monthly income'}
             prefix="₦"
             placeholder="450,000"
             keyboardType="numeric"
@@ -125,7 +165,7 @@ export default function OnboardingScreen({ onComplete }) {
         </View>
       ),
     },
-    2: {
+    3: {
       title: 'Which banks do you use?',
       body: 'Optional. This helps FinSight recognise your bank alerts and gives ARIA better answers.',
       content: (
@@ -134,7 +174,7 @@ export default function OnboardingScreen({ onComplete }) {
         </View>
       ),
     },
-    3: {
+    4: {
       title: 'What are you saving for?',
       body: 'Optional. Pick anything that matters to you. You can add or remove goals later in Plan.',
       content: (
@@ -152,7 +192,7 @@ export default function OnboardingScreen({ onComplete }) {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, paddingTop: space.sm }}>
           <Pressable
-            onPress={() => { tapFeedback(); setErrors({}); setStep(s => s - 1); }}
+            onPress={() => { tapFeedback(); setErrors({}); setStep(s => (s === 3 && tracking ? 1 : s - 1)); }}
             accessibilityRole="button"
             accessibilityLabel="Back"
             style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
@@ -160,9 +200,9 @@ export default function OnboardingScreen({ onComplete }) {
             <Icon name="arrow-back" size={24} />
           </Pressable>
           <View style={{ flex: 1 }}>
-            <ProgressBar value={step / 3} label={`Step ${step} of 3`} />
+            <ProgressBar value={step / LAST} label={`Step ${step} of ${LAST}`} />
           </View>
-          <Text variant="label" color="inkMuted" tabular>{step} of 3</Text>
+          <Text variant="label" color="inkMuted" tabular>{`${step} of ${LAST}`}</Text>
         </View>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, padding: space.xl, gap: space.sm }}>
           <Text variant="title" family="bold" accessibilityRole="header" style={{ fontSize: 28, lineHeight: 36 }}>{current.title}</Text>
@@ -170,7 +210,7 @@ export default function OnboardingScreen({ onComplete }) {
           {current.content}
         </ScrollView>
         <View style={{ padding: space.xl, gap: space.xs }}>
-          <Button full title={step === 3 ? 'Continue to PIN' : 'Continue'} onPress={next} />
+          <Button full title={step === LAST ? 'Continue to PIN' : 'Continue'} onPress={next} />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

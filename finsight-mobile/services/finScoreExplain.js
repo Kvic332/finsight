@@ -14,28 +14,51 @@ export function explainFinScore(stats, when = 'this month') {
   const expected = !stats.salarySeen && !stats.incomeVaries && income > 0 && stats.scoreInputs.declaredIncome > 0;
   const ofIncome = expected ? 'of your expected pay, as no salary has been recorded yet' : 'of your income';
 
-  const spending = {
+  // Without an income, spending is compared with the period before, and saving
+  // with everything that went out.
+  const byIncome = s.scoreMode !== 'spending';
+  const change = s.spendChange === null || s.spendChange === undefined ? null : Math.round((s.spendChange - 1) * 100);
+  const paceWords = change === null ? null
+    : change === 0 ? 'the same pace as' : change > 0 ? `${change}% faster than` : `${-change}% slower than`;
+  // Saving share of everything going out: to reach 20%, saved / (spent + saved) = 0.2.
+  const toShareTarget = Math.max(0, Math.round(totalSpend * TARGET_SAVE_RATE / (100 - TARGET_SAVE_RATE)) - totalSaved);
+
+  const spending = byIncome ? {
     label: 'Spending',
     score: score.spendScore,
     weight: 35,
-    reason: income > 0
-      ? `You've spent ${formatMoney(totalSpend)}, ${spentPct}% ${ofIncome}, ${when}.`
-      : 'Add your income in Settings so spending can be compared with it.',
+    reason: `You've spent ${formatMoney(totalSpend)}, ${spentPct}% ${ofIncome}, ${when}.`,
     next: score.spendScore >= 90
       ? 'Keep spending well below your income.'
       : 'Spending less of your income raises this. Spending all of it scores about 17.',
+  } : {
+    label: 'Spending',
+    score: score.spendScore,
+    weight: 35,
+    reason: paceWords
+      ? `You've spent ${formatMoney(totalSpend)} ${when}, ${paceWords} the period before (${formatMoney(s.previousSpend)}).`
+      : `You've spent ${formatMoney(totalSpend)} ${when}. There's no earlier period to compare with yet, so this part starts at 70.`,
+    next: score.spendScore >= 90
+      ? 'Keep spending at or below last period\'s pace.'
+      : 'Spending at least 10% less than the period before scores full marks.',
   };
 
-  const savings = {
+  const savings = byIncome ? {
     label: 'Savings',
     score: score.saveScore,
     weight: 35,
-    reason: income > 0
-      ? `You've moved ${formatMoney(totalSaved)} to savings ${when}, ${s.savingsRate}% ${ofIncome}.`
-      : 'Add your income in Settings so savings can be compared with it.',
+    reason: `You've moved ${formatMoney(totalSaved)} to savings ${when}, ${s.savingsRate}% ${ofIncome}.`,
     next: score.saveScore >= 100
       ? `You're saving at least ${TARGET_SAVE_RATE}%, which scores full marks.`
       : `Saving ${TARGET_SAVE_RATE}% scores full marks. Moving ${formatMoney(toTarget)} more to savings would get you there.`,
+  } : {
+    label: 'Savings',
+    score: score.saveScore,
+    weight: 35,
+    reason: `You've moved ${formatMoney(totalSaved)} to savings ${when}, ${s.saveShare}% of all the money that went out.`,
+    next: score.saveScore >= 100
+      ? `At least ${TARGET_SAVE_RATE}% of your money goes to savings, which scores full marks.`
+      : `Putting ${TARGET_SAVE_RATE}% of your money into savings scores full marks. Moving ${formatMoney(toShareTarget)} more would get you there.`,
   };
 
   const tracking = {
@@ -50,7 +73,8 @@ export function explainFinScore(stats, when = 'this month') {
 
   const goalPoints = s.hasGoals ? 35 : 0;
   const savingPoints = s.hasSavingsTx ? 45 : 0;
-  const ratePoints = s.savingsRate >= 10 ? 20 : s.savingsRate >= 5 ? 10 : 0;
+  const rate = byIncome ? s.savingsRate : s.saveShare;
+  const ratePoints = rate >= 10 ? 20 : rate >= 5 ? 10 : 0;
   const building = {
     label: 'Building',
     score: score.investScore,
@@ -58,7 +82,7 @@ export function explainFinScore(stats, when = 'this month') {
     reason: `Savings goal set: ${s.hasGoals ? 'yes' : 'no'} (${goalPoints} of 35). Money put into savings: ${s.hasSavingsTx ? 'yes' : 'no'} (${savingPoints} of 45). Saving at least 10% ${when}: ${ratePoints === 20 ? 'yes' : 'no'} (${ratePoints} of 20).`,
     next: !s.hasGoals ? 'Set a savings goal.'
       : !s.hasSavingsTx ? 'Make your first contribution to a goal.'
-      : ratePoints < 20 ? `Save 10% of your income ${when} to complete this part.` : 'All parts of Building are done.',
+      : ratePoints < 20 ? `Save 10% of ${byIncome ? "your income" : "what goes out"} ${when} to complete this part.` : 'All parts of Building are done.',
   };
 
   const parts = [spending, savings, tracking, building];
