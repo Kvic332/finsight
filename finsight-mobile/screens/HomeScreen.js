@@ -25,11 +25,13 @@ import { businessMonth } from '../services/business';
 import { loadOwed } from '../services/owedReminders';
 import { owedSummary } from '../services/receivables';
 
+// The card is a plan for money that hasn't arrived yet, so it says so plainly
+// and doesn't read as a second balance next to "Left until payday".
 function nextPayLabel(period) {
-  if (!period.hasPayday) return 'Your plan for this month';
-  if (period.payIn === 0) return 'Payday is today';
+  if (!period.hasPayday) return 'Plan for this month';
+  if (period.payIn === 0) return "Plan for today's pay";
   const date = period.start.toLocaleDateString('en-NG', { day: 'numeric', month: 'short' });
-  return `Next pay, ${date}`;
+  return `Plan for your ${date} pay`;
 }
 
 function greeting(hour = new Date().getHours()) {
@@ -481,8 +483,12 @@ export default function HomeScreen({ navigation, user, setUser }) {
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.md }}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text variant="label" family="medium" color="inkMuted">{nextPayLabel(nextPay.period)}</Text>
-                  <Money value={nextPay.free} variant="heading" family="semibold" style={{ fontVariant: ['tabular-nums'] }} />
-                  <Text variant="caption" color="inkMuted">{`to spend freely, about ${formatMoney(nextPay.perDay)} a day`}</Text>
+                  <Text variant="bodyStrong" family="semibold" style={{ marginTop: 2, fontVariant: ['tabular-nums'] }}>
+                    {`${formatMoney(nextPay.free)} free to spend`}
+                  </Text>
+                  <Text variant="caption" color="inkMuted">
+                    {`Of ${formatMoney(nextPay.pay)}, after debts, budgets and savings · about ${formatMoney(nextPay.perDay)} a day`}
+                  </Text>
                 </View>
                 {nextPay.short ? <Badge label={`${formatMoney(nextPay.short)} short`} tone="negative" /> : null}
               </View>
