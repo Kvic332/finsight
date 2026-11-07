@@ -42,7 +42,15 @@
       "./plugins/withSpeechRecognition",
       "expo-font",
       "expo-secure-store",
-      "expo-speech-recognition"
+      "expo-speech-recognition",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "nerdolek",
+          "project": "finsight-mobile",
+          "url": "https://de.sentry.io/"
+        }
+      ]
     ],
     "extra": {
       "eas": {

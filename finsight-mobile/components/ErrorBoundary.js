@@ -1,4 +1,5 @@
 import React from 'react';
+import * as Sentry from '@sentry/react-native';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 
 class ErrorBoundary extends React.Component {
@@ -12,8 +13,8 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
-    // Log silently — could send to a crash reporting service later
-    console.error('[FinSight Crash]', error?.message, info?.componentStack);
+    // Reported with the component path only; the privacy filter strips the rest.
+    Sentry.captureException(error, { contexts: { react: { componentStack: info?.componentStack } } });
   }
 
   handleReset() {

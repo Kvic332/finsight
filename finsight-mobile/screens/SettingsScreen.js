@@ -29,6 +29,7 @@ import { formatMoney, parseAmount } from '../services/format';
 import { hasPin as readHasPin, removePin, wipeAllData } from '../services/pinStore';
 import { syncDebtReminders } from '../services/debtReminders';
 import { syncOwedReminders } from '../services/owedReminders';
+import { crashReportingOn, sendTestReport } from '../services/crashReporting';
 import { syncPaydayReminder } from '../services/paydayReminder';
 import {
   CURRENCIES, FOREIGN_CURRENCIES, formatForeign, formatRate, isForeign, NAIRA, nairaIncome, rateFor,
@@ -687,6 +688,13 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
         ) : null}
 
         <Section title="About">
+          {crashReportingOn() ? (
+            <Row icon="bug-outline" title="Send a test error report" subtitle="Checks crash reporting. It contains no money or personal details"
+              onPress={async () => {
+                const sent = await sendTestReport().catch(() => false);
+                toast.show(sent ? 'Test report sent' : "Couldn't send it. Check your connection", { tone: sent ? 'success' : 'error' });
+              }} />
+          ) : null}
           <Row icon="help-circle-outline" title="How FinSight works" subtitle="FinScore, Broke Clock and ARIA"
             onPress={() => setAbout({
               title: 'How FinSight works',

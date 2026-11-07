@@ -24,6 +24,9 @@ import { syncPaydayReminder } from './services/paydayReminder';
 import { runAutoBackup } from './services/cloudSync';
 import { refreshForeignIncome } from './services/fxStore';
 import { isPickingMedia } from './services/appState';
+import { startCrashReporting, withCrashReporting } from './services/crashReporting';
+
+startCrashReporting();
 
 const Stack = createNativeStackNavigator();
 
@@ -34,7 +37,7 @@ Notifications.setNotificationHandler({
 });
 
 // ── Root ──────────────────────────────────────────────────────────────────────
-export default function App() {
+function App() {
   const fontsReady = useAppFonts();
   const [theme, setTheme] = useState('light');
   const [user, setUser] = useState(null);
@@ -191,3 +194,5 @@ export default function App() {
     </ErrorBoundary>
   );
 }
+
+export default withCrashReporting(App);
