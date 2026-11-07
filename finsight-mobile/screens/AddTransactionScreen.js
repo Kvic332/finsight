@@ -5,7 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fontFamily, radius, space } from '../constants/tokens';
 import {
-  Button, CategoryTile, Gradient, Icon, IconButton, Input, SegmentedControl, Sheet, Text, tapFeedback,
+  Button, CategoryTile, Chip, Gradient, Icon, IconButton, Input, SegmentedControl, Sheet, Text, tapFeedback,
   useTheme,
 } from '../components/ui';
 import { computePaydayPlan } from '../services/finance';
@@ -17,6 +17,10 @@ import { detectCategory } from '../services/smsParser';
 import Voice from '../services/voice';
 import { parseSpokenTransaction } from '../services/voiceEntry';
 import { rememberCategory } from '../services/payeeRuleStore';
+import {
+  CURRENCIES, FOREIGN_CURRENCIES, foreignFields, formatForeign, formatRate, isForeign, NAIRA, rateFor, walletBalance,
+} from '../services/currency';
+import { currentRates, loadWallets } from '../services/fxStore';
 
 const OUT_CATEGORIES = ['Food', 'Transport', 'Utilities', 'Shopping', 'Entertainment', 'Health', 'Savings', 'Other'];
 const IN_CATEGORIES = ['Income', 'Savings', 'Other'];
@@ -68,7 +72,13 @@ export default function AddTransactionScreen({ navigation, route, user }) {
   const { c, scheme } = useTheme();
   const editing = route?.params?.tx || null;
   const [type, setType] = useState(editing?.type || 'debit');
-  const [amount, setAmount] = useState(editing ? String(editing.amount) : '');
+  const [currency, setCurrency] = useState(editing?.currency || NAIRA);
+  const [amount, setAmount] = useState(editing ? String(isForeign(editing.currency) ? editing.originalAmount : editing.amount) : '');
+  const [walletId, setWalletId] = useState(editing?.walletId || null);
+  const [market, setMarket] = useState(null);
+  const [wallets, setWallets] = useState([]);
+  const [allTx, setAllTx] = useState([]);
+  const [choosingCurrency, setChoosingCurrency] = useState(false);
   const [desc, setDesc] = useState(editing?.desc || '');
   const [cat, setCat] = useState(editing?.cat || 'Other');
   // Until someone picks a category, by tap or voice, it follows the description.
@@ -114,6 +124,26 @@ export default function AddTransactionScreen({ navigation, route, user }) {
   }
 
   useEffect(() => {
+    currentRates().then(saved => setMarket(saved?.rates || null)).catch(() => {});
+    loadWallets().then(setWallets).catch(() => {});
+    loadTransactions().then(setAllTx).catch(() => {});
+  }, []);
+
+  // An edited foreign transaction keeps the rate it was saved with, unless its
+  // currency changes, so its history doesn't move with today's rate.
+  const keptRate = editing && editing.currency === currency && editing.fxRate ? { [currency]: editing.fxRate } : null;
+  const ownRates = keptRate || user?.fxOwnRates;
+  const rate = isForeign(currency) ? rateFor(currency, market, ownRates) : null;
+  const typed = parseAmount(amount);
+  const sameCurrencyWallets = wallets.filter(w => w.currency === currency);
+
+  function chooseCurrency(next) {
+    setCurrency(next);
+    setWalletId(null);
+    setChoosingCurrency(false);
+  }
+
+  useEffect(() => {
     Voice.onSpeechResults = e => { setListening(false); applySpoken(e.value?.[0] || ''); };
     Voice.onSpeechEnd = () => setListening(false);
     Voice.onSpeechError = () => { setListening(false); setHeard({ text: '', found: false }); };
@@ -152,11 +182,19 @@ export default function AddTransactionScreen({ navigation, route, user }) {
     const value = parseAmount(amount);
     const nextErrors = {
       ...(value ? null : { amount: 'Enter an amount, like 5,000' }),
+      ...(value && isForeign(currency) && !rate ? { amount: "There's no exchange rate yet. Go online once, or set your own rate in Settings, Foreign money." } : null),
       ...(desc.trim() ? null : { desc: 'Say what this was for' }),
     };
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
-    const fields = { desc: desc.trim(), amount: value, type, cat };
+    const foreign = isForeign(currency) ? foreignFields(value, currency, market, ownRates) : null;
+    // Switching back to naira clears the foreign details.
+    const fields = foreign
+      ? { desc: desc.trim(), type, cat, ...foreign, walletId: walletId || undefined }
+      : {
+        desc: desc.trim(), amount: value, type, cat,
+        currency: undefined, originalAmount: undefined, fxRate: undefined, fxSource: undefined, walletId: undefined,
+      };
     if (editing) {
       // Editing also confirms an imported transaction, and a changed category is
       // remembered for the next import from the same payee.
@@ -192,9 +230,16 @@ export default function AddTransactionScreen({ navigation, route, user }) {
           <View style={{ alignItems: 'center', paddingVertical: space.md }}>
             <Text variant="label" family="medium" color="inkMuted">Amount</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text variant="display" family="bold" style={{ fontSize: 46, lineHeight: 60 }} color={amount ? 'ink' : 'inkSubtle'}>₦</Text>
+              <Pressable
+                onPress={() => { tapFeedback(); setChoosingCurrency(true); }}
+                accessibilityRole="button"
+                accessibilityLabel={`Currency: ${CURRENCIES[currency].name}. Change currency`}
+                hitSlop={8}
+              >
+                <Text variant="display" family="bold" style={{ fontSize: currency === 'CAD' ? 30 : 46, lineHeight: 60 }} color={amount ? 'ink' : 'inkSubtle'}>{CURRENCIES[currency].symbol}</Text>
+              </Pressable>
               <TextInput
-                accessibilityLabel="Amount in naira"
+                accessibilityLabel={`Amount in ${CURRENCIES[currency].plural}`}
                 value={amount}
                 onChangeText={v => { setAmount(v); if (errors.amount) setErrors(e => ({ ...e, amount: undefined })); }}
                 placeholder="0"
@@ -209,8 +254,28 @@ export default function AddTransactionScreen({ navigation, route, user }) {
                 }}
               />
             </View>
-            {errors.amount ? <Text variant="caption" color="negative" accessibilityLiveRegion="polite">{errors.amount}</Text> : null}
+            {errors.amount ? <Text variant="caption" color="negative" accessibilityLiveRegion="polite" align="center">{errors.amount}</Text> : null}
+            {isForeign(currency) && rate && typed ? (
+              <Text variant="label" family="medium" color="inkMuted" align="center">
+                {`≈ ${formatMoney(Math.round(typed * rate.rate))} at ${formatRate(rate.rate)}, ${keptRate ? 'the rate it was saved with' : rate.source === 'own' ? 'your own rate' : 'the market rate'}`}
+              </Text>
+            ) : null}
+            <Pressable onPress={() => { tapFeedback(); setChoosingCurrency(true); }} accessibilityRole="button" hitSlop={8}>
+              <Text variant="caption" family="semibold" color="accent">{currency === NAIRA ? 'Paid in another currency?' : `In ${CURRENCIES[currency].plural}. Change`}</Text>
+            </Pressable>
           </View>
+
+          {isForeign(currency) && sameCurrencyWallets.length ? (
+            <View style={{ gap: space.xs }}>
+              <Text variant="label">{type === 'credit' ? 'Which account did it go into?' : 'Which account did it come from?'}</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+                {sameCurrencyWallets.map(w => (
+                  <Chip key={w.id} label={`${w.name} · ${formatForeign(walletBalance(w, allTx), w.currency)}`} selected={walletId === w.id} onPress={() => setWalletId(walletId === w.id ? null : w.id)} />
+                ))}
+                <Chip label="None of these" selected={!walletId} onPress={() => setWalletId(null)} />
+              </View>
+            </View>
+          ) : null}
 
           <Input
             label="Description"
@@ -261,6 +326,32 @@ export default function AddTransactionScreen({ navigation, route, user }) {
           <Button full title={editing ? 'Save changes' : 'Save transaction'} onPress={save} />
         </View>
       </KeyboardAvoidingView>
+
+      <Sheet visible={choosingCurrency} onClose={() => setChoosingCurrency(false)} title="Currency">
+        <Text variant="label" family="regular" color="inkMuted" style={{ marginBottom: space.sm }}>
+          FinSight adds everything up in naira. Foreign money is converted at your own rate if you've set one, otherwise the market rate.
+        </Text>
+        {[NAIRA, ...FOREIGN_CURRENCIES].map(code => {
+          const r = code === NAIRA ? null : rateFor(code, market, user?.fxOwnRates);
+          return (
+            <Pressable
+              key={code}
+              onPress={() => { tapFeedback(); chooseCurrency(code); }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: code === currency }}
+              style={({ pressed }) => ({
+                flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, marginBottom: space.xs,
+                borderRadius: radius.md, borderWidth: code === currency ? 1.5 : 0, borderColor: c.accent,
+                backgroundColor: code === currency ? c.accentSoft : pressed ? c.sunken : 'transparent',
+              })}
+            >
+              <Text variant="heading" family="bold" style={{ width: 52 }}>{CURRENCIES[code].symbol}</Text>
+              <Text variant="bodyStrong" family="semibold" style={{ flex: 1 }}>{CURRENCIES[code].name}</Text>
+              {r ? <Text variant="label" color="inkMuted">{formatRate(r.rate)}</Text> : null}
+            </Pressable>
+          );
+        })}
+      </Sheet>
 
       <Sheet visible={picking} onClose={() => setPicking(false)} title="Choose a category">
         <ScrollView style={{ maxHeight: 460 }}>

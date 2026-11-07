@@ -20,10 +20,10 @@ export function isRepeatAlert(existing, tx) {
 
 // Turns queued alerts into transactions added to the front of the list. Alerts that
 // aren't transactions are simply dropped.
-export function mergeBankAlerts(existing, alerts) {
+export function mergeBankAlerts(existing, alerts, fx = null) {
   const added = [];
   for (const alert of alerts) {
-    const tx = parseBankAlert(alert);
+    const tx = parseBankAlert(alert, fx);
     if (tx && !isRepeatAlert([...added, ...existing], tx)) added.push(tx);
   }
   // The queue runs oldest first, and the list runs newest first.

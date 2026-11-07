@@ -14,11 +14,17 @@ async function save(list) {
 
 export const saveTransactions = save;
 
-export async function addTransaction({ desc, amount, type, cat }) {
+// Foreign money also carries currency, originalAmount, fxRate, fxSource and an
+// optional walletId; amount is always the naira value.
+const FOREIGN_KEYS = ['currency', 'originalAmount', 'fxRate', 'fxSource', 'walletId'];
+
+export async function addTransaction({ desc, amount, type, cat, ...rest }) {
   const list = await loadTransactions();
+  const foreign = Object.fromEntries(FOREIGN_KEYS.filter(k => rest[k] !== undefined).map(k => [k, rest[k]]));
   const tx = {
     id: Date.now().toString(),
     desc, amount, type, cat,
+    ...foreign,
     source: 'manual',
     date: new Date().toLocaleDateString('en-NG'),
   };

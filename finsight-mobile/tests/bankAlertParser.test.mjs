@@ -173,3 +173,39 @@ test('real alerts still get through the advert check', () => {
   assert.equal(parse('You have received ₦5,000 from JOHN DOE').type, 'credit');
   assert.equal(parse('Debit alert: ₦13,502 paid to JUMIA. Avail Bal ₦40,000').amount, 13502);
 });
+
+// ── Foreign currency ──────────────────────────────────────────────────────────
+const FX = { market: { USD: 1348.02, GBP: 1814.5 }, own: { USD: 1550 }, wallets: [{ id: 'g', name: 'Grey', currency: 'USD' }] };
+const grey = text => parseBankAlert(alert(text, { pkg: 'co.grey.mobile.android', title: 'Grey' }), FX);
+
+test('a dollar alert keeps the dollars and counts at your rate in naira', () => {
+  const tx = grey('You have received $1,250.00 from ACME INC into your USD account');
+  assert.equal(tx.currency, 'USD');
+  assert.equal(tx.originalAmount, 1250);
+  assert.equal(tx.fxRate, 1550);
+  assert.equal(tx.amount, 1937500);
+  assert.equal(tx.type, 'credit');
+  assert.equal(tx.bank, 'Grey');
+  assert.equal(tx.walletId, 'g');
+  assert.equal(tx.balance, undefined);
+});
+
+test('USD, pounds and small dollar amounts are read too', () => {
+  assert.equal(grey('Your card was debited USD 15.99 at NETFLIX').originalAmount, 15.99);
+  const pounds = parseBankAlert(alert('You received £40 from JOHN', { pkg: 'com.transferwise.android', title: 'Wise' }), FX);
+  assert.equal(pounds.currency, 'GBP');
+  assert.equal(pounds.amount, Math.round(40 * 1814.5));
+  // Wise isn't the Grey account, so it isn't linked to it.
+  assert.equal(pounds.walletId, undefined);
+});
+
+test('a naira amount wins, and no rate means no guess', () => {
+  const card = parse('Debit alert: ₦21,500.00 for USD 15.99 NETFLIX. Avail Bal ₦40,000');
+  assert.equal(card.amount, 21500);
+  assert.equal(card.currency, undefined);
+  assert.equal(parseBankAlert(alert('You have received $100 from ACME', { pkg: 'co.grey.mobile.android', title: 'Grey' })), null);
+});
+
+test('foreign account apps are trusted sources', () => {
+  for (const pkg of ['co.grey.mobile.android', 'co.raenest.geegpay', 'com.payoneer.android', 'com.transferwise.android']) assert.ok(BANK_APPS[pkg], pkg);
+});

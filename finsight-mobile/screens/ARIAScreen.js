@@ -17,6 +17,26 @@ import { askAria } from '../services/ariaClient';
 import { debtsContext } from '../services/debts';
 import { computePaydayPlan, formatRunway, paydaysOf } from '../services/finance';
 import { budgetSpent } from '../services/plans';
+import { CURRENCIES, formatForeign, formatRate, isForeign, rateFor, walletBalance } from '../services/currency';
+import { currentRates, loadWallets } from '../services/fxStore';
+
+// Foreign income, rates and accounts, for ARIA. Empty when there are none.
+async function foreignSummary(user, transactions) {
+  const wallets = await loadWallets();
+  const paidForeign = isForeign(user?.incomeCurrency) && Number(user?.incomeForeign) > 0;
+  if (!paidForeign && !wallets.length) return '';
+  const saved = await currentRates();
+  const lines = [];
+  const used = new Set([...(paidForeign ? [user.incomeCurrency] : []), ...wallets.map(w => w.currency)]);
+  const rates = [...used].map(code => {
+    const r = rateFor(code, saved?.rates, user?.fxOwnRates);
+    return r ? `${CURRENCIES[code].symbol}1 = ${formatRate(r.rate)} (${r.source === 'own' ? 'their own rate' : 'market rate'})` : null;
+  }).filter(Boolean);
+  if (paidForeign) lines.push(`Paid in ${CURRENCIES[user.incomeCurrency].name}: ${formatForeign(Number(user.incomeForeign), user.incomeCurrency)} a month, counted as about ₦${(Number(user.income) || 0).toLocaleString()}`);
+  if (wallets.length) lines.push(`Foreign accounts: ${wallets.map(w => `${w.name} ${formatForeign(walletBalance(w, transactions), w.currency)}`).join(', ')}`);
+  if (rates.length) lines.push(`Exchange rates: ${rates.join(', ')}`);
+  return lines.join('\n');
+}
 
 const QUICK_QUESTIONS = [
   'What are my top expenses?',
@@ -90,6 +110,7 @@ export default function ARIAScreen({ navigation, user }) {
   const [transactions, setTransactions] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [debts, setDebts] = useState([]);
+  const [foreignLine, setForeignLine] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   // Off by default: reading someone's money out loud shouldn't happen unasked.
@@ -110,6 +131,7 @@ export default function ARIAScreen({ navigation, user }) {
       AsyncStorage.getItem('finsight_debts'),
       AsyncStorage.getItem(LANGUAGE_KEY),
     ]).then(([tRaw, bRaw, dRaw, lang]) => {
+      foreignSummary(user, tRaw ? JSON.parse(tRaw) : []).then(setForeignLine).catch(() => {});
       if (LANGUAGES.some(l => l.key === lang)) setLanguage(lang);
       setTransactions(tRaw ? JSON.parse(tRaw) : []);
       setBudgets(bRaw ? JSON.parse(bRaw) : []);
@@ -171,7 +193,7 @@ export default function ARIAScreen({ navigation, user }) {
 USER PROFILE:
 Name: ${user?.name || 'User'} | Employment: ${user?.employmentType || 'Not specified'}
 Income this pay period: ₦${stats.income.toLocaleString()} | Monthly income set: ₦${(Number(user?.income) || 0).toLocaleString()} | Paydays: ${payLine}
-Banks: ${(user?.banks || []).join(', ') || 'Not specified'}
+Banks: ${(user?.banks || []).join(', ') || 'Not specified'}${foreignLine ? `\n${foreignLine}` : ''}
 
 THIS PAY PERIOD (${transactions.length} transactions tracked in total, ${stats.cycle.daysToGo} days until the next payday):
 Estimated left until payday: ₦${stats.left.toLocaleString()} (an estimate from income and logged transactions, not a bank balance)

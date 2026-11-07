@@ -8,6 +8,8 @@ import {
   useTheme, useToast, IconTile,
 } from '../components/ui';
 import { computePaydayPlan, expectedPay, makeBalanceCheck, paydaysOf, parseTxDate } from '../services/finance';
+import { foreignNote, formatForeign, walletBalance, walletsInNaira } from '../services/currency';
+import { currentRates, loadWallets } from '../services/fxStore';
 import { latestBalances } from '../services/balances';
 import AsyncStorage from '../services/dataStore';
 import { DEFAULT_SAVE_PERCENT, planPayday, planPeriod } from '../services/paydayPlan';
@@ -114,6 +116,8 @@ export default function HomeScreen({ navigation, user, setUser }) {
   const [refreshing, setRefreshing] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [planData, setPlanData] = useState({ debts: [], budgets: [] });
+  const [wallets, setWallets] = useState([]);
+  const [fxRates, setFxRates] = useState(null);
   const [checking, setChecking] = useState(false);
   const [realText, setRealText] = useState('');
   const [realError, setRealError] = useState('');
@@ -128,6 +132,9 @@ export default function HomeScreen({ navigation, user, setUser }) {
     setTransactions(txs);
     const [dRaw, bRaw] = await Promise.all([AsyncStorage.getItem('finsight_debts'), AsyncStorage.getItem('finsight_budgets')]);
     setPlanData({ debts: dRaw ? JSON.parse(dRaw) : [], budgets: bRaw ? JSON.parse(bRaw) : [] });
+    const w = await loadWallets();
+    setWallets(w);
+    if (w.length) currentRates().then(saved => setFxRates(saved?.rates || null)).catch(() => {});
     const updated = await updateStreak();
     setStreak(updated);
     const score = computePaydayPlan(user, txs).finScore;
@@ -329,6 +336,21 @@ export default function HomeScreen({ navigation, user, setUser }) {
             </Card>
           ) : null}
 
+          {wallets.length ? (
+            <Card onPress={() => navigation.navigate('ForeignMoney')} accessibilityLabel="Foreign accounts. Open foreign money" style={{ padding: space.lg, gap: space.sm }}>
+              <Text variant="label" family="semibold" color="inkMuted">Foreign accounts</Text>
+              {wallets.slice(0, 3).map(w => (
+                <View key={w.id} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+                  <Text variant="bodyStrong" family="semibold" style={{ flex: 1 }} numberOfLines={1}>{w.name}</Text>
+                  <Text variant="bodyStrong" family="bold">{formatForeign(walletBalance(w, transactions), w.currency)}</Text>
+                </View>
+              ))}
+              <Text variant="caption" color="inkMuted">
+                {`Worth about ${formatMoney(walletsInNaira(wallets, transactions, fxRates, user?.fxOwnRates))} at today's rates.`}
+              </Text>
+            </Card>
+          ) : null}
+
           {toCheck ? (
             <Card onPress={() => navigation.navigate('NewTransactions')} accessibilityLabel={`${toCheck} new from your bank. Check them`} style={{ padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.md }}>
               <IconTile name="notifications-outline" tone="accent" />
@@ -427,7 +449,7 @@ export function TransactionRow({ tx, onPress, showCategory }) {
   return (
     <ListRowFlat
       tx={tx}
-      subtitle={showCategory ? tx.cat : when}
+      subtitle={[showCategory ? tx.cat : when, foreignNote(tx)].filter(Boolean).join(' · ')}
       money={money}
       onPress={onPress}
     />

@@ -3,6 +3,7 @@
 // a missed alert, so anything unclear returns null rather than a guess.
 import { detectCategory } from './smsParser.js';
 import { noiseReason } from './transactionReview.js';
+import { foreignFields, walletFor } from './currency.js';
 
 // Android app IDs, each confirmed on Google Play. Notifications from any other app
 // are ignored, apart from bank SMS below.
@@ -27,6 +28,11 @@ export const BANK_APPS = {
   'com.renmoney.android': 'Renmoney',
   'ng.com.fairmoney.fairmoney': 'FairMoney',
   'com.lenddo.mobile.paylater': 'Carbon',
+  // Foreign currency accounts. Their alerts are mostly in dollars, pounds or euros.
+  'co.grey.mobile.android': 'Grey',
+  'co.raenest.geegpay': 'Raenest',
+  'com.payoneer.android': 'Payoneer',
+  'com.transferwise.android': 'Wise',
 };
 
 // SMS sender names, in lower case with only letters and digits. An SMS is kept only
@@ -131,27 +137,54 @@ function formatDate(time) {
 }
 
 // alert: { id, pkg, channel, title, text, postedAt }, as queued by the Android service.
-export function parseBankAlert(alert) {
+// Money in another currency: "$1,250.00", "USD 15.00", "£40" or "40 EUR".
+const FOREIGN_SIGNS = [['US$', 'USD'], ['CA$', 'CAD'], ['$', 'USD'], ['£', 'GBP'], ['€', 'EUR']];
+function foreignAmount(text) {
+  const pattern = new RegExp(`(US\\$|CA\\$|\\$|£|€|\\b(?:USD|GBP|EUR|CAD)\\b)\\s?(${NUMBER})|(${NUMBER})\\s?(USD|GBP|EUR|CAD)\\b`, 'g');
+  for (const match of text.matchAll(pattern)) {
+    if (OTHER_FIGURE.test(text.slice(0, match.index + 1))) continue;
+    const sign = match[1] || match[4];
+    const currency = FOREIGN_SIGNS.find(([s]) => s === sign)?.[1] || sign.toUpperCase();
+    return { currency, amount: toNumber(match[2] || match[3]) };
+  }
+  return null;
+}
+
+// fx, when given: { market, own, wallets }, so foreign amounts are converted to naira
+// at today's rate and linked to the matching foreign account.
+export function parseBankAlert(alert, fx = null) {
   const text = String(alert?.text || '');
   const combined = `${alert?.title || ''}\n${text}`;
   // Bank apps also send adverts, and some of them mention amounts.
   if (!text || NOT_A_TRANSACTION.test(combined) || noiseReason(combined)) return null;
 
   const labelled = labelledAmount(combined);
-  const amount = labelled ? labelled.amount : firstOwnAmount(combined);
-  if (!amount || amount < MIN_AMOUNT) return null;
+  const nairaAmount = labelled ? labelled.amount : firstOwnAmount(combined);
+  // A naira amount wins: Nigerian banks show a dollar card payment in naira too.
+  const foreign = nairaAmount ? null : foreignAmount(combined);
+  const amount = nairaAmount || foreign?.amount;
+  if (!amount || (!foreign && amount < MIN_AMOUNT)) return null;
 
   const type = (labelled && labelled.type) || directionFromWords(combined);
   if (!type) return null;
 
   const bank = bankFrom(alert);
+  let money = { amount: Math.round(amount) };
+  if (foreign) {
+    // Without a rate the naira value can't be known, and a guess is worse than nothing.
+    const fields = foreignFields(foreign.amount, foreign.currency, fx?.market, fx?.own);
+    if (!fields) return null;
+    const wallet = walletFor(fx?.wallets || [], bank, foreign.currency);
+    money = { ...fields, ...(wallet ? { walletId: wallet.id } : null) };
+  }
   const cat = detectCategory(text);
-  const balance = reportedBalance(combined);
+  // A balance quoted in another currency isn't a naira balance.
+  const balance = foreign ? null : reportedBalance(combined);
   return {
     ...(balance !== null ? { balance } : null),
     id: `alert_${alert.id}`,
     desc: describe(text, bank),
-    amount: Math.round(amount),
+    ...money,
     type,
     cat: cat !== 'Other' ? cat : type === 'credit' ? 'Income' : /transfer|trf|\bsent\b/i.test(text) ? 'Transfer' : 'Other',
     bank,

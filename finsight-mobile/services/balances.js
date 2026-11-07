@@ -9,6 +9,8 @@ export function latestBalances(transactions, now = Date.now()) {
   const byBank = new Map();
   for (const tx of transactions) {
     if (typeof tx.balance !== 'number' || !tx.bank || typeof tx.capturedAt !== 'number') continue;
+    // A balance in dollars isn't naira; foreign accounts are shown on their own.
+    if (tx.currency && tx.currency !== 'NGN') continue;
     if (now - tx.capturedAt > BALANCE_FRESH_DAYS * 86400000) continue;
     const seen = byBank.get(tx.bank);
     if (!seen || tx.capturedAt > seen.capturedAt) byBank.set(tx.bank, { bank: tx.bank, balance: tx.balance, capturedAt: tx.capturedAt });

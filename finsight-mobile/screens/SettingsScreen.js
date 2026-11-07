@@ -29,6 +29,10 @@ import { formatMoney, parseAmount } from '../services/format';
 import { hasPin as readHasPin, removePin, wipeAllData } from '../services/pinStore';
 import { syncDebtReminders } from '../services/debtReminders';
 import { syncPaydayReminder } from '../services/paydayReminder';
+import {
+  CURRENCIES, FOREIGN_CURRENCIES, formatForeign, formatRate, isForeign, NAIRA, nairaIncome, rateFor,
+} from '../services/currency';
+import { currentRates } from '../services/fxStore';
 
 const NIGERIAN_BANKS = [
   'GTBank', 'Access Bank', 'Zenith Bank', 'First Bank', 'UBA', 'Fidelity Bank',
@@ -254,6 +258,8 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
   const [selectedBanks, setSelectedBanks] = useState(user?.banks || []);
   const [incomeInput, setIncomeInput] = useState('');
   const [incomeError, setIncomeError] = useState('');
+  const [incomeCurrency, setIncomeCurrency] = useState(NAIRA);
+  const [marketRates, setMarketRates] = useState(null);
   const [salaryDayInput, setSalaryDayInput] = useState('25');
   const [salaryError, setSalaryError] = useState('');
   const [payPattern, setPayPattern] = useState('monthly');
@@ -400,12 +406,31 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
     toast.show(`${selectedBanks.length} ${selectedBanks.length === 1 ? 'bank' : 'banks'} saved`, { tone: 'success' });
   }
 
+  function openIncome() {
+    const foreign = isForeign(user?.incomeCurrency);
+    setIncomeCurrency(foreign ? user.incomeCurrency : NAIRA);
+    setIncomeInput(foreign ? String(user.incomeForeign || '') : user?.income ? String(user.income) : '');
+    setIncomeError('');
+    setShowIncome(true);
+    currentRates().then(saved => setMarketRates(saved?.rates || null)).catch(() => {});
+  }
+
   async function saveIncome() {
     const value = parseAmount(incomeInput);
-    if (!value) { setIncomeError('Enter your monthly income, like 450,000'); return; }
-    await saveUser({ income: value });
+    if (!value) { setIncomeError(`Enter your monthly income, like ${incomeCurrency === NAIRA ? '450,000' : '2,000'}`); return; }
+    if (incomeCurrency === NAIRA) {
+      await saveUser({ income: value, incomeCurrency: NAIRA, incomeForeign: null });
+      toast.show(`Monthly income set to ${formatMoney(value)}`, { tone: 'success' });
+    } else {
+      if (!rateFor(incomeCurrency, marketRates, user?.fxOwnRates)) {
+        setIncomeError("There's no exchange rate yet. Go online once, or set your own rate in Foreign money.");
+        return;
+      }
+      const naira = nairaIncome({ ...user, incomeCurrency, incomeForeign: value }, marketRates);
+      await saveUser({ income: naira, incomeCurrency, incomeForeign: value });
+      toast.show(`Monthly income set to ${formatForeign(value, incomeCurrency)}, about ${formatMoney(naira)}`, { tone: 'success' });
+    }
     setShowIncome(false);
-    toast.show(`Monthly income set to ${formatMoney(value)}`, { tone: 'success' });
   }
 
   function openPayday() {
@@ -585,8 +610,13 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
         </Card>
 
         <Section title="Your money">
-          <Row icon="cash-outline" title="Monthly income" subtitle={user?.income ? formatMoney(Number(user.income)) : 'Not set'}
-            onPress={() => { setIncomeInput(user?.income ? String(user.income) : ''); setIncomeError(''); setShowIncome(true); }} />
+          <Row icon="cash-outline" title="Monthly income"
+            subtitle={isForeign(user?.incomeCurrency) && user?.incomeForeign
+              ? `${formatForeign(Number(user.incomeForeign), user.incomeCurrency)}, about ${formatMoney(Number(user.income))}`
+              : user?.income ? formatMoney(Number(user.income)) : 'Not set'}
+            onPress={openIncome} />
+          <Row icon="swap-horizontal-outline" title="Foreign money" subtitle="Exchange rates, your own rate and dollar accounts"
+            onPress={() => navigation?.navigate('ForeignMoney')} />
           <Row icon="calendar-outline" title="Payday" subtitle={paydaySummary(user)} onPress={openPayday} />
           <Row icon="flag-outline" title="Savings goals" subtitle={goalCount ? `${goalCount} ${goalCount === 1 ? 'goal' : 'goals'}` : 'None yet'}
             onPress={() => navigation?.navigate('Main', { screen: 'Plan', params: { view: 'Savings' } })} />
@@ -712,7 +742,26 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
       <Sheet visible={showIncome} onClose={() => setShowIncome(false)} title="Monthly income" footer={<Button full title="Save income" onPress={saveIncome} />}>
         <View style={{ gap: space.md }}>
           <Text color="inkMuted">FinSight uses this to work out what you can safely spend.</Text>
-          <Input label="Amount" prefix="₦" placeholder="450,000" keyboardType="numeric" value={incomeInput} error={incomeError} onChangeText={v => { setIncomeInput(v); setIncomeError(''); }} />
+          <View style={{ gap: space.xs }}>
+            <Text variant="label">You're paid in</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+              {[NAIRA, ...FOREIGN_CURRENCIES].map(code => (
+                <Chip key={code} label={`${CURRENCIES[code].symbol} ${CURRENCIES[code].name}`} selected={incomeCurrency === code} onPress={() => { setIncomeCurrency(code); setIncomeError(''); }} />
+              ))}
+            </View>
+          </View>
+          <Input label="Amount" prefix={CURRENCIES[incomeCurrency].symbol} placeholder={incomeCurrency === NAIRA ? '450,000' : '2,000'} keyboardType="numeric" value={incomeInput} error={incomeError} onChangeText={v => { setIncomeInput(v); setIncomeError(''); }} />
+          {incomeCurrency !== NAIRA ? (() => {
+            const r = rateFor(incomeCurrency, marketRates, user?.fxOwnRates);
+            const value = parseAmount(incomeInput);
+            return (
+              <Text variant="label" family="regular" color="inkMuted">
+                {r
+                  ? `${value ? `About ${formatMoney(Math.round(value * r.rate))} a month at ` : 'Converted at '}${formatRate(r.rate)}, ${r.source === 'own' ? 'your own rate' : 'the market rate'}. The naira figure follows the rate each day.`
+                  : 'Getting the exchange rate. You need to be online once.'}
+              </Text>
+            );
+          })() : null}
         </View>
       </Sheet>
 

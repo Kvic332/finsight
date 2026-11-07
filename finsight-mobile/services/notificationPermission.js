@@ -3,6 +3,7 @@ import AsyncStorage from './dataStore';
 import { mergeBankAlerts } from './alerts';
 import { withRememberedCategories } from './payeeRuleStore';
 import { BANK_APPS, BANK_SENDERS } from './bankAlertParser';
+import { currentRates, loadWallets } from './fxStore';
 
 const { NotificationPermission } = NativeModules;
 
@@ -79,7 +80,12 @@ export async function syncBankAlerts() {
     if (!alerts.length) return;
     const raw = await AsyncStorage.getItem('finsight_transactions');
     const existing = raw ? JSON.parse(raw) : [];
-    const { added } = mergeBankAlerts(existing, alerts);
+    // Foreign money is converted at today's rate and linked to its account.
+    const [saved, wallets, userRaw] = await Promise.all([
+      currentRates().catch(() => null), loadWallets(), AsyncStorage.getItem('finsight_user'),
+    ]);
+    const fx = { market: saved?.rates, own: userRaw ? JSON.parse(userRaw)?.fxOwnRates : null, wallets };
+    const { added } = mergeBankAlerts(existing, alerts, fx);
     if (added.length) {
       // New alerts use categories the user chose before, and wait in the new-transactions
       // inbox until they're confirmed. Newest first, as in mergeBankAlerts.

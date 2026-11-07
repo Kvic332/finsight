@@ -21,6 +21,7 @@ import { syncBankAlerts } from './services/notificationPermission';
 import { syncDebtReminders, syncStoredDebtReminders } from './services/debtReminders';
 import { syncPaydayReminder } from './services/paydayReminder';
 import { runAutoBackup } from './services/cloudSync';
+import { refreshForeignIncome } from './services/fxStore';
 import { isPickingMedia } from './services/appState';
 
 const Stack = createNativeStackNavigator();
@@ -70,6 +71,10 @@ export default function App() {
         const name = parsed?.name?.split(' ')[0] || 'there';
         checkAndSendDigests(name);
         syncPaydayReminder(parsed);
+        // Income set in another currency follows today's rate.
+        refreshForeignIncome(parsed)
+          .then(updated => { if (updated?.setupComplete) setUser(updated); })
+          .catch(() => {});
       }
       await syncBankAlerts();
       syncStoredDebtReminders();
