@@ -8,7 +8,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { space } from '../constants/tokens';
 import { PAYDAY_REMINDER_TYPE } from '../services/paydayReminder';
 import {
-  Gradient, Icon, IconButton, Text, tapFeedback, useTheme,
+  Icon, IconButton, Text, tapFeedback, useTheme,
 } from '../components/ui';
 import HomeScreen from '../screens/HomeScreen';
 import ActivityScreen from '../screens/ActivityScreen';
@@ -78,15 +78,20 @@ function AppTabBar({ state, navigation }) {
         onPress={() => { tapFeedback(); navigation.navigate('Add'); }}
         accessibilityRole="button"
         accessibilityLabel="Add a transaction"
+        // A solid square-ish button on a ring of the bar's colour, so it sits in the
+        // bar rather than floating over it.
         style={({ pressed }) => ({
-          position: 'absolute', alignSelf: 'center', left: '50%', marginLeft: -30, top: -26,
-          width: 60, height: 60, borderRadius: 30, overflow: 'hidden', opacity: pressed ? 0.85 : 1,
-          shadowColor: '#D8145A', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.38, shadowRadius: 14, elevation: 10,
+          position: 'absolute', alignSelf: 'center', left: '50%', marginLeft: -32, top: -22,
+          width: 64, height: 64, borderRadius: 22, padding: 5, backgroundColor: c.surface,
+          transform: [{ scale: pressed ? 0.96 : 1 }],
         })}
       >
-        <Gradient style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name="add" size={30} color="#FFFFFF" />
-        </Gradient>
+        <View style={{
+          flex: 1, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accent,
+          shadowColor: c.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 4,
+        }}>
+          <Icon name="add" size={28} color={c.onAccent} />
+        </View>
       </Pressable>
     </View>
   );

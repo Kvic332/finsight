@@ -481,22 +481,39 @@ export default function HomeScreen({ navigation, user, setUser }) {
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.md }}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text variant="label" family="medium" color="inkMuted">{nextPayLabel(nextPay.period)}</Text>
-                  <Money value={nextPay.free} variant="heading" family="bold" />
+                  <Money value={nextPay.free} variant="heading" family="semibold" style={{ fontVariant: ['tabular-nums'] }} />
                   <Text variant="caption" color="inkMuted">{`to spend freely, about ${formatMoney(nextPay.perDay)} a day`}</Text>
                 </View>
                 {nextPay.short ? <Badge label={`${formatMoney(nextPay.short)} short`} tone="negative" /> : null}
               </View>
-              <View style={{ flexDirection: 'row', height: 8, borderRadius: radius.pill, overflow: 'hidden', backgroundColor: c.sunken }}>
-                {[[nextPay.debtTotal, c.negative], [nextPay.budgetTotal, c.warning], [nextPay.saving, c.accent], [nextPay.free, c.positive]].map(([value, color], i) => (
-                  value > 0 ? <View key={i} style={{ flex: value, backgroundColor: color }} /> : null
-                ))}
+              {(() => {
+                // How the pay splits, with a key so each colour explains itself.
+                const parts = [
+                  ['Debts', nextPay.debtTotal, c.negative],
+                  ['Budgets', nextPay.budgetTotal, c.warning],
+                  ['Savings', nextPay.saving, c.accent],
+                  ['Free', nextPay.free, c.positive],
+                ].filter(([, value]) => value > 0);
+                return (
+                  <>
+                    <View style={{ flexDirection: 'row', height: 6, gap: 2 }}>
+                      {parts.map(([label, value, color]) => <View key={label} style={{ flex: value, backgroundColor: color, borderRadius: radius.pill }} />)}
+                    </View>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: space.lg, rowGap: space.xs }}>
+                      {parts.map(([label, value, color]) => (
+                        <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
+                          <Text variant="caption" color="inkMuted">{`${label} ${formatMoney(value)}`}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                );
+              })()}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                <Text variant="caption" family="semibold" color="accent">See full plan</Text>
+                <Icon name="chevron-forward" size={14} color="accent" />
               </View>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: space.md, rowGap: 2 }}>
-                <Text variant="caption" color="inkMuted">{`Debts ${formatMoney(nextPay.debtTotal)}`}</Text>
-                <Text variant="caption" color="inkMuted">{`Budgets ${formatMoney(nextPay.budgetTotal)}`}</Text>
-                <Text variant="caption" color="inkMuted">{`Savings ${formatMoney(nextPay.saving)}`}</Text>
-              </View>
-              <Text variant="label" family="semibold" color="accent">See full plan</Text>
             </Card>
           ) : null}
           </>
