@@ -36,11 +36,10 @@ export default function InvestmentsScreen() {
     <View style={{ flex: 1, backgroundColor: c.canvas }}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: space.xxxl }}>
-        <Gradient style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + 140 }} />
-        <View style={{ paddingTop: insets.top + space.md, paddingHorizontal: space.xl, paddingBottom: space.lg, gap: space.xs }}>
+        <Gradient style={{ paddingTop: insets.top + space.md, paddingHorizontal: space.xl, paddingBottom: space.lg, gap: space.xs, marginBottom: space.lg, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, overflow: 'hidden' }}>
           <Text variant="title" family="bold" color="#FFFFFF" accessibilityRole="header">Grow</Text>
           <Text variant="label" color="#FFFFFF">Places to start exploring</Text>
-        </View>
+        </Gradient>
         <View style={{ paddingHorizontal: space.xl, gap: space.md }}>
           <Card style={{ padding: space.lg, flexDirection: 'row', gap: space.md }}>
             <Icon name="information-circle-outline" size={22} color="accent" />

@@ -64,9 +64,7 @@ function SpendChart({ data }) {
             <Text variant="caption" color={today ? 'accent' : 'inkMuted'} numberOfLines={1} adjustsFontSizeToFit>
               {item.spend > 0 ? formatMoneyCompact(item.spend).replace('₦', '') : ' '}
             </Text>
-            <View style={{ width: '100%', height, marginVertical: space.xs, borderRadius: 6, overflow: 'hidden', backgroundColor: today ? 'transparent' : c.accentSoft }}>
-              {today ? <Gradient fill /> : null}
-            </View>
+            <View style={{ width: '100%', height, marginVertical: space.xs, borderRadius: 6, backgroundColor: today ? c.accent : c.accentSoft }} />
             <Text variant="caption" family={today ? 'bold' : 'regular'} color={today ? 'ink' : 'inkMuted'}>{item.day.slice(0, 3)}</Text>
           </View>
         );
@@ -143,18 +141,18 @@ export default function DashboardScreen({ user }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} colors={[c.accent]} />}
       >
         <Card onPress={() => setShowScore(true)} accessibilityLabel={`FinScore ${finScore} out of 100, ${g.label}. See the breakdown`} style={{ padding: 0, overflow: 'hidden' }}>
-          <Gradient style={{ padding: space.xl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ padding: space.xl, paddingBottom: space.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View>
-              <Text variant="label" color="#FFFFFF">{stats.cycle.hasPayday ? 'FinScore this pay period' : 'FinScore this month'}</Text>
+              <Text variant="label" family="medium" color="inkMuted">{stats.cycle.hasPayday ? 'FinScore this pay period' : 'FinScore this month'}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.xs }}>
-                <Text variant="display" family="bold" color="#FFFFFF" tabular style={{ fontSize: 56, lineHeight: 64, letterSpacing: -1.5 }}>{finScore}</Text>
-                <Text variant="bodyStrong" color="#FFFFFF">/ 100</Text>
+                <Text variant="display" family="semibold" tabular style={{ fontSize: 52, lineHeight: 60, letterSpacing: -1.2 }}>{finScore}</Text>
+                <Text variant="bodyStrong" color="inkMuted">/ 100</Text>
               </View>
             </View>
-            <View style={{ backgroundColor: '#FFFFFF', borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs + 2 }}>
-              <Text variant="label" family="bold" color="#A30E42">{g.label}</Text>
+            <View style={{ backgroundColor: c.accentSoft, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs + 2 }}>
+              <Text variant="label" family="semibold" color="onAccentSoft">{g.label}</Text>
             </View>
-          </Gradient>
+          </View>
           <View style={{ padding: space.lg + 2, gap: space.md }}>
             {parts.map(p => (
               <View key={p.label} style={{ gap: space.xs }}>

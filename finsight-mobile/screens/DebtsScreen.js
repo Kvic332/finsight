@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '../services/dataStore';
 import { space } from '../constants/tokens';
 import {
-  Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Gradient, Icon, IconTile, Input, Money, Sheet, Text,
+  Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Icon, IconTile, Input, Money, Sheet, Text,
   useTheme, useToast,
 } from '../components/ui';
 import { parseNumber } from '../services/catalogRules';
@@ -370,12 +370,12 @@ export default function DebtsScreen({ user }) {
             </Card>
 
             {ranked && order[0] && typeof order[0].annualRate === 'number' ? (
-              <Gradient name="plum" style={{ borderRadius: 22, padding: space.lg + 2, flexDirection: 'row', gap: space.md }}>
-                <Icon name="sparkles" size={20} color="#FFD9E8" />
-                <Text variant="label" color="#FFFFFF" style={{ flex: 1, lineHeight: 20 }}>
+              <Card tone="accentSoft" style={{ padding: space.lg, flexDirection: 'row', gap: space.md }}>
+                <Icon name="sparkles-outline" size={20} color="accent" />
+                <Text variant="label" family="regular" color="ink" style={{ flex: 1, lineHeight: 20 }}>
                   {`${order[0].lender} costs you the most, at about ${order[0].annualRate}% a year. After your minimum payments, any spare money goes furthest there.`}
                 </Text>
-              </Gradient>
+              </Card>
             ) : null}
 
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: space.xs }}>

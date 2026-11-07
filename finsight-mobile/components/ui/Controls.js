@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, TextInput, View } from 'react-native';
 import { fontFamily, motion, radius, space, TOUCH_TARGET, type } from '../../constants/tokens';
-import { Gradient } from './Gradient';
 import { Icon } from './Icon';
 import { Text } from './Text';
 import { tapFeedback, useReducedMotion, useTheme } from './theme';
@@ -17,13 +16,13 @@ export function Chip({ label, selected, onPress, icon }) {
       style={({ pressed }) => ({
         minHeight: 36, paddingHorizontal: space.md, borderRadius: radius.pill, borderWidth: 1,
         flexDirection: 'row', alignItems: 'center', gap: space.xs, overflow: 'hidden',
-        backgroundColor: pressed && !selected ? c.lineStrong : c.sunken,
-        borderColor: 'transparent',
+        // Selected is a soft tint with an accent outline, not a gradient.
+        backgroundColor: selected ? c.accentSoft : pressed ? c.lineStrong : c.sunken,
+        borderColor: selected ? c.accent : 'transparent',
       })}
     >
-      {selected ? <Gradient fill /> : null}
-      {icon ? <Icon name={icon} size={16} color={selected ? '#FFFFFF' : 'ink'} /> : null}
-      <Text variant="label" family="semibold" color={selected ? '#FFFFFF' : 'ink'}>{label}</Text>
+      {icon ? <Icon name={icon} size={16} color={selected ? 'onAccentSoft' : 'ink'} /> : null}
+      <Text variant="label" family={selected ? 'semibold' : 'medium'} color={selected ? 'onAccentSoft' : 'ink'}>{label}</Text>
     </Pressable>
   );
 }

@@ -6,7 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, space } from '../constants/tokens';
 import {
-  Badge, Button, Card, Chip, EmptyState, Gradient, Icon, IconButton, Input, Sheet, Text,
+  Badge, Button, Card, Chip, EmptyState, Gradient, Icon, IconButton, Input, SegmentedControl, Sheet, Text,
   tapFeedback, useTheme, useToast,
 } from '../components/ui';
 import InvestmentsScreen from './InvestmentsScreen';
@@ -394,32 +394,12 @@ function CompareList({ listings, inflation, refreshing, onRefresh }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} />}
         contentContainerStyle={{ paddingBottom: selected.length ? 150 : space.xxxl }}
       >
-        <Gradient style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + 168 }} />
-        <View style={{ paddingTop: insets.top + space.md, paddingHorizontal: space.xl, gap: space.xs }}>
+        <Gradient style={{ paddingTop: insets.top + space.md, paddingHorizontal: space.xl, paddingBottom: space.lg, gap: space.xs, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, overflow: 'hidden' }}>
           <Text variant="title" family="bold" color="#FFFFFF" accessibilityRole="header">Compare & Grow</Text>
           <Text variant="label" color="#FFFFFF">Providers whose licence we've checked</Text>
-        </View>
-        <View
-          accessibilityRole="tablist"
-          style={{
-            flexDirection: 'row', margin: space.xl, marginTop: space.lg, padding: space.xs,
-            borderRadius: radius.md, backgroundColor: 'rgba(255,255,255,0.2)',
-          }}
-        >
-          {TABS.map(t => (
-            <Pressable
-              key={t.value}
-              onPress={() => switchTab(t.value)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: t.value === category }}
-              style={{
-                flex: 1, minHeight: 38, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm,
-                backgroundColor: t.value === category ? '#FFFFFF' : 'transparent',
-              }}
-            >
-              <Text variant="label" family="semibold" color={t.value === category ? '#A30E42' : '#FFFFFF'}>{t.label}</Text>
-            </Pressable>
-          ))}
+        </Gradient>
+        <View style={{ margin: space.xl, marginTop: space.lg }}>
+          <SegmentedControl value={category} onChange={switchTab} options={TABS} />
         </View>
 
         <View style={{ paddingHorizontal: space.xl, gap: space.md }}>

@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, space } from '../constants/tokens';
 import {
-  Button, CategoryTile, Chip, ConfirmSheet, EmptyState, Gradient, Icon, IconButton, Input, Money, Sheet,
+  Button, Card, CategoryTile, Chip, ConfirmSheet, EmptyState, Gradient, Icon, IconButton, Input, Money, Sheet,
   Text, useTheme, useToast,
 } from '../components/ui';
 import { computePaydayPlan, parseTxDate } from '../services/finance';
@@ -16,10 +16,10 @@ import { TransactionRow } from './HomeScreen';
 
 function Total({ label, amount }) {
   return (
-    <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: radius.md, padding: space.md + 2 }}>
-      <Text variant="label" color="#FFFFFF">{label}</Text>
-      <Money value={amount} variant="heading" family="bold" tone="#FFFFFF" adjustsFontSizeToFit style={{ fontSize: 21, lineHeight: 28 }} />
-    </View>
+    <Card style={{ flex: 1, padding: space.md + 2 }}>
+      <Text variant="label" family="medium" color="inkMuted">{label}</Text>
+      <Money value={amount} variant="heading" family="semibold" adjustsFontSizeToFit style={{ fontSize: 21, lineHeight: 28, fontVariant: ['tabular-nums'] }} />
+    </Card>
   );
 }
 
@@ -102,10 +102,10 @@ export default function ActivityScreen({ navigation, user }) {
   const filtered = filter !== 'All' || query.trim();
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.surface }}>
+    <View style={{ flex: 1, backgroundColor: c.canvas }}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      <Gradient style={{ paddingTop: insets.top + space.sm, paddingHorizontal: space.xl, paddingBottom: space.xxxl + space.sm }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.md }}>
+      <Gradient style={{ paddingTop: insets.top + space.sm, paddingHorizontal: space.xl, paddingBottom: space.lg, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, overflow: 'hidden' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text variant="title" family="bold" color="#FFFFFF" accessibilityRole="header">Activity</Text>
           <View style={{ flexDirection: 'row', gap: space.sm }}>
             <IconButton
@@ -117,21 +117,21 @@ export default function ActivityScreen({ navigation, user }) {
             />
           </View>
         </View>
+      </Gradient>
+
+      <View style={{ paddingHorizontal: space.xl, paddingTop: space.lg, gap: space.sm }}>
         <View style={{ flexDirection: 'row', gap: space.md - 2 }}>
           <Total label="Money in" amount={plan.moneyIn} />
           <Total label="Money out" amount={plan.totalSpend} />
         </View>
-        <Text variant="caption" color="#FFFFFF" style={{ marginTop: space.sm, opacity: 0.85 }}>
+        <Text variant="caption" color="inkMuted">
           {plan.cycle.hasPayday
             ? `Since your last payday on ${plan.cycle.start.toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })}`
             : 'This month so far'}
         </Text>
-      </Gradient>
+      </View>
 
-      <View style={{
-        flex: 1, marginTop: -space.xl, backgroundColor: c.surface,
-        borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden',
-      }}>
+      <View style={{ flex: 1, backgroundColor: c.canvas }}>
         <SectionList
           sections={sections}
           keyExtractor={t => t.id}

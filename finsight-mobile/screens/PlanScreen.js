@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StatusBar, View } from 'react-native';
+import { StatusBar, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { radius, space } from '../constants/tokens';
-import { Gradient, Text, tapFeedback, useTheme } from '../components/ui';
+import { space } from '../constants/tokens';
+import { Gradient, SegmentedControl, Text, useTheme } from '../components/ui';
 import BudgetScreen from './BudgetScreen';
 import SavingsScreen from './SavingsScreen';
 import DebtsScreen from './DebtsScreen';
@@ -18,25 +18,16 @@ export default function PlanScreen({ route, user, setUser }) {
   return (
     <View style={{ flex: 1, backgroundColor: c.canvas }}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      <Gradient style={{ paddingTop: insets.top + space.sm, paddingHorizontal: space.xl, paddingBottom: space.lg, gap: space.md }}>
+      <Gradient style={{ paddingTop: insets.top + space.sm, paddingHorizontal: space.xl, paddingBottom: space.lg, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, overflow: 'hidden' }}>
         <Text variant="title" family="bold" color="#FFFFFF" accessibilityRole="header">Plan</Text>
-        <View accessibilityRole="tablist" style={{ flexDirection: 'row', padding: space.xs, borderRadius: radius.md, backgroundColor: 'rgba(255,255,255,0.2)' }}>
-          {['Budget', 'Savings', 'Debts'].map(option => (
-            <Pressable
-              key={option}
-              onPress={() => { tapFeedback(); setView(option); }}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: option === view }}
-              style={{
-                flex: 1, minHeight: 38, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm,
-                backgroundColor: option === view ? '#FFFFFF' : 'transparent',
-              }}
-            >
-              <Text variant="label" family="semibold" color={option === view ? '#A30E42' : '#FFFFFF'}>{option}</Text>
-            </Pressable>
-          ))}
-        </View>
       </Gradient>
+      <View style={{ paddingHorizontal: space.xl, paddingTop: space.lg }}>
+        <SegmentedControl
+          value={view}
+          onChange={setView}
+          options={['Budget', 'Savings', 'Debts'].map(option => ({ value: option, label: option }))}
+        />
+      </View>
       {/* The Payday plan now opens from Home, so an old link to it lands on Budget. */}
       {view === 'Savings' ? <SavingsScreen user={user} setUser={setUser} />
         : view === 'Debts' ? <DebtsScreen user={user} />

@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '../services/dataStore';
 import { space } from '../constants/tokens';
 import {
-  Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Gradient, Icon, IconTile, Input, Money, ProgressBar, Sheet,
+  Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Icon, IconTile, Input, Money, ProgressBar, Sheet,
   Text, useTheme, useToast,
 } from '../components/ui';
 import { computePeriodStats, periodLabel, savingsFlows } from '../services/finance';
@@ -189,10 +189,10 @@ export default function SavingsScreen({ user, setUser }) {
           </View>
         </Card>
 
-        <Gradient name="plum" style={{ borderRadius: 22, padding: space.lg + 2, flexDirection: 'row', gap: space.md }}>
-          <Icon name="sparkles" size={20} color="#FFD9E8" />
-          <Text variant="label" color="#FFFFFF" style={{ flex: 1, lineHeight: 20 }}>{insight}</Text>
-        </Gradient>
+        <Card tone="accentSoft" style={{ padding: space.lg, flexDirection: 'row', gap: space.md }}>
+          <Icon name="sparkles-outline" size={20} color="accent" />
+          <Text variant="label" family="regular" color="ink" style={{ flex: 1, lineHeight: 20 }}>{insight}</Text>
+        </Card>
 
         {unassigned > 0 ? (
           <Card style={{ padding: space.lg, gap: space.sm }}>
