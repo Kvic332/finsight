@@ -21,14 +21,19 @@ import { CURRENCIES, formatForeign, formatRate, isForeign, rateFor, walletBalanc
 import { currentRates, loadWallets } from '../services/fxStore';
 import { businessMonth, hasBusiness } from '../services/business';
 import { loadOwed } from '../services/owedReminders';
-import { openOwed, owedStatus, owedSummary, remaining } from '../services/receivables';
+import { openOwed, owedStatus, owedSummary, remaining, taxSetAside } from '../services/receivables';
 
 // The business this month, for ARIA. Empty for someone without a business.
 function businessSummary(user, transactions, owed = []) {
   if (!hasBusiness(user)) return '';
   const b = businessMonth(transactions);
   const costs = b.byCost.slice(0, 3).map(([cat, amount]) => `${cat} ₦${amount.toLocaleString()}`).join(', ');
-  return `Business this month (kept apart from personal figures): sales ₦${(b.sales + b.otherIn).toLocaleString()}, costs ₦${b.costs.toLocaleString()}${costs ? ` (${costs})` : ''}, profit ₦${b.profit.toLocaleString()}, paid themselves ₦${b.ownerPay.toLocaleString()}${b.hasLast ? `; last month's profit ₦${b.last.profit.toLocaleString()}` : ''}${owedLine(owed)}`;
+  // The same figures the Business screen shows, so ARIA and the screen agree.
+  const percent = Number(user?.taxSetAsidePercent) || 0;
+  const tax = taxSetAside(b.profit, percent);
+  const taxLine = percent ? `, they set aside ${percent}% of profit for tax (₦${tax.toLocaleString()} this month)` : '';
+  const left = Math.max(0, b.kept - tax);
+  return `Business this month (kept apart from personal figures): sales ₦${(b.sales + b.otherIn).toLocaleString()}, costs ₦${b.costs.toLocaleString()}${costs ? ` (${costs})` : ''}, profit ₦${b.profit.toLocaleString()}, paid themselves ₦${b.ownerPay.toLocaleString()}${taxLine}, profit still in the business ₦${left.toLocaleString()}${b.hasLast ? `; last month's profit ₦${b.last.profit.toLocaleString()}` : ''}${owedLine(owed)}`;
 }
 
 // Customers who owe the business, latest first, for ARIA.

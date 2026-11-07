@@ -109,6 +109,8 @@ export default function AddTransactionScreen({ navigation, route, user }) {
     if (whichBook === 'business') return kind === 'credit' ? 'Sales' : 'Other business';
     const options = listFor(kind, whichBook);
     const guess = detectCategory(text || '');
+    // "Other" is only a fallback guess: money coming in is most often income.
+    if (kind === 'credit' && guess === 'Other') return 'Income';
     return options.includes(guess) ? guess : kind === 'credit' ? 'Income' : 'Other';
   }
 
