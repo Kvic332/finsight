@@ -30,6 +30,7 @@ import { hasPin as readHasPin, removePin, wipeAllData } from '../services/pinSto
 import { syncDebtReminders } from '../services/debtReminders';
 import { syncOwedReminders } from '../services/owedReminders';
 import { crashReportingOn, sendTestReport } from '../services/crashReporting';
+import { PrivacySummary } from '../components/PrivacySummary';
 import { syncPaydayReminder } from '../services/paydayReminder';
 import {
   CURRENCIES, FOREIGN_CURRENCIES, formatForeign, formatRate, isForeign, NAIRA, nairaIncome, rateFor,
@@ -224,6 +225,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
   const [showBanks, setShowBanks] = useState(false);
   const [showIncome, setShowIncome] = useState(false);
   const [showUsage, setShowUsage] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
   const [showSalaryDay, setShowSalaryDay] = useState(false);
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [showLockTimeout, setShowLockTimeout] = useState(false);
@@ -534,6 +536,8 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
 
   async function enableCapture() {
     setShowCapture(false);
+    // What was agreed and when, kept on the phone, so it can be shown or withdrawn.
+    await AsyncStorage.setItem('finsight_capture_consent', JSON.stringify({ agreedAt: new Date().toISOString(), version: 1 })).catch(() => {});
     // Tells the Android side which sources to keep before access is switched on.
     await syncBankAlerts();
     awaitingAccess.current = true;
@@ -689,6 +693,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
         ) : null}
 
         <Section title="About">
+          <Row icon="lock-closed-outline" title="Privacy" subtitle="What FinSight keeps, where it goes, and your choices" onPress={() => setShowPrivacy(true)} />
           {crashReportingOn() ? (
             <Row icon="bug-outline" title="Send a test error report" subtitle="Checks crash reporting. It contains no money or personal details"
               onPress={async () => {
@@ -752,6 +757,12 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
           ))}
         </View>
       </FormModal>
+
+      <Sheet visible={showPrivacy} onClose={() => setShowPrivacy(false)} title="Your privacy" footer={<Button full title="Done" variant="secondary" onPress={() => setShowPrivacy(false)} />}>
+        <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false}>
+          <PrivacySummary />
+        </ScrollView>
+      </Sheet>
 
       <Sheet visible={showUsage} onClose={() => setShowUsage(false)} title="How you use FinSight">
         <View accessibilityRole="radiogroup" style={{ gap: space.sm }}>
@@ -849,13 +860,15 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
       <Sheet
         visible={showCapture}
         onClose={() => setShowCapture(false)}
-        title={notifAccessGranted ? 'Keep bank alert capture running' : 'Capture bank alerts'}
+        title={notifAccessGranted ? 'Keep bank alert capture running' : 'Allow FinSight to read bank alerts?'}
         footer={(
           <>
             {notifAccessGranted
               ? <Button full title={captureStatus?.batteryExempt ? 'Battery use allowed' : 'Allow background use'} disabled={!!captureStatus?.batteryExempt} onPress={allowBackground} />
-              : <Button full title="Open phone settings" onPress={enableCapture} />}
-            <Button full title="Open App info" variant="ghost" onPress={() => { setShowCapture(false); openAppInfo(); }} />
+              : <Button full title="I agree, open phone settings" onPress={enableCapture} />}
+            {notifAccessGranted
+              ? <Button full title="Open App info" variant="ghost" onPress={() => { setShowCapture(false); openAppInfo(); }} />
+              : <Button full title="Not now" variant="ghost" onPress={() => setShowCapture(false)} />}
           </>
         )}
       >
@@ -873,10 +886,21 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
             <Text variant="label" family="regular" color="inkMuted">Alerts that arrive while capture is paused aren't added later, so add those by hand or paste the SMS.</Text>
           </View>
         ) : (
-        <View style={{ gap: space.sm }}>
-          <Text color="inkMuted">FinSight can add transactions from your bank's notifications, so you don't have to type them.</Text>
-          <Text variant="label" family="regular" color="inkMuted">Android will show FinSight your notifications. It only keeps alerts from bank apps and bank SMS, and ignores everything else. Nothing is sent anywhere.</Text>
-          {['Tap Open phone settings', 'Find FinSight in the list', 'Turn it on, then come back'].map((step, i) => (
+        <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
+          <Text color="inkMuted">FinSight can add transactions from your bank's notifications, so you don't have to type them. To do that, Android will let FinSight see your notifications.</Text>
+          {[
+            ['What FinSight reads', 'Notifications from bank and money apps (like GTBank, OPay, PalmPay, Kuda, Moniepoint, Grey) and SMS from bank sender names. Every other notification is ignored and not kept.'],
+            ['How it is used', 'On your phone, to find the amount, whether money came in or went out, and a short description. You check each one under "New from your bank".'],
+            ['Is it shared?', "No. Alert text never leaves your phone and isn't sent to FinSight or anyone else. The transactions it creates are only included in a cloud backup if you turn backups on."],
+            ['You stay in control', 'Turn it off any time here or in your phone settings.'],
+          ].map(([title, body]) => (
+            <View key={title} style={{ gap: 2 }}>
+              <Text variant="label" family="semibold">{title}</Text>
+              <Text variant="label" family="regular" color="inkMuted">{body}</Text>
+            </View>
+          ))}
+          <Text variant="label" family="semibold" style={{ marginTop: space.xs }}>To turn it on</Text>
+          {['Tap I agree, open phone settings', 'Find FinSight in the list', 'Turn it on, then come back'].map((step, i) => (
             <View key={step} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
               <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
                 <Text variant="label" family="bold" color="onAccentSoft">{i + 1}</Text>
@@ -885,7 +909,10 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
             </View>
           ))}
           <Text variant="label" family="regular" color="inkMuted">If Android says the setting is restricted, open App info, tap the three dots at the top, choose Allow restricted settings, then try again.</Text>
-        </View>
+          <Pressable onPress={() => { setShowCapture(false); openAppInfo(); }} accessibilityRole="button" hitSlop={8}>
+            <Text variant="label" family="semibold" color="accent">Open App info</Text>
+          </Pressable>
+        </ScrollView>
         )}
       </Sheet>
 

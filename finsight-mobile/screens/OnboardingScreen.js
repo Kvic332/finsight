@@ -9,6 +9,7 @@ import { parseAmount } from '../services/format';
 import { normalizeGoals } from '../services/plans';
 import PinScreen from './PinScreen';
 import { USAGES } from '../services/usage';
+import { PrivacySummary } from '../components/PrivacySummary';
 
 const BANKS = [
   'Access Bank', 'Zenith Bank', 'GTBank', 'First Bank', 'UBA', 'Fidelity Bank', 'Sterling Bank', 'Kuda Bank',
@@ -66,7 +67,8 @@ export default function OnboardingScreen({ onComplete }) {
   const [data, setData] = useState({ name: '', usage: 'salary', income: '', salaryDay: '25', banks: [], goals: [] });
   const tracking = data.usage === 'tracking';
   const business = data.usage === 'business';
-  const LAST = 4;
+  // The last step is the privacy notice, agreed before the PIN is set.
+  const LAST = 5;
 
   const set = patch => setData(d => ({ ...d, ...patch }));
 
@@ -93,6 +95,8 @@ export default function OnboardingScreen({ onComplete }) {
           salaryDay: tracking ? '' : data.salaryDay,
           banks: data.banks,
           goals: normalizeGoals(data.goals),
+          privacyAcceptedAt: new Date().toISOString(),
+          privacyVersion: 1,
           setupComplete: true,
           createdAt: new Date().toISOString(),
         })}
@@ -183,6 +187,11 @@ export default function OnboardingScreen({ onComplete }) {
         </View>
       ),
     },
+    5: {
+      title: 'Your privacy',
+      body: 'How FinSight handles your information, in short. You can read this again any time in Settings.',
+      content: <PrivacySummary />,
+    },
   };
   const current = steps[step];
 
@@ -210,7 +219,7 @@ export default function OnboardingScreen({ onComplete }) {
           {current.content}
         </ScrollView>
         <View style={{ padding: space.xl, gap: space.xs }}>
-          <Button full title={step === LAST ? 'Continue to PIN' : 'Continue'} onPress={next} />
+          <Button full title={step === LAST ? 'Agree and continue' : 'Continue'} onPress={next} />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
