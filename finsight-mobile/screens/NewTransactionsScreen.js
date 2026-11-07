@@ -11,8 +11,14 @@ import { formatDayLabel, formatMoney } from '../services/format';
 import { rememberCategory } from '../services/payeeRuleStore';
 import { loadTransactions, saveTransactions } from '../services/transactions';
 
-const OUT_CATEGORIES = ['Food', 'Transport', 'Utilities', 'Shopping', 'Entertainment', 'Health', 'Savings', 'Debt', 'Transfer', 'Other'];
-const IN_CATEGORIES = ['Income', 'Savings', 'Transfer', 'Other'];
+import { BUSINESS_IN, BUSINESS_OUT, hasBusiness, OWN_ACCOUNTS, OWNER_PAY } from '../services/business';
+
+const OUT_CATEGORIES = ['Food', 'Transport', 'Utilities', 'Shopping', 'Entertainment', 'Health', 'Savings', 'Debt', 'Transfer', OWN_ACCOUNTS, 'Other'];
+const IN_CATEGORIES = ['Income', 'Savings', 'Transfer', OWN_ACCOUNTS, 'Other'];
+// Business users can file an alert straight into the business.
+const listsFor = user => (hasBusiness(user)
+  ? { in: [...IN_CATEGORIES, ...BUSINESS_IN], out: [...OUT_CATEGORIES, ...BUSINESS_OUT.filter(c => c !== OWNER_PAY)] }
+  : { in: IN_CATEGORIES, out: OUT_CATEGORIES });
 
 export const isUnconfirmed = tx => !!tx.unconfirmed;
 
@@ -70,7 +76,8 @@ function InboxRow({ tx, onCategory, onDirection, onConfirm, onRemove }) {
 
 // Transactions captured from bank alerts wait here until the user confirms them,
 // so a wrong category or direction is caught before it skews the numbers.
-export default function NewTransactionsScreen({ navigation }) {
+export default function NewTransactionsScreen({ navigation, user }) {
+  const lists = listsFor(user);
   const { c } = useTheme();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -100,7 +107,7 @@ export default function NewTransactionsScreen({ navigation }) {
   function flipDirection(tx) {
     tapFeedback();
     const type = tx.type === 'credit' ? 'debit' : 'credit';
-    const cats = type === 'credit' ? IN_CATEGORIES : OUT_CATEGORIES;
+    const cats = type === 'credit' ? lists.in : lists.out;
     update(tx.id, { type, cat: cats.includes(tx.cat) ? tx.cat : type === 'credit' ? 'Income' : 'Other' });
   }
 
@@ -133,7 +140,7 @@ export default function NewTransactionsScreen({ navigation }) {
     );
   }
 
-  const cats = picking?.type === 'credit' ? IN_CATEGORIES : OUT_CATEGORIES;
+  const cats = picking?.type === 'credit' ? lists.in : lists.out;
 
   return (
     <View style={{ flex: 1 }}>

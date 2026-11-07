@@ -16,6 +16,19 @@ export const CATEGORY_ICONS = {
   Debt: 'card-outline',
   Shopping: 'bag-outline',
   Other: 'ellipsis-horizontal',
+  'Between my accounts': 'repeat-outline',
+  // Business
+  Sales: 'cash-outline',
+  'Other business income': 'trending-up-outline',
+  Stock: 'cube-outline',
+  'Shop rent': 'storefront-outline',
+  Staff: 'people-outline',
+  Delivery: 'bicycle-outline',
+  'Business bills': 'receipt-outline',
+  'POS charges': 'card-outline',
+  'Levies & tax': 'document-text-outline',
+  'Other business': 'briefcase-outline',
+  'Owner pay': 'person-outline',
 };
 
 export function Icon({ name, size = 20, color = 'ink' }) {

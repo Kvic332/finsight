@@ -19,6 +19,15 @@ import { computePaydayPlan, formatRunway, paydaysOf } from '../services/finance'
 import { budgetSpent } from '../services/plans';
 import { CURRENCIES, formatForeign, formatRate, isForeign, rateFor, walletBalance } from '../services/currency';
 import { currentRates, loadWallets } from '../services/fxStore';
+import { businessMonth, hasBusiness } from '../services/business';
+
+// The business this month, for ARIA. Empty for someone without a business.
+function businessSummary(user, transactions) {
+  if (!hasBusiness(user)) return '';
+  const b = businessMonth(transactions);
+  const costs = b.byCost.slice(0, 3).map(([cat, amount]) => `${cat} ₦${amount.toLocaleString()}`).join(', ');
+  return `Business this month (kept apart from personal figures): sales ₦${(b.sales + b.otherIn).toLocaleString()}, costs ₦${b.costs.toLocaleString()}${costs ? ` (${costs})` : ''}, profit ₦${b.profit.toLocaleString()}, paid themselves ₦${b.ownerPay.toLocaleString()}${b.hasLast ? `; last month's profit ₦${b.last.profit.toLocaleString()}` : ''}`;
+}
 
 // Foreign income, rates and accounts, for ARIA. Empty when there are none.
 async function foreignSummary(user, transactions) {
@@ -193,7 +202,7 @@ export default function ARIAScreen({ navigation, user }) {
 USER PROFILE:
 Name: ${user?.name || 'User'} | Employment: ${user?.employmentType || 'Not specified'}
 Income this pay period: ₦${stats.income.toLocaleString()} | Monthly income set: ₦${(Number(user?.income) || 0).toLocaleString()} | Paydays: ${payLine}
-Banks: ${(user?.banks || []).join(', ') || 'Not specified'}${foreignLine ? `\n${foreignLine}` : ''}
+Banks: ${(user?.banks || []).join(', ') || 'Not specified'}${foreignLine ? `\n${foreignLine}` : ''}${hasBusiness(user) ? `\n${businessSummary(user, transactions)}` : ''}
 
 THIS PAY PERIOD (${transactions.length} transactions tracked in total, ${stats.cycle.daysToGo} days until the next payday):
 Estimated left until payday: ₦${stats.left.toLocaleString()} (an estimate from income and logged transactions, not a bank balance)

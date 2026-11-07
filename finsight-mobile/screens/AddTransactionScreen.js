@@ -21,9 +21,17 @@ import {
   CURRENCIES, FOREIGN_CURRENCIES, foreignFields, formatForeign, formatRate, isForeign, NAIRA, rateFor, walletBalance,
 } from '../services/currency';
 import { currentRates, loadWallets } from '../services/fxStore';
+import {
+  BUSINESS_IN, BUSINESS_OUT, hasBusiness, isBusinessTx, OWN_ACCOUNTS, OWNER_PAY,
+} from '../services/business';
 
-const OUT_CATEGORIES = ['Food', 'Transport', 'Utilities', 'Shopping', 'Entertainment', 'Health', 'Savings', 'Other'];
-const IN_CATEGORIES = ['Income', 'Savings', 'Other'];
+const OUT_CATEGORIES = ['Food', 'Transport', 'Utilities', 'Shopping', 'Entertainment', 'Health', 'Savings', OWN_ACCOUNTS, 'Other'];
+const IN_CATEGORIES = ['Income', 'Savings', OWN_ACCOUNTS, 'Other'];
+// Paying yourself is recorded from the Business screen, so both sides are saved together.
+const BUSINESS_OUT_CHOICES = BUSINESS_OUT.filter(c => c !== OWNER_PAY);
+const listFor = (kind, book) => (book === 'business'
+  ? (kind === 'credit' ? BUSINESS_IN : BUSINESS_OUT_CHOICES)
+  : (kind === 'credit' ? IN_CATEGORIES : OUT_CATEGORIES));
 
 function Saved({ tx, user, isEdit, onDone }) {
   const { c } = useTheme();
@@ -71,7 +79,7 @@ function Saved({ tx, user, isEdit, onDone }) {
 export default function AddTransactionScreen({ navigation, route, user }) {
   const { c, scheme } = useTheme();
   const editing = route?.params?.tx || null;
-  const [type, setType] = useState(editing?.type || 'debit');
+  const [type, setType] = useState(editing?.type || route?.params?.type || 'debit');
   const [currency, setCurrency] = useState(editing?.currency || NAIRA);
   const [amount, setAmount] = useState(editing ? String(isForeign(editing.currency) ? editing.originalAmount : editing.amount) : '');
   const [walletId, setWalletId] = useState(editing?.walletId || null);
@@ -80,7 +88,9 @@ export default function AddTransactionScreen({ navigation, route, user }) {
   const [allTx, setAllTx] = useState([]);
   const [choosingCurrency, setChoosingCurrency] = useState(false);
   const [desc, setDesc] = useState(editing?.desc || '');
-  const [cat, setCat] = useState(editing?.cat || 'Other');
+  const showBook = hasBusiness(user) || (editing && isBusinessTx(editing));
+  const [book, setBook] = useState(editing ? (isBusinessTx(editing) ? 'business' : 'personal') : route?.params?.book || (user?.usage === 'business' ? 'business' : 'personal'));
+  const [cat, setCat] = useState(editing?.cat || (book === 'business' ? (type === 'credit' ? 'Sales' : 'Other business') : type === 'credit' ? 'Income' : 'Other'));
   // Until someone picks a category, by tap or voice, it follows the description.
   const [catChosen, setCatChosen] = useState(!!editing);
   const [errors, setErrors] = useState({});
@@ -90,22 +100,27 @@ export default function AddTransactionScreen({ navigation, route, user }) {
   const [listening, setListening] = useState(false);
   const [heard, setHeard] = useState(null);
 
-  const categories = type === 'credit' ? IN_CATEGORIES : OUT_CATEGORIES;
+  const categories = listFor(type, book);
   // Speech results arrive in a listener set up once, so it reads the latest values here.
   const latest = useRef({});
   latest.current = { categories, amount, desc };
 
-  function guessCategory(text, kind) {
-    const options = kind === 'credit' ? IN_CATEGORIES : OUT_CATEGORIES;
+  function guessCategory(text, kind, whichBook = book) {
+    if (whichBook === 'business') return kind === 'credit' ? 'Sales' : 'Other business';
+    const options = listFor(kind, whichBook);
     const guess = detectCategory(text || '');
     return options.includes(guess) ? guess : kind === 'credit' ? 'Income' : 'Other';
   }
 
   function changeType(next) {
     setType(next);
-    if (!catChosen) setCat(guessCategory(desc, next));
-    else if (next === 'credit' && !IN_CATEGORIES.includes(cat)) setCat('Income');
-    else if (next === 'debit' && !OUT_CATEGORIES.includes(cat)) setCat('Other');
+    if (!catChosen || !listFor(next, book).includes(cat)) setCat(guessCategory(desc, next));
+  }
+
+  function changeBook(next) {
+    setBook(next);
+    setCatChosen(false);
+    setCat(guessCategory(desc, type, next));
   }
 
   function changeDesc(value) {
@@ -221,10 +236,17 @@ export default function AddTransactionScreen({ navigation, route, user }) {
         </View>
 
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.xl, paddingTop: space.md, gap: space.lg }}>
+          {showBook ? (
+            <SegmentedControl
+              value={book}
+              onChange={changeBook}
+              options={[{ value: 'personal', label: 'Personal' }, { value: 'business', label: 'Business' }]}
+            />
+          ) : null}
           <SegmentedControl
             value={type}
             onChange={changeType}
-            options={[{ value: 'debit', label: 'Money out' }, { value: 'credit', label: 'Money in' }]}
+            options={[{ value: 'debit', label: book === 'business' ? 'Cost' : 'Money out' }, { value: 'credit', label: book === 'business' ? 'Sale or income' : 'Money in' }]}
           />
 
           <View style={{ alignItems: 'center', paddingVertical: space.md }}>
@@ -279,7 +301,7 @@ export default function AddTransactionScreen({ navigation, route, user }) {
 
           <Input
             label="Description"
-            placeholder={type === 'credit' ? 'Salary' : 'Groceries'}
+            placeholder={book === 'business' ? (type === 'credit' ? 'What you sold' : 'Supplier or what you paid for') : type === 'credit' ? 'Salary' : 'Groceries'}
             value={desc}
             onChangeText={changeDesc}
             error={errors.desc}

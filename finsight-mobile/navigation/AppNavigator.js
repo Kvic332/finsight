@@ -24,6 +24,7 @@ import ReviewTransactionsScreen from '../screens/ReviewTransactionsScreen';
 import NewTransactionsScreen from '../screens/NewTransactionsScreen';
 import PaydayScreen from '../screens/PaydayScreen';
 import ForeignMoneyScreen from '../screens/ForeignMoneyScreen';
+import BusinessScreen from '../screens/BusinessScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -149,8 +150,9 @@ export default function AppNavigator({ theme, toggleTheme, user, setUser }) {
       <Stack.Screen name="Settings">{back('Settings', p => <SettingsScreen {...p} theme={theme} toggleTheme={toggleTheme} user={user} setUser={setUser} />)}</Stack.Screen>
       <Stack.Screen name="ImportSMS">{back('Import bank SMS', p => <SMSScreen {...p} />)}</Stack.Screen>
       <Stack.Screen name="PaydayPlan">{back('Payday plan', p => <PaydayScreen {...p} user={user} setUser={setUser} />)}</Stack.Screen>
+      <Stack.Screen name="Business">{back('Your business', p => <BusinessScreen {...p} user={user} />)}</Stack.Screen>
       <Stack.Screen name="ForeignMoney">{back('Foreign money', p => <ForeignMoneyScreen {...p} user={user} setUser={setUser} />)}</Stack.Screen>
-      <Stack.Screen name="NewTransactions">{back('New from your bank', p => <NewTransactionsScreen {...p} />)}</Stack.Screen>
+      <Stack.Screen name="NewTransactions">{back('New from your bank', p => <NewTransactionsScreen {...p} user={user} />)}</Stack.Screen>
       <Stack.Screen name="ReviewTransactions">{back('Check imported transactions', p => <ReviewTransactionsScreen {...p} />)}</Stack.Screen>
       <Stack.Screen name="ImportStatement">
         {p => <BankImportScreen onClose={() => p.navigation.goBack()} />}

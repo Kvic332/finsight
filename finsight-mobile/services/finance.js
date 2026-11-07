@@ -7,6 +7,8 @@ const CAP_DAYS = 365;
 // like a daily habit, so the burn rate is never averaged over less than this.
 const MIN_BURN_WINDOW_DAYS = 7;
 
+import { OWN_ACCOUNTS, personalOnly } from './categories.js';
+
 // Transactions store dates as DD/MM/YYYY (en-NG) or ISO. `new Date()` misreads
 // the first form, so always parse through here. Returns a local date or null.
 export function parseTxDate(raw) {
@@ -39,9 +41,10 @@ export function isSameDay(raw, day) {
 
 const sumAmounts = list => list.reduce((s, t) => s + (t.amount || 0), 0);
 
-// Spending leaves out money moved into savings: it's still the user's money.
+// Spending leaves out money moved into savings or between your own accounts:
+// it's still the user's money.
 export function spendingOf(transactions) {
-  return transactions.filter(t => t.type === 'debit' && t.cat !== 'Savings');
+  return transactions.filter(t => t.type === 'debit' && t.cat !== 'Savings' && t.cat !== OWN_ACCOUNTS);
 }
 
 // A debit tagged Savings is money moved to savings. A credit tagged Savings is
@@ -137,7 +140,7 @@ export function expectedPay(user, transactions, now = new Date()) {
   const monthly = Number(user?.income) || 0;
   const paydays = paydaysOf(user);
   if (paydays.length) return { amount: Math.round(monthly / paydays.length), basis: 'salary', months: 0 };
-  const typical = typicalIncome(transactions, now);
+  const typical = typicalIncome(personalOnly(transactions), now);
   if (typical) return { amount: typical.amount, basis: 'average', months: typical.months };
   return { amount: monthly, basis: 'declared', months: 0 };
 }
@@ -183,7 +186,9 @@ function inPeriod(raw, period) {
   return !!d && d >= period.start && d < period.end;
 }
 
-export function computeStats(user, transactions, now = new Date(), period = null) {
+export function computeStats(user, allTransactions, now = new Date(), period = null) {
+  // Business money has its own view; every personal figure leaves it out.
+  const transactions = personalOnly(allTransactions);
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const range = period || { start: new Date(today.getFullYear(), today.getMonth(), 1), end: new Date(today.getFullYear(), today.getMonth() + 1, 1) };
   const monthTxs = transactions.filter(t => inPeriod(t.date, range));
@@ -315,7 +320,7 @@ export function computePaydayPlan(user, transactions, now = new Date()) {
   const shortDays = daysLeft === null ? 0 : Math.max(0, cycle.daysToGo - daysLeft);
   // Rounded up to the next ₦100, because advice to cut ₦1,089 reads as false precision.
   const cutPerDay = shortDays > 0 ? Math.ceil((dailySpend - safePerDay) / 100) * 100 : 0;
-  const moneyIn = sumAmounts(transactions.filter(t => t.type === 'credit' && t.cat !== 'Savings' && inPeriod(t.date, cycle)));
+  const moneyIn = sumAmounts(personalOnly(transactions).filter(t => t.type === 'credit' && t.cat !== 'Savings' && t.cat !== OWN_ACCOUNTS && inPeriod(t.date, cycle)));
   return { ...stats, cycle, safePerDay, shortDays, cutPerDay, moneyIn };
 }
 
@@ -324,7 +329,7 @@ export function weeklySummary(transactions, now = new Date()) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const week = { start: new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6), end: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1) };
   const before = { start: new Date(today.getFullYear(), today.getMonth(), today.getDate() - 13), end: week.start };
-  const spentIn = range => spendingOf(transactions.filter(t => inPeriod(t.date, range)));
+  const spentIn = range => spendingOf(personalOnly(transactions).filter(t => inPeriod(t.date, range)));
   const thisWeek = spentIn(week);
   const spent = sumAmounts(thisWeek);
   const previous = sumAmounts(spentIn(before));

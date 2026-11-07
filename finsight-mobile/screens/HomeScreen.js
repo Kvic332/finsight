@@ -19,6 +19,7 @@ import { checkAchievements, updateStreak } from '../services/notificationService
 import { awardXP, getXPState } from '../services/xpService';
 import { syncFinScore, syncXP, trackEvent } from '../services/cloudSync';
 import { isTrackingOnly } from '../services/usage';
+import { businessMonth, hasBusiness } from '../services/business';
 
 function nextPayLabel(period) {
   if (!period.hasPayday) return 'Your plan for this month';
@@ -370,6 +371,27 @@ export default function HomeScreen({ navigation, user, setUser }) {
           ) : null}
           </>
           )}
+
+          {hasBusiness(user) ? (() => {
+            const biz = businessMonth(transactions);
+            return (
+              <Card onPress={() => navigation.navigate('Business')} accessibilityLabel={`Your business this month. Profit ${formatMoney(biz.profit)}. Open business`} style={{ padding: space.lg, gap: space.sm }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+                  <IconTile name="storefront-outline" tone="accent" />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text variant="label" family="medium" color="inkMuted">Business profit this month</Text>
+                    <Money value={biz.profit} variant="heading" family="bold" tone={biz.profit < 0 ? 'negative' : 'ink'} />
+                  </View>
+                  <Icon name="chevron-forward" size={18} color="inkSubtle" />
+                </View>
+                <Text variant="caption" color="inkMuted">
+                  {biz.count
+                    ? `Sales ${formatMoney(biz.sales + biz.otherIn)} · Costs ${formatMoney(biz.costs)}${biz.ownerPay ? ` · Paid yourself ${formatMoney(biz.ownerPay)}` : ''}`
+                    : 'Record sales and costs to see your profit. Business money stays out of your personal figures.'}
+                </Text>
+              </Card>
+            );
+          })() : null}
 
           <Pressable
             onPress={() => navigation.navigate('Insights')}
