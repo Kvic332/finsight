@@ -37,42 +37,42 @@ function greeting(hour = new Date().getHours()) {
 }
 
 function ActionButton({ icon, label, onPress }) {
+  const { c } = useTheme();
   return (
     <Pressable
       onPress={() => { tapFeedback(); onPress(); }}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => ({ alignItems: 'center', gap: space.xs + 2, flex: 1, opacity: pressed ? 0.75 : 1 })}
+      style={({ pressed }) => ({ alignItems: 'center', gap: space.xs + 2, flex: 1, opacity: pressed ? 0.7 : 1 })}
     >
-      <Gradient style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' }}>
-        <Icon name={icon} size={22} color="#FFFFFF" />
-      </Gradient>
-      <Text variant="caption" family="semibold" numberOfLines={1}>{label}</Text>
+      <View style={{ width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accentSoft }}>
+        <Icon name={icon} size={22} color="accent" />
+      </View>
+      <Text variant="caption" family="medium" color="inkMuted" numberOfLines={1}>{label}</Text>
     </Pressable>
   );
 }
 
-// One tick per day of the pay period: past days, days covered at the current
-// pace, and the days the money won't reach.
-function Runway({ plan }) {
+// How much of this pay is left against how far through the period you are. The
+// line marks today: money ahead of the line means it should last.
+function PeriodBar({ plan }) {
+  const { c } = useTheme();
   const { length, elapsed } = plan.cycle;
-  const short = Math.min(plan.shortDays, length - elapsed);
+  const base = Math.max(plan.left, (plan.income || 0) + (plan.correction || 0));
+  if (!(base > 0) || !(length > 0)) return null;
+  const moneyLeft = Math.max(0, Math.min(1, plan.left / base));
+  const timeLeft = Math.max(0, Math.min(1, 1 - elapsed / length));
+  const ahead = moneyLeft >= timeLeft;
   return (
-    <View
-      accessible
-      accessibilityLabel={`Day ${elapsed} of ${length} in this pay period${short ? `, ${short} days short of payday` : ''}`}
-      style={{ flexDirection: 'row', gap: 3 }}
-    >
-      {Array.from({ length }, (_, i) => {
-        const past = i < elapsed;
-        const isShort = i >= length - short;
-        return (
-          <View key={i} style={{
-            flex: 1, height: 8, borderRadius: 2,
-            backgroundColor: isShort ? '#FFB020' : past ? 'rgba(255,255,255,0.35)' : '#FFFFFF',
-          }} />
-        );
-      })}
+    <View style={{ gap: space.xs + 2, marginTop: space.md }}
+      accessible accessibilityLabel={`${Math.round(moneyLeft * 100)}% of your money left, ${Math.round(timeLeft * 100)}% of the period to go`}>
+      <View style={{ height: 6, borderRadius: radius.pill, backgroundColor: c.sunken, overflow: 'hidden' }}>
+        <View style={{ width: `${moneyLeft * 100}%`, height: '100%', borderRadius: radius.pill, backgroundColor: ahead ? c.positive : c.warning }} />
+        <View style={{ position: 'absolute', left: `${timeLeft * 100}%`, top: -2, bottom: -2, width: 2, backgroundColor: c.ink, opacity: 0.6 }} />
+      </View>
+      <Text variant="caption" color="inkMuted">
+        {`${Math.round(moneyLeft * 100)}% of your money left · day ${elapsed} of ${length}`}
+      </Text>
     </View>
   );
 }
@@ -92,7 +92,7 @@ function SpendingCardBody({ stats }) {
   return (
     <>
       <Text variant="label" family="medium" color="inkMuted">Spent this month</Text>
-      <Money value={stats.totalSpend} variant="display" family="bold" adjustsFontSizeToFit style={{ fontSize: 40, lineHeight: 50, letterSpacing: -1 }} />
+      <Money value={stats.totalSpend} variant="display" family="semibold" adjustsFontSizeToFit style={{ fontSize: 38, lineHeight: 48, letterSpacing: -0.8, fontVariant: ['tabular-nums'] }} />
       <Text variant="label" family="medium" color="inkMuted">{`About ${formatMoney(Math.round(perDay))} a day${top ? `, most on ${top[0]}` : ''}`}</Text>
       <Text variant="label" family="semibold" color={change === null ? 'inkMuted' : change <= 0 ? 'positive' : 'negative'} style={{ marginTop: space.xs }}>{pace}</Text>
     </>
@@ -137,7 +137,7 @@ function CardCarousel({ cards, render, onChange }) {
   const [index, setIndex] = useState(0);
   const [ready, setReady] = useState(false);
   const gap = space.md;
-  const peek = cards.length > 1 ? space.xl : 0;
+  const peek = cards.length > 1 ? space.md : 0;
   const cardWidth = width - space.xl * 2 - peek;
   const step = cardWidth + gap;
   const keys = cards.map(card => card.key).join(',');
@@ -182,7 +182,7 @@ function CardCarousel({ cards, render, onChange }) {
         onMomentumScrollEnd={e => settle(e.nativeEvent.contentOffset.x)}
       >
         {cards.map((card, i) => (
-          <View key={card.key} style={{ width: cardWidth }} accessibilityLabel={`${card.label}, card ${i + 1} of ${cards.length}`}>
+          <View key={card.key} style={{ width: cardWidth, opacity: i === index ? 1 : 0.35 }} accessibilityLabel={`${card.label}, card ${i + 1} of ${cards.length}`}>
             {render(card)}
           </View>
         ))}
@@ -213,23 +213,19 @@ function BrokeClock({ plan, onSetPayday }) {
   else if (hasPace) advice = 'At this pace, your money reaches payday.';
 
   const card = (
-    <Gradient name="plum" style={{ borderRadius: 22, padding: space.lg + 2, gap: space.md - 2 }}>
+    <Card style={{ padding: space.lg, gap: space.xs }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm }}>
-        <View style={{ flex: 1 }}>
-          <Text variant="label" color="#FFD9E8">Broke Clock</Text>
-          <Text variant="heading" family="bold" color="#FFFFFF" numberOfLines={1} adjustsFontSizeToFit>{title}</Text>
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+          <Icon name="hourglass-outline" size={18} color="inkMuted" />
+          <Text variant="label" family="medium" color="inkMuted">Broke Clock</Text>
         </View>
         {hasPace && cycle.hasPayday ? (
-          <View style={{ backgroundColor: shortDays > 0 ? '#FFB020' : '#DDF6E8', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 }}>
-            <Text variant="caption" family="bold" color={shortDays > 0 ? '#3B0B3E' : '#08603B'}>
-              {shortDays > 0 ? `${shortDays} ${shortDays === 1 ? 'day' : 'days'} short` : 'On track'}
-            </Text>
-          </View>
+          <Badge label={shortDays > 0 ? `${shortDays} ${shortDays === 1 ? 'day' : 'days'} short` : 'On track'} tone={shortDays > 0 ? 'warning' : 'positive'} />
         ) : null}
       </View>
-      <Runway plan={plan} />
-      <Text variant="label" color="#FFFFFF">{advice}</Text>
-    </Gradient>
+      <Text variant="heading" family="semibold" numberOfLines={1} adjustsFontSizeToFit>{title}</Text>
+      <Text variant="label" family="regular" color="inkMuted">{advice}</Text>
+    </Card>
   );
   if (hasPace && !cycle.hasPayday) {
     return <Pressable onPress={onSetPayday} accessibilityRole="button" accessibilityLabel="Set your payday in Settings">{card}</Pressable>;
@@ -365,10 +361,10 @@ export default function HomeScreen({ navigation, user, setUser }) {
         contentContainerStyle={{ paddingBottom: space.xxxl }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} colors={[c.accent]} />}
       >
-        <Gradient style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + 188 }} />
-        <View style={{
-          paddingTop: insets.top + space.md, paddingHorizontal: space.xl, paddingBottom: space.lg + 2,
+        <Gradient style={{
+          paddingTop: insets.top + space.md, paddingHorizontal: space.xl, paddingBottom: space.xl,
           flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+          borderBottomLeftRadius: 28, borderBottomRightRadius: 28, marginBottom: space.lg, overflow: 'hidden',
         }}>
           <View style={{ flex: 1 }}>
             <Text variant="label" color="#FFFFFF">{greeting()}</Text>
@@ -387,7 +383,7 @@ export default function HomeScreen({ navigation, user, setUser }) {
               ? <Text variant="heading" family="bold" color="#FFFFFF">{firstName[0].toUpperCase()}</Text>
               : <Icon name="settings-outline" color="#FFFFFF" />}
           </Pressable>
-        </View>
+        </Gradient>
 
         {(() => {
           const biz = businessMonth(transactions);
@@ -414,8 +410,9 @@ export default function HomeScreen({ navigation, user, setUser }) {
                   return (
                     <Card style={cardStyle}>
                       <Text variant="label" family="medium" color="inkMuted">{card.label}</Text>
-                      <Money value={plan.left} variant="display" family="bold" adjustsFontSizeToFit style={{ fontSize: 40, lineHeight: 50, letterSpacing: -1 }} />
-                      <Text variant="label" family="medium" color="inkMuted">{subtitle}</Text>
+                      <Money value={plan.left} variant="display" family="semibold" adjustsFontSizeToFit style={{ fontSize: 38, lineHeight: 48, letterSpacing: -0.8, fontVariant: ['tabular-nums'] }} />
+                      <Text variant="label" family="regular" color="inkMuted">{subtitle}</Text>
+                      <PeriodBar plan={plan} />
                       <Pressable onPress={openBalanceCheck} accessibilityRole="button" hitSlop={8} style={{ marginTop: 'auto', paddingTop: space.sm, flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
                         <Icon name={check ? 'checkmark-circle' : 'scale-outline'} size={16} color="accent" />
                         <Text variant="caption" family="semibold" color="accent">
@@ -431,7 +428,7 @@ export default function HomeScreen({ navigation, user, setUser }) {
                   return (
                     <Card style={cardStyle} onPress={() => navigation.navigate('Business')} accessibilityLabel={`Business profit this month ${formatMoney(biz.profit)}. Open your business`}>
                       <Text variant="label" family="medium" color="inkMuted">Business profit this month</Text>
-                      <Money value={biz.profit} variant="display" family="bold" tone={biz.profit < 0 ? 'negative' : 'ink'} adjustsFontSizeToFit style={{ fontSize: 40, lineHeight: 50, letterSpacing: -1 }} />
+                      <Money value={biz.profit} variant="display" family="semibold" tone={biz.profit < 0 ? 'negative' : 'ink'} adjustsFontSizeToFit style={{ fontSize: 38, lineHeight: 48, letterSpacing: -0.8, fontVariant: ['tabular-nums'] }} />
                       <Text variant="label" family="medium" color="inkMuted">
                         {biz.count ? `Sales ${formatMoney(biz.sales + biz.otherIn)} · Costs ${formatMoney(biz.costs)}` : 'Record sales and costs to see your profit'}
                       </Text>
@@ -448,7 +445,7 @@ export default function HomeScreen({ navigation, user, setUser }) {
                   return (
                     <Card style={cardStyle} onPress={() => navigation.navigate('ForeignMoney')} accessibilityLabel="Foreign accounts. Open foreign money">
                       <Text variant="label" family="medium" color="inkMuted">Foreign accounts, in naira</Text>
-                      <Money value={walletsInNaira(wallets, transactions, fxRates, user?.fxOwnRates)} variant="display" family="bold" adjustsFontSizeToFit style={{ fontSize: 40, lineHeight: 50, letterSpacing: -1 }} />
+                      <Money value={walletsInNaira(wallets, transactions, fxRates, user?.fxOwnRates)} variant="display" family="semibold" adjustsFontSizeToFit style={{ fontSize: 38, lineHeight: 48, letterSpacing: -0.8, fontVariant: ['tabular-nums'] }} />
                       <Text variant="label" family="medium" color="inkMuted" numberOfLines={2}>
                         {wallets.slice(0, 3).map(w => `${w.name} ${formatForeign(walletBalance(w, transactions), w.currency)}`).join(' · ')}
                       </Text>
@@ -468,12 +465,12 @@ export default function HomeScreen({ navigation, user, setUser }) {
         })()}
 
         <View style={{ paddingHorizontal: space.xl, gap: space.md + 2, marginTop: space.md }}>
-          <Card style={{ paddingVertical: space.md, paddingHorizontal: space.sm, flexDirection: 'row' }}>
-            <ActionButton icon="add" label="Add" onPress={() => navigation.navigate('Add')} />
+          <View style={{ flexDirection: 'row', paddingVertical: space.xs }}>
             <ActionButton icon="download-outline" label="Import" onPress={() => setShowImport(true)} />
             <ActionButton icon="pie-chart-outline" label="Budget" onPress={() => navigation.navigate('Plan')} />
+            <ActionButton icon="stats-chart-outline" label="Insights" onPress={() => navigation.navigate('Insights')} />
             <ActionButton icon="chatbubble-ellipses-outline" label="Ask ARIA" onPress={() => navigation.navigate('ARIA')} />
-          </Card>
+          </View>
 
           {tracking ? <WhereItWent stats={month} transactions={transactions} /> : (
           <>
