@@ -81,7 +81,7 @@ const clock = (h, m) => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '
 function Section({ title, children }) {
   return (
     <View style={{ gap: space.sm }}>
-      <Text variant="label" family="bold" color="inkMuted" accessibilityRole="header">{title}</Text>
+      <Text variant="label" family="semibold" color="inkMuted" accessibilityRole="header">{title}</Text>
       <Card padded={false} style={{ overflow: 'hidden' }}>{children}</Card>
     </View>
   );
@@ -90,7 +90,8 @@ function Section({ title, children }) {
 function Row({ icon, title, subtitle, onPress, right, danger, last }) {
   return (
     <ListRow
-      leading={<IconTile name={icon} size={40} tone={danger ? 'negative' : 'accent'} />}
+      // Neutral tiles: a long column of pink ones made Settings loud.
+      leading={<IconTile name={icon} size={36} tone={danger ? 'negative' : 'neutral'} />}
       title={title}
       subtitle={subtitle}
       value={right}
@@ -607,7 +608,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
                 : <Text variant="title" family="bold" color="onAccentSoft">{firstName[0]?.toUpperCase()}</Text>}
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text variant="heading" family="bold" numberOfLines={1}>{user?.name || 'Set up your profile'}</Text>
+              <Text variant="heading" family="semibold" numberOfLines={1}>{user?.name || 'Set up your profile'}</Text>
               <Text variant="label" family="regular" color="inkMuted" numberOfLines={1}>{user?.employmentType || user?.email || 'Add your details'}</Text>
             </View>
             <Icon name="chevron-forward" size={18} color="inkSubtle" />
@@ -705,7 +706,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
               title: 'Your privacy',
               body: 'Your transactions, budgets, goals, debts and profile are stored on this phone, encrypted.\n\nIf you turn on Capture bank alerts, Android shows FinSight your notifications. It keeps only alerts from bank apps and bank SMS, on this phone, and ignores everything else. New alerts wait unencrypted, in storage only FinSight can use, until the app next opens.\n\nWhen you ask ARIA a question, a summary of your finances goes through our server to Anthropic, the AI provider, to get an answer.\n\nExcel and CSV statements are read on your phone. If you choose a PDF statement, we ask first, then the whole file goes through our server to Anthropic to be read. FinSight doesn\'t keep it.\n\nIf you create a cloud account, your backup and basic usage figures are stored with Google Firebase. The app only lets your account open your backup. It\'s protected by Firebase\'s security, not by FinSight\'s own encryption. You can delete your account and backup under Cloud backup.\n\nCompare & Grow doesn\'t send your finances anywhere. "Go to provider" opens a website we don\'t run, and we may earn from some of those links. That never changes the order of the list.\n\nWe don\'t sell your data.',
             })} />
-          <ListRow leading={<IconTile name="information-circle-outline" size={40} tone="accent" />} title="Version" subtitle="FinSight 1.0.0" divider={false} />
+          <ListRow leading={<IconTile name="information-circle-outline" size={36} tone="neutral" />} title="Version" subtitle="FinSight 1.0.0" divider={false} />
         </Section>
       </ScrollView>
 

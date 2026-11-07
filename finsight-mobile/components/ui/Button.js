@@ -1,7 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { radius, space } from '../../constants/tokens';
-import { Gradient } from './Gradient';
 import { Icon } from './Icon';
 import { Text } from './Text';
 import { tapFeedback, useTheme } from './theme';
@@ -15,7 +14,8 @@ function buttonColors(variant, c, pressed) {
     case 'danger':
       return { bg: pressed ? c.negativeSoft : 'transparent', border: c.negative, fg: 'negative' };
     default:
-      return { bg: 'transparent', border: 'transparent', fg: 'onGradient' };
+      // Solid, not a gradient: calmer, and the text uses the accent's own colour.
+      return { bg: pressed ? c.accentPressed : c.accent, border: 'transparent', fg: 'onAccent' };
   }
 }
 
@@ -27,7 +27,7 @@ export function Button({
   const inactive = disabled || loading;
   const isPrimary = variant === 'primary';
   const fg = buttonColors(variant, c, false).fg;
-  const fgColor = fg === 'onGradient' ? '#FFFFFF' : c[fg];
+  const fgColor = c[fg];
   return (
     <Pressable
       onPress={() => { tapFeedback(); onPress?.(); }}
@@ -42,24 +42,23 @@ export function Button({
           minHeight: 54,
           paddingHorizontal: space.xl,
           borderRadius: radius.md,
-          borderWidth: isPrimary ? 0 : 1.5,
+          borderWidth: isPrimary ? 0 : 1,
           backgroundColor: b.bg,
           borderColor: b.border,
           alignItems: 'center',
           justifyContent: 'center',
           alignSelf: full ? 'stretch' : 'flex-start',
           overflow: 'hidden',
-          opacity: disabled ? 0.5 : pressed && isPrimary ? 0.88 : 1,
+          opacity: disabled ? 0.5 : 1,
         };
       }}
     >
-      {isPrimary ? <Gradient fill /> : null}
       {loading ? (
         <ActivityIndicator size="small" color={fgColor} />
       ) : (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
           {icon ? <Icon name={icon} size={18} color={fgColor} /> : null}
-          <Text variant="bodyStrong" family="bold" color={fgColor}>{title}</Text>
+          <Text variant="bodyStrong" family="semibold" color={fgColor}>{title}</Text>
         </View>
       )}
     </Pressable>
