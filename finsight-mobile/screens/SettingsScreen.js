@@ -28,6 +28,7 @@ import { exportCSV, exportPDF } from '../services/exportService';
 import { formatMoney, parseAmount } from '../services/format';
 import { hasPin as readHasPin, removePin, wipeAllData } from '../services/pinStore';
 import { syncDebtReminders } from '../services/debtReminders';
+import { syncOwedReminders } from '../services/owedReminders';
 import { syncPaydayReminder } from '../services/paydayReminder';
 import {
   CURRENCIES, FOREIGN_CURRENCIES, formatForeign, formatRate, isForeign, NAIRA, nairaIncome, rateFor,
@@ -579,6 +580,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
       onConfirm: async () => {
         await cancelDailyReminder().catch(() => {});
         await syncDebtReminders([]);
+        await syncOwedReminders([]);
         await syncPaydayReminder(null);
         await wipeAllData();
         setUser(null);

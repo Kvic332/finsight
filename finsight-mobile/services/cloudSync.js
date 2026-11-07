@@ -150,6 +150,7 @@ const BACKUP_KEYS = [
   'finsight_debts',
   'finsight_payee_rules',
   'finsight_wallets',
+  'finsight_owed_to_me',
 ];
 
 // This phone's record of its last backup or restore: { uid, at, hash }. Kept on

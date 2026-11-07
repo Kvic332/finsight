@@ -19,6 +19,7 @@ import { gradients } from './constants/tokens';
 import { checkAndSendDigests } from './services/notificationService';
 import { syncBankAlerts } from './services/notificationPermission';
 import { syncDebtReminders, syncStoredDebtReminders } from './services/debtReminders';
+import { syncOwedReminders, syncStoredOwedReminders } from './services/owedReminders';
 import { syncPaydayReminder } from './services/paydayReminder';
 import { runAutoBackup } from './services/cloudSync';
 import { refreshForeignIncome } from './services/fxStore';
@@ -78,6 +79,7 @@ export default function App() {
       }
       await syncBankAlerts();
       syncStoredDebtReminders();
+      syncStoredOwedReminders();
       // After the bank alerts are in, so the backup includes them.
       runAutoBackup();
     } catch(e){
@@ -155,7 +157,7 @@ export default function App() {
         {dataLocked ? (
           <DataLockedScreen
             onRetry={() => { setDataLocked(false); setLoading(true); initApp(); }}
-            onStartOver={async () => { await syncDebtReminders([]); await syncPaydayReminder(null); await wipeAllData(); setDataLocked(false); setUser(null); setLocked(false); }}
+            onStartOver={async () => { await syncDebtReminders([]); await syncOwedReminders([]); await syncPaydayReminder(null); await wipeAllData(); setDataLocked(false); setUser(null); setLocked(false); }}
           />
         ) : !user ? (
           <Stack.Navigator screenOptions={{ headerShown:false }}>
@@ -173,6 +175,7 @@ export default function App() {
             onSuccess={()=>setLocked(false)}
             onForgot={async()=>{
               await syncDebtReminders([]);
+              await syncOwedReminders([]);
               await syncPaydayReminder(null);
               await wipeAllData();
               setUser(null); setLocked(false);
