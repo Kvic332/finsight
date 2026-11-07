@@ -20,13 +20,27 @@ import { budgetSpent } from '../services/plans';
 import { CURRENCIES, formatForeign, formatRate, isForeign, rateFor, walletBalance } from '../services/currency';
 import { currentRates, loadWallets } from '../services/fxStore';
 import { businessMonth, hasBusiness } from '../services/business';
+import { loadOwed } from '../services/owedReminders';
+import { openOwed, owedStatus, owedSummary, remaining } from '../services/receivables';
 
 // The business this month, for ARIA. Empty for someone without a business.
-function businessSummary(user, transactions) {
+function businessSummary(user, transactions, owed = []) {
   if (!hasBusiness(user)) return '';
   const b = businessMonth(transactions);
   const costs = b.byCost.slice(0, 3).map(([cat, amount]) => `${cat} ₦${amount.toLocaleString()}`).join(', ');
-  return `Business this month (kept apart from personal figures): sales ₦${(b.sales + b.otherIn).toLocaleString()}, costs ₦${b.costs.toLocaleString()}${costs ? ` (${costs})` : ''}, profit ₦${b.profit.toLocaleString()}, paid themselves ₦${b.ownerPay.toLocaleString()}${b.hasLast ? `; last month's profit ₦${b.last.profit.toLocaleString()}` : ''}`;
+  return `Business this month (kept apart from personal figures): sales ₦${(b.sales + b.otherIn).toLocaleString()}, costs ₦${b.costs.toLocaleString()}${costs ? ` (${costs})` : ''}, profit ₦${b.profit.toLocaleString()}, paid themselves ₦${b.ownerPay.toLocaleString()}${b.hasLast ? `; last month's profit ₦${b.last.profit.toLocaleString()}` : ''}${owedLine(owed)}`;
+}
+
+// Customers who owe the business, latest first, for ARIA.
+function owedLine(owed) {
+  const open = openOwed(owed);
+  if (!open.length) return '';
+  const due = owedSummary(owed);
+  const people = open.slice(0, 5).map(e => {
+    const status = owedStatus(e);
+    return `${e.name} ₦${remaining(e).toLocaleString()}${status ? ` (${status.label.toLowerCase()})` : ''}`;
+  }).join(', ');
+  return `. Owed to them: ₦${due.total.toLocaleString()} from ${due.count} customers, ${due.late} late: ${people}`;
 }
 
 // Foreign income, rates and accounts, for ARIA. Empty when there are none.
@@ -120,6 +134,7 @@ export default function ARIAScreen({ navigation, user }) {
   const [budgets, setBudgets] = useState([]);
   const [debts, setDebts] = useState([]);
   const [foreignLine, setForeignLine] = useState('');
+  const [owed, setOwed] = useState([]);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   // Off by default: reading someone's money out loud shouldn't happen unasked.
@@ -141,6 +156,7 @@ export default function ARIAScreen({ navigation, user }) {
       AsyncStorage.getItem(LANGUAGE_KEY),
     ]).then(([tRaw, bRaw, dRaw, lang]) => {
       foreignSummary(user, tRaw ? JSON.parse(tRaw) : []).then(setForeignLine).catch(() => {});
+      if (hasBusiness(user)) loadOwed().then(setOwed).catch(() => {});
       if (LANGUAGES.some(l => l.key === lang)) setLanguage(lang);
       setTransactions(tRaw ? JSON.parse(tRaw) : []);
       setBudgets(bRaw ? JSON.parse(bRaw) : []);
@@ -202,7 +218,7 @@ export default function ARIAScreen({ navigation, user }) {
 USER PROFILE:
 Name: ${user?.name || 'User'} | Employment: ${user?.employmentType || 'Not specified'}
 Income this pay period: ₦${stats.income.toLocaleString()} | Monthly income set: ₦${(Number(user?.income) || 0).toLocaleString()} | Paydays: ${payLine}
-Banks: ${(user?.banks || []).join(', ') || 'Not specified'}${foreignLine ? `\n${foreignLine}` : ''}${hasBusiness(user) ? `\n${businessSummary(user, transactions)}` : ''}
+Banks: ${(user?.banks || []).join(', ') || 'Not specified'}${foreignLine ? `\n${foreignLine}` : ''}${hasBusiness(user) ? `\n${businessSummary(user, transactions, owed)}` : ''}
 
 THIS PAY PERIOD (${transactions.length} transactions tracked in total, ${stats.cycle.daysToGo} days until the next payday):
 Estimated left until payday: ₦${stats.left.toLocaleString()} (an estimate from income and logged transactions, not a bank balance)

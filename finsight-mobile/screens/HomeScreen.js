@@ -20,6 +20,8 @@ import { awardXP, getXPState } from '../services/xpService';
 import { syncFinScore, syncXP, trackEvent } from '../services/cloudSync';
 import { isTrackingOnly } from '../services/usage';
 import { businessMonth, hasBusiness } from '../services/business';
+import { loadOwed } from '../services/owedReminders';
+import { owedSummary } from '../services/receivables';
 
 function nextPayLabel(period) {
   if (!period.hasPayday) return 'Your plan for this month';
@@ -166,6 +168,7 @@ export default function HomeScreen({ navigation, user, setUser }) {
   const [showImport, setShowImport] = useState(false);
   const [planData, setPlanData] = useState({ debts: [], budgets: [] });
   const [wallets, setWallets] = useState([]);
+  const [owed, setOwed] = useState([]);
   const [fxRates, setFxRates] = useState(null);
   const [checking, setChecking] = useState(false);
   const [realText, setRealText] = useState('');
@@ -185,6 +188,7 @@ export default function HomeScreen({ navigation, user, setUser }) {
     const [dRaw, bRaw] = await Promise.all([AsyncStorage.getItem('finsight_debts'), AsyncStorage.getItem('finsight_budgets')]);
     setPlanData({ debts: dRaw ? JSON.parse(dRaw) : [], budgets: bRaw ? JSON.parse(bRaw) : [] });
     const w = await loadWallets();
+    if (hasBusiness(user)) loadOwed().then(setOwed).catch(() => {});
     setWallets(w);
     if (w.length) currentRates().then(saved => setFxRates(saved?.rates || null)).catch(() => {});
     const updated = await updateStreak();
@@ -389,6 +393,14 @@ export default function HomeScreen({ navigation, user, setUser }) {
                     ? `Sales ${formatMoney(biz.sales + biz.otherIn)} · Costs ${formatMoney(biz.costs)}${biz.ownerPay ? ` · Paid yourself ${formatMoney(biz.ownerPay)}` : ''}`
                     : 'Record sales and costs to see your profit. Business money stays out of your personal figures.'}
                 </Text>
+                {(() => {
+                  const due = owedSummary(owed);
+                  return due.count ? (
+                    <Text variant="caption" family="semibold" color={due.late ? 'negative' : 'inkMuted'}>
+                      {`Owed to you: ${formatMoney(due.total)} from ${due.count === 1 ? '1 customer' : `${due.count} customers`}${due.late ? `, ${due.late} late` : ''}`}
+                    </Text>
+                  ) : null;
+                })()}
               </Card>
             );
           })() : null}
