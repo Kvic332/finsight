@@ -263,6 +263,7 @@ export default function HomeScreen({ navigation, user, setUser }) {
   const [realText, setRealText] = useState('');
   const [realError, setRealError] = useState('');
   const [hideBalances, setHideBalances] = useState(false);
+  const [showBalanceInfo, setShowBalanceInfo] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(HIDE_BALANCES_KEY).then(v => setHideBalances(v === '1')).catch(() => {});
@@ -383,7 +384,7 @@ export default function HomeScreen({ navigation, user, setUser }) {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: space.xxxl }}
+        contentContainerStyle={{ paddingBottom: space.huge + space.xxl }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} colors={[c.accent]} />}
       >
         <Gradient style={{
@@ -500,7 +501,7 @@ export default function HomeScreen({ navigation, user, setUser }) {
           {/* The one thing on Home that needs the user: it comes first and stands out. */}
           {toCheck ? (
             <Card onPress={() => navigation.navigate('NewTransactions')} accessibilityLabel={`${toCheck} new from your bank. Review them`} style={{ padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.md, borderWidth: 1.5, borderColor: c.accent }}>
-              <IconTile name="notifications-outline" tone="accent" />
+              <IconTile name="checkmark-done-outline" tone="accent" />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text variant="bodyStrong" family="bold" numberOfLines={1} adjustsFontSizeToFit>{toCheck === 1 ? '1 new from your bank' : `${toCheck} new from your bank`}</Text>
                 <Text variant="label" family="regular" color="inkMuted">Check them to keep figures right</Text>
@@ -524,6 +525,7 @@ export default function HomeScreen({ navigation, user, setUser }) {
                   {nextPay.short
                     ? <Badge label={`${formatMoney(nextPay.short)} short`} tone="negative" />
                     : paceStatus(plan) ? <Badge label={paceStatus(plan).badge} tone={paceStatus(plan).tone} /> : null}
+                  <Icon name="chevron-forward" size={18} color="inkSubtle" />
                 </View>
                   <Text variant="bodyStrong" family="semibold" style={{ marginTop: 2, fontVariant: ['tabular-nums'] }}>
                     {`${formatMoney(nextPay.free)} free to spend`}
@@ -565,36 +567,41 @@ export default function HomeScreen({ navigation, user, setUser }) {
                   </>
                 );
               })()}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
-                <Text variant="caption" family="semibold" color="accent">See full plan</Text>
-                <Icon name="chevron-forward" size={14} color="accent" />
-              </View>
             </Card>
           ) : null}
           </>
           )}
 
-          <Pressable
-            onPress={() => navigation.navigate('Insights')}
-            accessibilityRole="button"
+          <Card onPress={() => navigation.navigate('Insights')}
             accessibilityLabel={`FinScore ${finScore}. ${streak.count} day streak. See your insights.`}
-            style={({ pressed }) => ({
-              flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: space.xs,
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            <Icon name="sparkles-outline" size={18} color="accent" />
-            <Text variant="label" family="semibold" style={{ flex: 1 }}>
-              FinScore {finScore}{streak.count > 0 ? ` · ${streak.count}-day streak` : ''}
-            </Text>
-            <Text variant="label" family="semibold" color="accent">Insights</Text>
-            <Icon name="chevron-forward" size={16} color="accent" />
-          </Pressable>
+            style={{ padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+            <View style={{
+              width: 48, height: 48, borderRadius: 24, borderWidth: 3, alignItems: 'center', justifyContent: 'center',
+              borderColor: finScore >= 70 ? c.positive : finScore >= 50 ? c.warning : c.negative,
+            }}>
+              <Text variant="bodyStrong" family="bold" tabular>{finScore}</Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text variant="bodyStrong" family="semibold">Your FinScore</Text>
+              <Text variant="label" family="regular" color="inkMuted">
+                {streak.count > 0 ? `${streak.count}-day streak` : 'See what moves your score'}
+              </Text>
+            </View>
+            <Icon name="chevron-forward" size={18} color="inkSubtle" />
+          </Card>
 
           {banks.length ? (
             <Card style={{ padding: space.lg, gap: space.sm }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text variant="label" family="semibold" color="inkMuted">What your bank alerts last said</Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text variant="bodyStrong" family="semibold">Bank balances</Text>
+                  <Text variant="caption" color="inkMuted">From your latest bank alerts</Text>
+                </View>
+                <Pressable onPress={() => setShowBalanceInfo(v => !v)} accessibilityRole="button" hitSlop={12}
+                  accessibilityLabel={showBalanceInfo ? 'Hide what these balances mean' : 'What these balances mean'}
+                  style={{ marginRight: space.md }}>
+                  <Icon name="information-circle-outline" size={20} color="inkMuted" />
+                </Pressable>
                 <Pressable onPress={toggleBalances} accessibilityRole="button" hitSlop={12}
                   accessibilityLabel={hideBalances ? 'Show bank balances' : 'Hide bank balances'}>
                   <Icon name={hideBalances ? 'eye-off-outline' : 'eye-outline'} size={20} color="inkMuted" />
@@ -609,9 +616,11 @@ export default function HomeScreen({ navigation, user, setUser }) {
                     : <Money value={b.balance} family="bold" />}
                 </View>
               ))}
-              <Text variant="caption" color="inkMuted">
-                Real balances from your bank. "Left until payday" is FinSight's estimate from your income and spending, so the two can differ.
-              </Text>
+              {showBalanceInfo ? (
+                <Text variant="caption" color="inkMuted">
+                  These are the real balances in your bank's latest alerts. "Left until payday" is FinSight's estimate from your income and spending, so the two can differ.
+                </Text>
+              ) : null}
             </Card>
           ) : null}
 
