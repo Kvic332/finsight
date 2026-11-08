@@ -1,10 +1,11 @@
 import React from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { radius, space, TOUCH_TARGET } from '../../constants/tokens';
+import { LinearGradient } from 'expo-linear-gradient';
+import { heroes, heroInk, radius, space, TOUCH_TARGET } from '../../constants/tokens';
 import { Icon } from './Icon';
 import { Text } from './Text';
-import { tapFeedback, useTheme } from './theme';
+import { PaletteProvider, tapFeedback, useTheme } from './theme';
 
 export function Screen({ children, scroll = true, refreshControl, edges = ['top'], contentStyle }) {
   const { c } = useTheme();
@@ -26,7 +27,7 @@ export function Screen({ children, scroll = true, refreshControl, edges = ['top'
 
 // Raised white card with a soft plum-tinted shadow, in the warm style.
 export function Card({ children, onPress, padded = true, tone = 'surface', style, accessibilityLabel }) {
-  const { c } = useTheme();
+  const { c, scheme } = useTheme();
   const base = {
     backgroundColor: c[tone],
     borderRadius: radius.lg,
@@ -34,6 +35,8 @@ export function Card({ children, onPress, padded = true, tone = 'surface', style
     ...(tone === 'surface' ? {
       shadowColor: c.shadow, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 3,
     } : null),
+    // In dark mode a faint edge lifts the card off the page.
+    ...(tone === 'surface' && scheme === 'dark' ? { borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' } : null),
   };
   if (!onPress) return <View style={[base, style]}>{children}</View>;
   return (
@@ -118,5 +121,47 @@ export function EmptyState({ icon, title, body, action }) {
       {body ? <Text color="inkMuted" align="center">{body}</Text> : null}
       {action ? <View style={{ marginTop: space.md }}>{action}</View> : null}
     </View>
+  );
+}
+
+// A soft warm light from the top-right corner of a hero card. A gradient, not circles,
+// so it fades smoothly without rings.
+const HERO_GLOW = ['rgba(255,176,128,0.20)', 'rgba(255,176,128,0.06)', 'rgba(255,176,128,0)'];
+
+// The one coloured card on a screen (Home's top cards). Content inside gets light colours.
+export function HeroCard({ tint = 'personal', children, onPress, style, accessibilityLabel }) {
+  const [from, to] = heroes[tint] || heroes.personal;
+  const content = pressed => (
+    <LinearGradient
+      colors={[from, to]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[{
+        borderRadius: radius.lg, padding: space.lg, overflow: 'hidden',
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', opacity: pressed ? 0.92 : 1,
+      }, style]}
+    >
+      <LinearGradient
+        pointerEvents="none"
+        colors={HERO_GLOW}
+        locations={[0, 0.35, 0.7]}
+        start={{ x: 1, y: 0 }}
+        end={{ x: 0.2, y: 0.8 }}
+        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+      />
+      <PaletteProvider c={heroInk}>{children}</PaletteProvider>
+    </LinearGradient>
+  );
+  const shadow = { flex: style?.flex, shadowColor: to, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.35, shadowRadius: 22, elevation: 6, borderRadius: radius.lg };
+  if (!onPress) return <View style={shadow}>{content(false)}</View>;
+  return (
+    <Pressable
+      onPress={() => { tapFeedback(); onPress(); }}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={shadow}
+    >
+      {({ pressed }) => content(pressed)}
+    </Pressable>
   );
 }

@@ -42,8 +42,8 @@ export const colors = {
   },
   dark: {
     canvas: '#150D14',
-    surface: '#221721',
-    sunken: '#2D1F2B',
+    surface: '#2A1C29',
+    sunken: '#342433',
     ink: '#F7EFF4',
     inkMuted: '#BDB0BA',
     inkSubtle: '#A99DA6',
@@ -70,6 +70,36 @@ export const colors = {
     scrim: 'rgba(0,0,0,0.65)',
     shadow: '#000000',
   },
+};
+
+// The top card on Home is the one coloured card: a deep two-tone gradient per kind,
+// the same in light and dark mode, always with light text (see heroInk).
+export const heroes = {
+  personal: ['#7A1757', '#3B0B3E'],
+  business: ['#0F6656', '#0A2F2B'],
+  spending: ['#6A1736', '#2A0918'],
+  foreign: ['#1D4580', '#0D1C38'],
+};
+
+// Colours used inside a hero card. Everything inside reads its colours from the theme,
+// so swapping the palette turns amounts, bars and links light without touching them.
+export const heroInk = {
+  ...colors.dark,
+  surface: 'rgba(255,255,255,0.08)',
+  sunken: 'rgba(255,255,255,0.14)',
+  ink: '#FFFFFF',
+  inkMuted: 'rgba(255,240,246,0.80)',
+  inkSubtle: 'rgba(255,240,246,0.72)',
+  line: 'rgba(255,255,255,0.14)',
+  lineStrong: 'rgba(255,255,255,0.24)',
+  accent: '#FFD3E2',
+  accentPressed: '#FFB8D0',
+  onAccent: '#3B0B3E',
+  accentSoft: 'rgba(255,255,255,0.14)',
+  onAccentSoft: '#FFFFFF',
+  positive: '#8FF0C8',
+  negative: '#FFB8B0',
+  warning: '#FFD98A',
 };
 
 // Soft tile colours for categories, used behind icons in lists.

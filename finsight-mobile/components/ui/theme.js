@@ -18,6 +18,12 @@ export function ThemeProvider({ scheme = 'light', children }) {
 
 export const useTheme = () => useContext(ThemeContext);
 
+// Gives the children a different colour palette, e.g. light text inside a coloured card.
+export function PaletteProvider({ c, scheme = 'dark', children }) {
+  const value = useMemo(() => ({ scheme, c }), [c, scheme]);
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}
+
 // Returns true once fonts are ready or have failed. A failure falls back to the
 // system font rather than leaving the app stuck on a blank screen.
 export function useAppFonts() {

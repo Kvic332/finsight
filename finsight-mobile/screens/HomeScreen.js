@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, space } from '../constants/tokens';
 import {
-  Badge, Button, Card, CategoryTile, EmptyState, Gradient, Icon, Input, ListRow, Money, Sheet, Text, tapFeedback,
+  Badge, Button, Card, CategoryTile, EmptyState, Gradient, HeroCard, Icon, Input, ListRow, Money, Sheet, Text, tapFeedback,
   useTheme, useToast, IconTile,
 } from '../components/ui';
 import { computePaydayPlan, computeStats, weeklySummary, expectedPay, makeBalanceCheck, paydaysOf, parseTxDate } from '../services/finance';
@@ -410,7 +410,7 @@ export default function HomeScreen({ navigation, user, setUser }) {
               render={card => {
                 if (card.key === 'personal') {
                   return (
-                    <Card style={cardStyle}>
+                    <HeroCard tint="personal" style={cardStyle}>
                       <Text variant="label" family="medium" color="inkMuted">{card.label}</Text>
                       <Money value={plan.left} variant="display" family="semibold" adjustsFontSizeToFit style={{ fontSize: 38, lineHeight: 48, letterSpacing: -0.8, fontVariant: ['tabular-nums'] }} />
                       <Text variant="label" family="regular" color="inkMuted">{subtitle}</Text>
@@ -423,12 +423,12 @@ export default function HomeScreen({ navigation, user, setUser }) {
                             : 'Match my real balance'}
                         </Text>
                       </Pressable>
-                    </Card>
+                    </HeroCard>
                   );
                 }
                 if (card.key === 'business') {
                   return (
-                    <Card style={cardStyle} onPress={() => navigation.navigate('Business')} accessibilityLabel={`Business profit this month ${formatMoney(biz.profit)}. Open your business`}>
+                    <HeroCard tint="business" style={cardStyle} onPress={() => navigation.navigate('Business')} accessibilityLabel={`Business profit this month ${formatMoney(biz.profit)}. Open your business`}>
                       <Text variant="label" family="medium" color="inkMuted">Business profit this month</Text>
                       <Money value={biz.profit} variant="display" family="semibold" tone={biz.profit < 0 ? 'negative' : 'ink'} adjustsFontSizeToFit style={{ fontSize: 38, lineHeight: 48, letterSpacing: -0.8, fontVariant: ['tabular-nums'] }} />
                       <Text variant="label" family="medium" color="inkMuted">
@@ -440,26 +440,26 @@ export default function HomeScreen({ navigation, user, setUser }) {
                         </Text>
                       ) : null}
                       {more('Open your business', () => navigation.navigate('Business'))}
-                    </Card>
+                    </HeroCard>
                   );
                 }
                 if (card.key === 'foreign') {
                   return (
-                    <Card style={cardStyle} onPress={() => navigation.navigate('ForeignMoney')} accessibilityLabel="Foreign accounts. Open foreign money">
+                    <HeroCard tint="foreign" style={cardStyle} onPress={() => navigation.navigate('ForeignMoney')} accessibilityLabel="Foreign accounts. Open foreign money">
                       <Text variant="label" family="medium" color="inkMuted">Foreign accounts, in naira</Text>
                       <Money value={walletsInNaira(wallets, transactions, fxRates, user?.fxOwnRates)} variant="display" family="semibold" adjustsFontSizeToFit style={{ fontSize: 38, lineHeight: 48, letterSpacing: -0.8, fontVariant: ['tabular-nums'] }} />
                       <Text variant="label" family="medium" color="inkMuted" numberOfLines={2}>
                         {wallets.slice(0, 3).map(w => `${w.name} ${formatForeign(walletBalance(w, transactions), w.currency)}`).join(' · ')}
                       </Text>
                       {more('Rates and accounts', () => navigation.navigate('ForeignMoney'))}
-                    </Card>
+                    </HeroCard>
                   );
                 }
                 return (
-                  <Card style={cardStyle} onPress={() => navigation.navigate('Insights')} accessibilityLabel={`Spent this month ${formatMoney(month.totalSpend)}. See your insights`}>
+                  <HeroCard tint="spending" style={cardStyle} onPress={() => navigation.navigate('Insights')} accessibilityLabel={`Spent this month ${formatMoney(month.totalSpend)}. See your insights`}>
                     <SpendingCardBody stats={month} />
                     {more('See where it went', () => navigation.navigate('Insights'))}
-                  </Card>
+                  </HeroCard>
                 );
               }}
             />
