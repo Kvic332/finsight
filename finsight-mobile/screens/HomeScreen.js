@@ -80,6 +80,8 @@ function PeriodBar({ plan }) {
 }
 
 const HOME_CARD_KEY = 'finsight_home_card';
+// Whether bank balances on Home are hidden (the eye button). Kept on the phone.
+const HIDE_BALANCES_KEY = 'finsight_hide_bank_balances';
 
 // What went out this month and how the pace compares with last month.
 function SpendingCardBody({ stats }) {
@@ -95,7 +97,7 @@ function SpendingCardBody({ stats }) {
     <>
       <Text variant="label" family="medium" color="inkMuted">Spent this month</Text>
       <Money value={stats.totalSpend} variant="display" family="semibold" adjustsFontSizeToFit style={{ fontSize: 38, lineHeight: 48, letterSpacing: -0.8, fontVariant: ['tabular-nums'] }} />
-      <Text variant="label" family="medium" color="inkMuted">{`About ${formatMoney(Math.round(perDay))} a day${top ? `, most on ${top[0]}` : ''}`}</Text>
+      <Text variant="label" family="medium" color="inkMuted">{`You've spent about ${formatMoney(Math.round(perDay))} a day${top ? `, most on ${top[0]}` : ''}`}</Text>
       <Text variant="label" family="semibold" color={change === null ? 'inkMuted' : change <= 0 ? 'positive' : 'negative'} style={{ marginTop: space.xs }}>{pace}</Text>
     </>
   );
@@ -203,6 +205,16 @@ function CardCarousel({ cards, render, onChange }) {
   );
 }
 
+// How long the money lasts at this pace, and whether it reaches payday.
+function paceStatus(plan) {
+  const { daysLeft, shortDays, cutPerDay, cycle } = plan;
+  if (daysLeft === null || !cycle.hasPayday) return null;
+  const length = daysLeft >= 365 ? 'Over a year of money left' : `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} of money left`;
+  return shortDays > 0
+    ? { line: `${length}. Spend ${formatMoney(cutPerDay)} less a day to reach payday.`, badge: `${shortDays} ${shortDays === 1 ? 'day' : 'days'} short`, tone: 'warning' }
+    : { line: `${length}, so your money reaches payday.`, badge: 'On track', tone: 'positive' };
+}
+
 function BrokeClock({ plan, onSetPayday }) {
   const { daysLeft, shortDays, cutPerDay, cycle } = plan;
   const hasPace = daysLeft !== null;
@@ -250,6 +262,17 @@ export default function HomeScreen({ navigation, user, setUser }) {
   const [checking, setChecking] = useState(false);
   const [realText, setRealText] = useState('');
   const [realError, setRealError] = useState('');
+  const [hideBalances, setHideBalances] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(HIDE_BALANCES_KEY).then(v => setHideBalances(v === '1')).catch(() => {});
+  }, []);
+
+  function toggleBalances() {
+    const next = !hideBalances;
+    setHideBalances(next);
+    AsyncStorage.setItem(HIDE_BALANCES_KEY, next ? '1' : '0').catch(() => {});
+  }
 
   const firstName = user?.name?.split(' ')[0] || '';
   const plan = computePaydayPlan(user, transactions);
@@ -299,7 +322,7 @@ export default function HomeScreen({ navigation, user, setUser }) {
     ? 'For the rest of this month'
     : plan.cycle.daysToGo === 1
       ? `${formatMoney(plan.safePerDay)} to spend before payday tomorrow`
-      : `${formatMoney(plan.safePerDay)} a day for the next ${plan.cycle.daysToGo} days`;
+      : `You can spend ${formatMoney(plan.safePerDay)} a day for the next ${plan.cycle.daysToGo} days`;
   const recent = transactions.slice(0, 4);
   const toCheck = transactions.filter(t => t.unconfirmed).length;
   const banks = latestBalances(transactions);
@@ -474,24 +497,50 @@ export default function HomeScreen({ navigation, user, setUser }) {
             <ActionButton icon="chatbubble-ellipses-outline" label="Ask ARIA" onPress={() => navigation.navigate('ARIA')} />
           </View>
 
+          {/* The one thing on Home that needs the user: it comes first and stands out. */}
+          {toCheck ? (
+            <Card onPress={() => navigation.navigate('NewTransactions')} accessibilityLabel={`${toCheck} new from your bank. Review them`} style={{ padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.md, borderWidth: 1.5, borderColor: c.accent }}>
+              <IconTile name="notifications-outline" tone="accent" />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text variant="bodyStrong" family="bold" numberOfLines={1} adjustsFontSizeToFit>{toCheck === 1 ? '1 new from your bank' : `${toCheck} new from your bank`}</Text>
+                <Text variant="label" family="regular" color="inkMuted">Check them to keep figures right</Text>
+              </View>
+              <View style={{ backgroundColor: c.accent, borderRadius: radius.pill, paddingHorizontal: space.sm + 4, paddingVertical: space.xs + 1 }}>
+                <Text variant="caption" family="semibold" color="onAccent">Review</Text>
+              </View>
+            </Card>
+          ) : null}
+
           {tracking ? <WhereItWent stats={month} transactions={transactions} /> : (
           <>
-          <BrokeClock plan={plan} onSetPayday={() => navigation.navigate('Settings')} />
+          {/* With a pay plan, the Broke Clock is one line inside the Plan card. */}
+          {!nextPay.pay || !paceStatus(plan) ? <BrokeClock plan={plan} onSetPayday={() => navigation.navigate('Settings')} /> : null}
 
           {nextPay.pay ? (
             <Card onPress={() => navigation.navigate('PaydayPlan')} accessibilityLabel={`Your next pay plan: ${formatMoney(nextPay.free)} to spend freely. See full plan`} style={{ padding: space.lg, gap: space.md }}>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.md }}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text variant="label" family="medium" color="inkMuted">{nextPayLabel(nextPay.period)}</Text>
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm }}>
+                  <Text variant="label" family="medium" color="inkMuted" style={{ flex: 1 }} numberOfLines={1}>{nextPayLabel(nextPay.period)}</Text>
+                  {nextPay.short
+                    ? <Badge label={`${formatMoney(nextPay.short)} short`} tone="negative" />
+                    : paceStatus(plan) ? <Badge label={paceStatus(plan).badge} tone={paceStatus(plan).tone} /> : null}
+                </View>
                   <Text variant="bodyStrong" family="semibold" style={{ marginTop: 2, fontVariant: ['tabular-nums'] }}>
                     {`${formatMoney(nextPay.free)} free to spend`}
                   </Text>
-                  <Text variant="caption" color="inkMuted">
-                    {`Of ${formatMoney(nextPay.pay)}, after debts, budgets and savings · about ${formatMoney(nextPay.perDay)} a day`}
+                  <Text variant="label" family="semibold" style={{ marginTop: 2 }}>
+                    {`You can spend about ${formatMoney(nextPay.perDay)} a day`}
                   </Text>
-                </View>
-                {nextPay.short ? <Badge label={`${formatMoney(nextPay.short)} short`} tone="negative" /> : null}
+                  <Text variant="caption" color="inkMuted">
+                    {`Of ${formatMoney(nextPay.pay)}, after debts, budgets and savings`}
+                  </Text>
               </View>
+              {paceStatus(plan) ? (
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.xs }}>
+                  <View style={{ marginTop: 2 }}><Icon name="hourglass-outline" size={14} color="inkMuted" /></View>
+                  <Text variant="caption" color="inkMuted" style={{ flex: 1 }}>{paceStatus(plan).line}</Text>
+                </View>
+              ) : null}
               {(() => {
                 // How the pay splits, with a key so each colour explains itself.
                 const parts = [
@@ -544,28 +593,25 @@ export default function HomeScreen({ navigation, user, setUser }) {
 
           {banks.length ? (
             <Card style={{ padding: space.lg, gap: space.sm }}>
-              <Text variant="label" family="semibold" color="inkMuted">What your bank alerts last said</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text variant="label" family="semibold" color="inkMuted">What your bank alerts last said</Text>
+                <Pressable onPress={toggleBalances} accessibilityRole="button" hitSlop={12}
+                  accessibilityLabel={hideBalances ? 'Show bank balances' : 'Hide bank balances'}>
+                  <Icon name={hideBalances ? 'eye-off-outline' : 'eye-outline'} size={20} color="inkMuted" />
+                </Pressable>
+              </View>
               {banks.slice(0, 3).map(b => (
                 <View key={b.bank} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
                   <Text variant="bodyStrong" family="semibold" style={{ flex: 1 }} numberOfLines={1}>{b.bank}</Text>
                   <Text variant="caption" color="inkMuted">{formatDayLabel(new Date(b.capturedAt))}</Text>
-                  <Money value={b.balance} family="bold" />
+                  {hideBalances
+                    ? <Text variant="bodyStrong" family="bold" accessibilityLabel="Balance hidden">₦ ••••••</Text>
+                    : <Money value={b.balance} family="bold" />}
                 </View>
               ))}
               <Text variant="caption" color="inkMuted">
                 Real balances from your bank. "Left until payday" is FinSight's estimate from your income and spending, so the two can differ.
               </Text>
-            </Card>
-          ) : null}
-
-          {toCheck ? (
-            <Card onPress={() => navigation.navigate('NewTransactions')} accessibilityLabel={`${toCheck} new from your bank. Check them`} style={{ padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-              <IconTile name="notifications-outline" tone="accent" />
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text variant="bodyStrong" family="bold">{toCheck === 1 ? '1 new from your bank' : `${toCheck} new from your bank`}</Text>
-                <Text variant="label" family="regular" color="inkMuted">Check the category, so your figures stay right</Text>
-              </View>
-              <Icon name="chevron-forward" size={18} color="inkSubtle" />
             </Card>
           ) : null}
 
