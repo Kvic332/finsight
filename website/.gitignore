@@ -1,0 +1,6 @@
+.vercel
+.env*
+
+# Font files (Fontshare, ITF Free Font License) are used on the site but not re-shared in this public repo.
+# To restore them, download Clash Display 500/600 and Satoshi 400/500/700 (woff2) from fontshare.com into website/fonts/.
+fonts/
