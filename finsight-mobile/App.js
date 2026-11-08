@@ -174,6 +174,7 @@ function App() {
           </Stack.Navigator>
         ) : locked ? (
           <PinScreen mode="unlock"
+            name={user?.name}
             biometricEnabled={biometricEnabled}
             onSuccess={()=>setLocked(false)}
             onForgot={async()=>{
