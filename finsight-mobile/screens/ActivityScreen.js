@@ -13,6 +13,7 @@ import { deleteTransaction, loadTransactions, updateTransaction } from '../servi
 import AsyncStorage from '../services/dataStore';
 import { suspectTransactions } from '../services/transactionReview';
 import { TransactionRow } from './HomeScreen';
+import { transactionName } from '../services/txName';
 
 function Total({ label, amount }) {
   return (
@@ -214,7 +215,7 @@ export default function ActivityScreen({ navigation, user }) {
         {selected ? (
           <View style={{ alignItems: 'center', gap: space.xs }}>
             <CategoryTile category={selected.cat} size={56} />
-            <Text variant="heading" family="bold" align="center" style={{ marginTop: space.sm }}>{selected.desc}</Text>
+            <Text variant="heading" family="bold" align="center" style={{ marginTop: space.sm }}>{transactionName(selected)}</Text>
             <Money
               value={selected.type === 'credit' ? selected.amount : -selected.amount}
               variant="title"

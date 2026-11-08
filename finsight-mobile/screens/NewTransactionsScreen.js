@@ -12,6 +12,7 @@ import { rememberCategory } from '../services/payeeRuleStore';
 import { loadTransactions, saveTransactions } from '../services/transactions';
 
 import { BUSINESS_IN, BUSINESS_OUT, hasBusiness, OWN_ACCOUNTS, OWNER_PAY } from '../services/business';
+import { transactionName } from '../services/txName';
 
 const OUT_CATEGORIES = ['Food', 'Transport', 'Utilities', 'Shopping', 'Entertainment', 'Health', 'Savings', 'Debt', 'Transfer', OWN_ACCOUNTS, 'Other'];
 const IN_CATEGORIES = ['Income', 'Savings', 'Transfer', OWN_ACCOUNTS, 'Other'];
@@ -49,7 +50,7 @@ function InboxRow({ tx, onCategory, onDirection, onConfirm, onRemove }) {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
         <CategoryTile category={tx.cat} size={36} />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text variant="bodyStrong" family="semibold" numberOfLines={2}>{tx.desc}</Text>
+          <Text variant="bodyStrong" family="semibold" numberOfLines={2}>{transactionName(tx)}</Text>
           <Text variant="caption" color="inkMuted" numberOfLines={1}>
             {[formatDayLabel(parseTxDate(tx.date) || undefined), tx.bank].filter(Boolean).join(' · ')}
           </Text>

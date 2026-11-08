@@ -66,7 +66,7 @@ function Freshness({ listing }) {
 
 const INFLATION_ICONS = { positive: 'trending-up-outline', warning: 'trending-down-outline', neutral: 'remove-outline' };
 
-function ListingCard({ listing, inflation, selected, onDetails, onLeave, onCompare }) {
+function ListingCard({ listing, inflation, selected, onDetails, onCompare }) {
   const details = [amountRange(listing), termRange(listing)].filter(Boolean).join(' · ');
   const check = inflationCheck(listing, inflation);
   return (
@@ -88,7 +88,8 @@ function ListingCard({ listing, inflation, selected, onDetails, onLeave, onCompa
         </View>
 
         <View style={{ gap: space.xxs }}>
-          <Text variant="heading" family="bold" color="accent" tabular>{headlineRate(listing)}</Text>
+          {/* A loan rate is a cost, not a highlight; what savings earn is shown in green. */}
+          <Text variant="heading" family="bold" color={listing.category === 'loan' ? 'ink' : 'positive'} tabular>{headlineRate(listing)}</Text>
           {annualNote(listing) ? <Text variant="caption" color="inkMuted">{annualNote(listing)}</Text> : null}
           {details ? <Text variant="label" family="regular" color="inkMuted">{details}</Text> : null}
         </View>
@@ -101,11 +102,9 @@ function ListingCard({ listing, inflation, selected, onDetails, onLeave, onCompa
         </View>
       </Pressable>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-        <View style={{ flex: 1 }}>
-          <Button full title="Go to provider" variant="secondary" onPress={onLeave} />
-        </View>
-        <Chip label="Compare" icon={selected ? 'checkmark' : 'add'} selected={selected} onPress={onCompare} />
+      {/* One action on the card: tap it for details (where "Go to provider" is), or add it to compare. */}
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+        <Chip label={selected ? 'Comparing' : 'Compare'} icon={selected ? 'checkmark' : 'add'} selected={selected} onPress={onCompare} />
       </View>
     </Card>
   );
@@ -346,7 +345,7 @@ function CompareList({ listings, inflation, refreshing, onRefresh }) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const toast = useToast();
-  const [category, setCategory] = useState('loan');
+  const [category, setCategory] = useState('savings');
   const [sort, setSort] = useState('rate');
   const [filters, setFilters] = useState(NO_FILTERS);
   const [selectedByTab, setSelectedByTab] = useState({});
@@ -436,7 +435,6 @@ function CompareList({ listings, inflation, refreshing, onRefresh }) {
               inflation={inflation}
               selected={selected.includes(listing.product_id)}
               onDetails={() => setDetails(listing)}
-              onLeave={() => setLeaving(listing)}
               onCompare={() => toggle(listing.product_id)}
             />
           ))}

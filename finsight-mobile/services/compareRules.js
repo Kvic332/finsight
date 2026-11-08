@@ -3,10 +3,11 @@
 import { formatMoney } from './format.js';
 import { RATE_PERIODS } from './catalogRules.js';
 
+// Saving comes first: FinSight helps people keep money, and borrowing is the last option.
 export const TABS = [
-  { value: 'loan', label: 'Loans' },
   { value: 'savings', label: 'Savings' },
   { value: 'fund', label: 'Funds' },
+  { value: 'loan', label: 'Loans' },
 ];
 
 export const MAX_COMPARE = 3;

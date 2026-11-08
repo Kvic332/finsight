@@ -101,6 +101,14 @@ export default function AddTransactionScreen({ navigation, route, user }) {
   const [heard, setHeard] = useState(null);
 
   const categories = listFor(type, book);
+  // The categories this person uses most for this kind of money, for one-tap picking.
+  const quick = (() => {
+    const counts = {};
+    allTx.filter(t => t.type === type && categories.includes(t.cat) && t.cat !== 'Other')
+      .forEach(t => { counts[t.cat] = (counts[t.cat] || 0) + 1; });
+    const used = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+    return [...used, ...categories.filter(o => o !== 'Other' && !used.includes(o))].slice(0, 5);
+  })();
   // Speech results arrive in a listener set up once, so it reads the latest values here.
   const latest = useRef({});
   latest.current = { categories, amount, desc };
@@ -340,6 +348,12 @@ export default function AddTransactionScreen({ navigation, route, user }) {
               <Text variant="bodyStrong" style={{ flex: 1 }}>{cat}</Text>
               <Icon name="chevron-forward" size={18} color="inkSubtle" />
             </Pressable>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.xs }}>
+              {quick.map(option => (
+                <Chip key={option} label={option} selected={option === cat}
+                  onPress={() => { setCat(option); setCatChosen(true); setHeard(null); }} />
+              ))}
+            </View>
             {voiceNote ? (
               <Text variant="caption" color={heard && !heard.found ? 'negative' : 'inkMuted'} accessibilityLiveRegion="polite">{voiceNote}</Text>
             ) : null}

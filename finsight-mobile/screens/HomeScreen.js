@@ -2,9 +2,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StatusBar, useWindowDimensions, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { transactionName } from '../services/txName';
 import { radius, space } from '../constants/tokens';
 import {
-  Badge, Button, Card, CategoryTile, EmptyState, Gradient, HeroCard, Icon, Input, ListRow, Money, Sheet, Text, tapFeedback,
+  Badge, Button, Card, CategoryTile, EmptyState, HeroCard, Icon, Input, ListRow, Money, Sheet, Text, tapFeedback,
   useTheme, useToast, IconTile,
 } from '../components/ui';
 import { computePaydayPlan, computeStats, weeklySummary, expectedPay, makeBalanceCheck, paydaysOf, parseTxDate } from '../services/finance';
@@ -32,6 +33,15 @@ function nextPayLabel(period) {
   if (period.payIn === 0) return "Plan for today's pay";
   const date = period.start.toLocaleDateString('en-NG', { day: 'numeric', month: 'short' });
   return `Plan for your ${date} pay`;
+}
+
+// The Plan card is about the NEXT pay, so its per-day amount says when it starts,
+// to keep it apart from the top card's amount for the days before payday.
+function nextPayPerDay(period, perDay) {
+  if (!period.hasPayday) return `About ${formatMoney(perDay)} a day this month`;
+  if (period.payIn === 0) return `From today: about ${formatMoney(perDay)} a day`;
+  const date = period.start.toLocaleDateString('en-NG', { day: 'numeric', month: 'short' });
+  return `From ${date}: about ${formatMoney(perDay)} a day`;
 }
 
 function greeting(hour = new Date().getHours()) {
@@ -126,7 +136,7 @@ function WhereItWent({ stats, transactions }) {
       ))}
       <Text variant="caption" color="inkMuted">{weeklySummary(transactions).text}</Text>
       {stats.biggest ? (
-        <Text variant="caption" color="inkMuted">{`Biggest single expense: ${stats.biggest.desc}, ${formatMoney(stats.biggest.amount)}`}</Text>
+        <Text variant="caption" color="inkMuted">{`Biggest single expense: ${transactionName(stats.biggest)}, ${formatMoney(stats.biggest.amount)}`}</Text>
       ) : null}
     </Card>
   );
@@ -248,7 +258,7 @@ function BrokeClock({ plan, onSetPayday }) {
 }
 
 export default function HomeScreen({ navigation, user, setUser }) {
-  const { c } = useTheme();
+  const { c, scheme } = useTheme();
   const insets = useSafeAreaInsets();
   const toast = useToast();
   const [transactions, setTransactions] = useState([]);
@@ -381,20 +391,20 @@ export default function HomeScreen({ navigation, user, setUser }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.canvas }}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: space.huge + space.xxl }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} colors={[c.accent]} />}
       >
-        <Gradient style={{
-          paddingTop: insets.top + space.md, paddingHorizontal: space.xl, paddingBottom: space.xl,
-          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-          borderBottomLeftRadius: 28, borderBottomRightRadius: 28, marginBottom: space.lg, overflow: 'hidden',
+        {/* A calm header: the coloured top card below is Home's one focal point. */}
+        <View style={{
+          paddingTop: insets.top + space.md, paddingHorizontal: space.xl, paddingBottom: space.sm,
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.md,
         }}>
           <View style={{ flex: 1 }}>
-            <Text variant="label" color="#FFFFFF">{greeting()}</Text>
-            <Text variant="title" family="bold" color="#FFFFFF" numberOfLines={1}>{firstName || 'Welcome'}</Text>
+            <Text variant="label" color="inkMuted">{greeting()}</Text>
+            <Text variant="title" family="bold" numberOfLines={1}>{firstName || 'Welcome'}</Text>
           </View>
           <Pressable
             onPress={() => navigation.navigate('Settings')}
@@ -402,14 +412,14 @@ export default function HomeScreen({ navigation, user, setUser }) {
             accessibilityLabel="Open settings"
             style={({ pressed }) => ({
               width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
-              backgroundColor: pressed ? 'rgba(255,255,255,0.32)' : 'rgba(255,255,255,0.2)',
+              backgroundColor: pressed ? c.accentPressed : c.accentSoft,
             })}
           >
             {firstName
-              ? <Text variant="heading" family="bold" color="#FFFFFF">{firstName[0].toUpperCase()}</Text>
-              : <Icon name="settings-outline" color="#FFFFFF" />}
+              ? <Text variant="heading" family="bold" color="onAccentSoft">{firstName[0].toUpperCase()}</Text>
+              : <Icon name="settings-outline" color="onAccentSoft" />}
           </Pressable>
-        </Gradient>
+        </View>
 
         {(() => {
           const biz = businessMonth(transactions);
@@ -531,7 +541,7 @@ export default function HomeScreen({ navigation, user, setUser }) {
                     {`${formatMoney(nextPay.free)} free to spend`}
                   </Text>
                   <Text variant="label" family="semibold" style={{ marginTop: 2 }}>
-                    {`You can spend about ${formatMoney(nextPay.perDay)} a day`}
+                    {nextPayPerDay(nextPay.period, nextPay.perDay)}
                   </Text>
                   <Text variant="caption" color="inkMuted">
                     {`Of ${formatMoney(nextPay.pay)}, after debts, budgets and savings`}
@@ -539,8 +549,11 @@ export default function HomeScreen({ navigation, user, setUser }) {
               </View>
               {paceStatus(plan) ? (
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.xs }}>
-                  <View style={{ marginTop: 2 }}><Icon name="hourglass-outline" size={14} color="inkMuted" /></View>
-                  <Text variant="caption" color="inkMuted" style={{ flex: 1 }}>{paceStatus(plan).line}</Text>
+                  <View style={{ marginTop: 2 }}><Icon name="hourglass-outline" size={14} color="ink" /></View>
+                  <Text variant="caption" color="inkMuted" style={{ flex: 1 }}>
+                    <Text variant="caption" family="bold" color="ink">Broke Clock · </Text>
+                    {paceStatus(plan).line}
+                  </Text>
                 </View>
               ) : null}
               {(() => {
@@ -647,7 +660,7 @@ export default function HomeScreen({ navigation, user, setUser }) {
         </View>
       </ScrollView>
       {/* Keeps scrolled content out from under the clock and battery icons. */}
-      <Gradient pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top }} />
+      <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: c.canvas }} />
 
       <Sheet
         visible={checking}
@@ -724,7 +737,7 @@ function ListRowFlat({ tx, subtitle, money, onPress }) {
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.sm + 2 }}>
       <CategoryTile category={tx.cat} />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text variant="bodyStrong" family="semibold" numberOfLines={1}>{tx.desc}</Text>
+        <Text variant="bodyStrong" family="semibold" numberOfLines={1}>{transactionName(tx)}</Text>
         <Text variant="label" family="regular" color="inkMuted" numberOfLines={1}>{subtitle}</Text>
       </View>
       <Money value={money} family="bold" tone="auto" showSign={money > 0} />
@@ -735,7 +748,7 @@ function ListRowFlat({ tx, subtitle, money, onPress }) {
     <Pressable
       onPress={() => { tapFeedback(); onPress(); }}
       accessibilityRole="button"
-      accessibilityLabel={`${tx.desc}, ${formatMoney(money, { showSign: money > 0 })}`}
+      accessibilityLabel={`${transactionName(tx)}, ${formatMoney(money, { showSign: money > 0 })}`}
       style={({ pressed }) => ({ backgroundColor: pressed ? c.sunken : 'transparent', borderRadius: radius.md })}
     >
       {content}

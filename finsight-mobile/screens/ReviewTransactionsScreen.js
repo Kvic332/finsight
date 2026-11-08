@@ -10,6 +10,7 @@ import { parseTxDate } from '../services/finance';
 import { formatDayLabel, formatMoney } from '../services/format';
 import { loadTransactions, saveTransactions } from '../services/transactions';
 import { applyReview, suspectTransactions } from '../services/transactionReview';
+import { transactionName } from '../services/txName';
 
 function SuspectRow({ item, selected, onToggle }) {
   const { c } = useTheme();
@@ -30,7 +31,7 @@ function SuspectRow({ item, selected, onToggle }) {
       <Icon name={selected ? 'checkbox' : 'square-outline'} size={24} color={selected ? 'accent' : 'inkSubtle'} />
       <CategoryTile category={tx.cat} size={36} />
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-        <Text variant="bodyStrong" family="semibold" numberOfLines={2}>{tx.desc}</Text>
+        <Text variant="bodyStrong" family="semibold" numberOfLines={2}>{transactionName(tx)}</Text>
         <Text variant="caption" color="inkMuted" numberOfLines={1}>{`${formatDayLabel(parseTxDate(tx.date) || undefined)} · ${tx.cat}`}</Text>
         <Text variant="caption" color="warning">{reason}</Text>
         <Text variant="caption" family="semibold" color={selected ? 'ink' : 'inkMuted'}>
