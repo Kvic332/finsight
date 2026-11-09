@@ -1,12 +1,14 @@
 /* FinSight website. Dark only. Colours follow the app's dark tokens (finsight-mobile/constants/tokens.js).
-   Headings: Clash Display. Body: Satoshi. Both from Fontshare. */
+   Headings: Clash Display (Fontshare). Body: Plus Jakarta Sans, the app's font (SIL Open Font License),
+   which also has the naira sign. */
 
-/* Fonts are stored with the site (Fontshare, ITF Free Font License), so no third-party font service is contacted. */
+/* Fonts are stored with the site, so no third-party font service is contacted. */
 @font-face { font-family: 'Clash Display'; src: url('fonts/ClashDisplay-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
 @font-face { font-family: 'Clash Display'; src: url('fonts/ClashDisplay-600.woff2') format('woff2'); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Satoshi'; src: url('fonts/Satoshi-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Satoshi'; src: url('fonts/Satoshi-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Satoshi'; src: url('fonts/Satoshi-700.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Plus Jakarta Sans'; src: url('fonts/PlusJakartaSans-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Plus Jakarta Sans'; src: url('fonts/PlusJakartaSans-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Plus Jakarta Sans'; src: url('fonts/PlusJakartaSans-600.woff2') format('woff2'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Plus Jakarta Sans'; src: url('fonts/PlusJakartaSans-700.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
 
 :root {
   --canvas: #120A11;
@@ -31,8 +33,8 @@
   --r-xl: 32px;
   --max: 1200px;
   --gutter: 20px;
-  --display: 'Clash Display', 'Satoshi', system-ui, sans-serif;
-  --body: 'Satoshi', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --display: 'Clash Display', 'Plus Jakarta Sans', system-ui, sans-serif;
+  --body: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   color-scheme: dark;
 }
 
