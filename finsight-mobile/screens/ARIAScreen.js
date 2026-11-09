@@ -303,7 +303,7 @@ DEBTS, MOST EXPENSIVE FIRST: ${debtsContext(debts)}
   }
   sendRef.current = send;
 
-  const status = loading ? 'Thinking' : isListening ? 'Listening' : isSpeaking ? 'Speaking' : 'Your money assistant';
+  const status = loading ? 'Thinking' : isListening ? 'Listening' : isSpeaking ? 'Speaking' : 'Ready to help';
   const canSend = !!input.trim() && !loading && !isListening;
 
   return (
@@ -319,7 +319,7 @@ DEBTS, MOST EXPENSIVE FIRST: ${debtsContext(debts)}
         </View>
         <View style={{ flex: 1, marginLeft: space.xs }}>
           <Text variant="heading" family="bold" color="#FFFFFF" accessibilityRole="header">ARIA</Text>
-          <Text variant="caption" color="#FFFFFF" accessibilityLiveRegion="polite">{status}</Text>
+          <Text variant="caption" color="#FFFFFF" numberOfLines={1} accessibilityLiveRegion="polite">{status}</Text>
         </View>
         <Pressable
           onPress={() => setShowLanguages(true)}
@@ -330,12 +330,17 @@ DEBTS, MOST EXPENSIVE FIRST: ${debtsContext(debts)}
           <Icon name="language-outline" size={16} color="#FFFFFF" />
           <Text variant="caption" family="semibold" color="#FFFFFF">{languageLabel}</Text>
         </Pressable>
-        <IconButton
-          icon={autoSpeak ? 'volume-high-outline' : 'volume-mute-outline'}
-          label={autoSpeak ? 'Stop reading replies aloud' : 'Read replies aloud'}
-          color="#FFFFFF"
+        {/* Says its state in words: an icon alone could mean "muted" or "tap to mute". */}
+        <Pressable
           onPress={toggleSpeak}
-        />
+          accessibilityRole="switch"
+          accessibilityState={{ checked: autoSpeak }}
+          accessibilityLabel="Read replies aloud"
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.sm + 2, minHeight: 36, borderRadius: 18, backgroundColor: autoSpeak ? '#FFFFFF' : 'rgba(255,255,255,0.22)' }}
+        >
+          <Icon name={autoSpeak ? 'volume-high-outline' : 'volume-mute-outline'} size={16} color={autoSpeak ? '#A30E42' : '#FFFFFF'} />
+          <Text variant="caption" family="semibold" color={autoSpeak ? '#A30E42' : '#FFFFFF'}>{autoSpeak ? 'Voice on' : 'Voice off'}</Text>
+        </Pressable>
       </Gradient>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>

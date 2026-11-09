@@ -1,11 +1,12 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Modal, Pressable, RefreshControl, ScrollView, Share, View } from 'react-native';
+import { Modal, Pressable, RefreshControl, ScrollView, Share, StatusBar, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { radius, space } from '../constants/tokens';
 import {
-  Button, Card, CategoryTile, EmptyState, Gradient, Icon, IconTile, ProgressBar, Sheet, Text, useTheme,
+  Badge, Button, Card, CategoryTile, EmptyState, Gradient, Icon, IconButton, IconTile, ProgressBar, Sheet, Text, useTheme,
   useToast,
 } from '../components/ui';
 import { computePeriodStats, periodLabel } from '../services/finance';
@@ -73,8 +74,9 @@ function SpendChart({ data }) {
   );
 }
 
-export default function DashboardScreen({ user }) {
+export default function DashboardScreen({ navigation, user }) {
   const { c } = useTheme();
+  const insets = useSafeAreaInsets();
   const toast = useToast();
   const [transactions, setTransactions] = useState([]);
   const [streak, setStreak] = useState({ count: 0, longest: 0 });
@@ -135,9 +137,15 @@ export default function DashboardScreen({ user }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.canvas }}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      {/* Insights is a main place in the app, so it has the same header as the tabs. */}
+      <Gradient style={{ paddingTop: insets.top + space.sm, paddingHorizontal: space.sm, paddingBottom: space.lg, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+        <IconButton icon="arrow-back" label="Back" color="#FFFFFF" onPress={() => navigation?.goBack()} />
+        <Text variant="title" family="bold" color="#FFFFFF" accessibilityRole="header">Insights</Text>
+      </Gradient>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: space.xl, paddingTop: space.sm, paddingBottom: space.huge, gap: space.md + 2 }}
+        contentContainerStyle={{ padding: space.xl, paddingTop: space.lg, paddingBottom: space.huge, gap: space.md + 2 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} colors={[c.accent]} />}
       >
         <Card onPress={() => setShowScore(true)} accessibilityLabel={`FinScore ${finScore} out of 100, ${g.label}. See the breakdown`} style={{ padding: 0, overflow: 'hidden' }}>
@@ -149,9 +157,8 @@ export default function DashboardScreen({ user }) {
                 <Text variant="bodyStrong" color="inkMuted">/ 100</Text>
               </View>
             </View>
-            <View style={{ backgroundColor: c.accentSoft, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs + 2 }}>
-              <Text variant="label" family="semibold" color="onAccentSoft">{g.label}</Text>
-            </View>
+            {/* The same colours as the score ring on Home: green, amber or red. */}
+            <Badge label={g.label} tone={g.tone} />
           </View>
           <View style={{ padding: space.lg + 2, gap: space.md }}>
             {parts.map(p => (

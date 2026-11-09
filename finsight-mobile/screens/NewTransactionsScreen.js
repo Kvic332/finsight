@@ -80,6 +80,7 @@ function InboxRow({ tx, onCategory, onDirection, onConfirm, onRemove }) {
 export default function NewTransactionsScreen({ navigation, user }) {
   const lists = listsFor(user);
   const { c } = useTheme();
+  const [showHow, setShowHow] = useState(false);
   const toast = useToast();
   const insets = useSafeAreaInsets();
   const [list, setList] = useState(null);
@@ -146,9 +147,20 @@ export default function NewTransactionsScreen({ navigation, user }) {
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ padding: space.xl, paddingTop: space.sm, gap: space.sm }}>
-        <Text color="inkMuted" style={{ marginBottom: space.sm }}>
-          These came from your bank alerts. Check the category and direction. Anything you change is remembered for that payee.
-        </Text>
+        <View style={{ marginBottom: space.sm, gap: space.xs }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+            <Text color="inkMuted" style={{ flex: 1 }}>From your bank alerts. Check each one.</Text>
+            <Pressable onPress={() => setShowHow(v => !v)} accessibilityRole="button" hitSlop={12}
+              accessibilityLabel={showHow ? 'Hide how this works' : 'How this works'}>
+              <Icon name="information-circle-outline" size={20} color="inkMuted" />
+            </Pressable>
+          </View>
+          {showHow ? (
+            <Text variant="label" family="regular" color="inkMuted">
+              Make sure the category and direction are right. Anything you change is remembered for that payee, so next time it's sorted for you.
+            </Text>
+          ) : null}
+        </View>
         {pending.map(tx => (
           <InboxRow
             key={tx.id}

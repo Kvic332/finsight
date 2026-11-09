@@ -38,6 +38,8 @@ export default function PaydayScreen({ user, setUser }) {
   const [debts, setDebts] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [payText, setPayText] = useState('');
+  // Until the person types, the field shows the expected pay as a real value, not a grey hint.
+  const [payEdited, setPayEdited] = useState(false);
   const [transactions, setTransactions] = useState([]);
 
   useFocusEffect(useCallback(() => {
@@ -90,13 +92,13 @@ export default function PaydayScreen({ user, setUser }) {
         label="Pay to plan with"
         prefix="₦"
         keyboardType="numeric"
-        placeholder={income ? income.toLocaleString() : '450,000'}
-        value={payText}
+        placeholder="450,000"
+        value={payEdited ? payText : (income ? income.toLocaleString() : '')}
         hint={!income ? 'Enter what you expect to receive.'
           : expected.basis === 'average' ? `Your average income over the last ${monthsLabel(expected.months)}. Enter a different amount if this pay is different.`
           : payCount > 1 ? "Half your monthly income, since you're paid twice a month. Enter a different amount if this pay is different."
           : 'Uses your income from Settings. Enter a different amount if this pay is different.'}
-        onChangeText={setPayText}
+        onChangeText={value => { setPayEdited(true); setPayText(value); }}
       />
 
       {pay ? (
@@ -134,7 +136,7 @@ export default function PaydayScreen({ user, setUser }) {
             </View>
             {eta ? (
               <Text variant="label" family="regular" color="inkMuted">
-                {`At ${formatMoney(plan.saving)} a month, ${eta.name} takes about ${monthsLabel(eta.months)}.`}
+                {`Saving ${formatMoney(plan.saving)} a month, you'll reach your "${eta.name}" goal in about ${monthsLabel(eta.months)}.`}
               </Text>
             ) : null}
           </Card>

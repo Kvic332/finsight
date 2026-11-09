@@ -151,7 +151,7 @@ export default function AppNavigator({ theme, toggleTheme, user, setUser }) {
         {p => <AddTransactionScreen {...p} user={user} />}
       </Stack.Screen>
       <Stack.Screen name="ARIA">{p => <ARIAScreen {...p} user={user} />}</Stack.Screen>
-      <Stack.Screen name="Insights">{back('Insights', p => <DashboardScreen {...p} user={user} />)}</Stack.Screen>
+      <Stack.Screen name="Insights">{p => <DashboardScreen {...p} user={user} />}</Stack.Screen>
       <Stack.Screen name="Settings">{back('Settings', p => <SettingsScreen {...p} theme={theme} toggleTheme={toggleTheme} user={user} setUser={setUser} />)}</Stack.Screen>
       <Stack.Screen name="ImportSMS">{back('Import bank SMS', p => <SMSScreen {...p} />)}</Stack.Screen>
       <Stack.Screen name="PaydayPlan">{back('Payday plan', p => <PaydayScreen {...p} user={user} setUser={setUser} />)}</Stack.Screen>
