@@ -23,14 +23,20 @@ function titleCase(text) {
   }).join(' ');
 }
 
+// Only text that came from a bank is cleaned. What people type themselves is shown
+// exactly as written ("Rent - January", "Card games", "Smoke alert").
+const BANK_SOURCES = new Set(['push', 'sms', 'import']);
+
 export function transactionName(tx) {
   const raw = String(tx?.desc || '').trim();
+  if (!BANK_SOURCES.has(tx?.source)) return raw;
   const bank = tx?.bank || '';
   const incoming = tx?.type === 'credit';
 
-  // The parser's fallback when the alert gave no details.
+  // The parser's fallback when the alert gave no details: exactly "<Bank> alert" or "Bank alert".
   const generic = raw.match(/^(.*?)\s*alert$/i);
-  if (!raw || generic) {
+  const isFallback = generic && (/^bank$/i.test(generic[1].trim()) || generic[1].trim().toLowerCase() === bank.toLowerCase());
+  if (!raw || isFallback) {
     const source = (generic && generic[1].trim()) || bank;
     if (!source || /^bank$/i.test(source)) return incoming ? 'Money in' : 'Payment';
     return incoming ? `Money in via ${source}` : `${source} payment`;
@@ -52,7 +58,8 @@ export function transactionName(tx) {
   }
 
   // "POS PURCHASE AT SHOPRITE LEKKI", "WEB PAYMENT @ JUMIA"
-  const card = text.match(/^(?:POS|WEB|CARD)\s*(?:PURCHASE|PAYMENT|PMT|TXN|TRANSACTION)?\s*(?:AT|@)?\s+(.+)$/i);
+  // A purchase word or "at"/"@" must follow, so "POS charges" or "Web hosting" stay whole.
+  const card = text.match(/^(?:POS|WEB|CARD)\s+(?:(?:PURCHASE|PAYMENT|PMT|TXN|TRANSACTION)(?:\s+(?:AT|@))?|AT|@)\s+(.+)$/i);
   if (card) text = card[1];
 
   if (!text) return raw;

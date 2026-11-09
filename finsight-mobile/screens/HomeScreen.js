@@ -28,11 +28,14 @@ import { owedSummary } from '../services/receivables';
 
 // The card is a plan for money that hasn't arrived yet, so it says so plainly
 // and doesn't read as a second balance next to "Left until payday".
+function payDate(period) {
+  return period.start.toLocaleDateString('en-NG', { day: 'numeric', month: 'short' });
+}
+
 function nextPayLabel(period) {
   if (!period.hasPayday) return 'Plan for this month';
   if (period.payIn === 0) return "Plan for today's pay";
-  const date = period.start.toLocaleDateString('en-NG', { day: 'numeric', month: 'short' });
-  return `Plan for your ${date} pay`;
+  return `Plan for your ${payDate(period)} pay`;
 }
 
 // The Plan card is about the NEXT pay, so its per-day amount says when it starts,
@@ -40,8 +43,7 @@ function nextPayLabel(period) {
 function nextPayPerDay(period, perDay) {
   if (!period.hasPayday) return `About ${formatMoney(perDay)} a day this month`;
   if (period.payIn === 0) return `From today: about ${formatMoney(perDay)} a day`;
-  const date = period.start.toLocaleDateString('en-NG', { day: 'numeric', month: 'short' });
-  return `From ${date}: about ${formatMoney(perDay)} a day`;
+  return `From ${payDate(period)}: about ${formatMoney(perDay)} a day`;
 }
 
 function greeting(hour = new Date().getHours()) {
@@ -272,7 +274,9 @@ export default function HomeScreen({ navigation, user, setUser }) {
   const [checking, setChecking] = useState(false);
   const [realText, setRealText] = useState('');
   const [realError, setRealError] = useState('');
-  const [hideBalances, setHideBalances] = useState(false);
+  // null until the saved choice loads, and treated as hidden meanwhile, so balances never flash.
+  const [hideBalances, setHideBalances] = useState(null);
+  const balancesHidden = hideBalances !== false;
   const [showBalanceInfo, setShowBalanceInfo] = useState(false);
 
   useEffect(() => {
@@ -280,13 +284,14 @@ export default function HomeScreen({ navigation, user, setUser }) {
   }, []);
 
   function toggleBalances() {
-    const next = !hideBalances;
+    const next = !balancesHidden;
     setHideBalances(next);
     AsyncStorage.setItem(HIDE_BALANCES_KEY, next ? '1' : '0').catch(() => {});
   }
 
   const firstName = user?.name?.split(' ')[0] || '';
   const plan = computePaydayPlan(user, transactions);
+  const pace = paceStatus(plan);
   const tracking = isTrackingOnly(user);
   // The calendar month, for the spending card.
   const month = computeStats(user, transactions);
@@ -342,7 +347,7 @@ export default function HomeScreen({ navigation, user, setUser }) {
   const check = user?.balanceCheck && plan.correction !== 0 ? user.balanceCheck : null;
 
   function openBalanceCheck() {
-    setRealText(banks.length ? String(Math.round(banksTotal)) : '');
+    setRealText(banks.length && !balancesHidden ? String(Math.round(banksTotal)) : '');
     setRealError('');
     setChecking(true);
   }
@@ -525,7 +530,7 @@ export default function HomeScreen({ navigation, user, setUser }) {
           {tracking ? <WhereItWent stats={month} transactions={transactions} /> : (
           <>
           {/* With a pay plan, the Broke Clock is one line inside the Plan card. */}
-          {!nextPay.pay || !paceStatus(plan) ? <BrokeClock plan={plan} onSetPayday={() => navigation.navigate('Settings')} /> : null}
+          {!nextPay.pay || !pace ? <BrokeClock plan={plan} onSetPayday={() => navigation.navigate('Settings')} /> : null}
 
           {nextPay.pay ? (
             <Card onPress={() => navigation.navigate('PaydayPlan')} accessibilityLabel={`Your next pay plan: ${formatMoney(nextPay.free)} to spend freely. See full plan`} style={{ padding: space.lg, gap: space.md }}>
@@ -534,7 +539,7 @@ export default function HomeScreen({ navigation, user, setUser }) {
                   <Text variant="label" family="medium" color="inkMuted" style={{ flex: 1 }} numberOfLines={1}>{nextPayLabel(nextPay.period)}</Text>
                   {nextPay.short
                     ? <Badge label={`${formatMoney(nextPay.short)} short`} tone="negative" />
-                    : paceStatus(plan) ? <Badge label={paceStatus(plan).badge} tone={paceStatus(plan).tone} /> : null}
+                    : pace ? <Badge label={pace.badge} tone={pace.tone} /> : null}
                   <Icon name="chevron-forward" size={18} color="inkSubtle" />
                 </View>
                   <Text variant="bodyStrong" family="semibold" style={{ marginTop: 2, fontVariant: ['tabular-nums'] }}>
@@ -547,12 +552,12 @@ export default function HomeScreen({ navigation, user, setUser }) {
                     {`Of ${formatMoney(nextPay.pay)}, after debts, budgets and savings`}
                   </Text>
               </View>
-              {paceStatus(plan) ? (
+              {pace ? (
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.xs }}>
                   <View style={{ marginTop: 2 }}><Icon name="hourglass-outline" size={14} color="ink" /></View>
                   <Text variant="caption" color="inkMuted" style={{ flex: 1 }}>
                     <Text variant="caption" family="bold" color="ink">Broke Clock · </Text>
-                    {paceStatus(plan).line}
+                    {pace.line}
                   </Text>
                 </View>
               ) : null}
@@ -616,15 +621,15 @@ export default function HomeScreen({ navigation, user, setUser }) {
                   <Icon name="information-circle-outline" size={20} color="inkMuted" />
                 </Pressable>
                 <Pressable onPress={toggleBalances} accessibilityRole="button" hitSlop={12}
-                  accessibilityLabel={hideBalances ? 'Show bank balances' : 'Hide bank balances'}>
-                  <Icon name={hideBalances ? 'eye-off-outline' : 'eye-outline'} size={20} color="inkMuted" />
+                  accessibilityLabel={balancesHidden ? 'Show bank balances' : 'Hide bank balances'}>
+                  <Icon name={balancesHidden ? 'eye-off-outline' : 'eye-outline'} size={20} color="inkMuted" />
                 </Pressable>
               </View>
               {banks.slice(0, 3).map(b => (
                 <View key={b.bank} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
                   <Text variant="bodyStrong" family="semibold" style={{ flex: 1 }} numberOfLines={1}>{b.bank}</Text>
                   <Text variant="caption" color="inkMuted">{formatDayLabel(new Date(b.capturedAt))}</Text>
-                  {hideBalances
+                  {balancesHidden
                     ? <Text variant="bodyStrong" family="bold" accessibilityLabel="Balance hidden">₦ ••••••</Text>
                     : <Money value={b.balance} family="bold" />}
                 </View>
@@ -685,7 +690,9 @@ export default function HomeScreen({ navigation, user, setUser }) {
             value={realText}
             error={realError}
             hint={banks.length
-              ? `Your bank alerts last reported ${formatMoney(banksTotal)} across ${banks.map(b => b.bank).join(', ')}. Add any other accounts or cash.`
+              ? balancesHidden
+                ? `Check ${banks.map(b => b.bank).join(', ')} and add up what you have, including any other accounts or cash.`
+                : `Your bank alerts last reported ${formatMoney(banksTotal)} across ${banks.map(b => b.bank).join(', ')}. Add any other accounts or cash.`
               : 'Check your banking apps and add up what you have, including cash.'}
             onChangeText={v => { setRealText(v); setRealError(''); }}
           />
