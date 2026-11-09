@@ -11,9 +11,12 @@ export function Text({
 }) {
   const { c } = useTheme();
   const t = type[variant];
+  // Follow the phone's text size up to 200% (WCAG 1.4.4). Only the very large amounts
+  // and titles are held back, since they're already big and would push layouts apart.
+  const maxScale = variant === 'display' ? 1.3 : variant === 'title' ? 1.6 : 2;
   return (
     <RNText
-      maxFontSizeMultiplier={1.4}
+      maxFontSizeMultiplier={maxScale}
       {...rest}
       style={[
         {

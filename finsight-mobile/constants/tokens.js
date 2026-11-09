@@ -19,6 +19,7 @@ export const colors = {
     inkSubtle: '#6F6570',
     line: '#F1ECEF',
     lineStrong: '#DCD3D9',
+    fieldBorder: '#948590',
     accent: '#C4124F',
     accentPressed: '#A30E42',
     onAccent: '#FFFFFF',
@@ -49,6 +50,7 @@ export const colors = {
     inkSubtle: '#A99DA6',
     line: '#35262F',
     lineStrong: '#4C3945',
+    fieldBorder: '#86717F',
     accent: '#FF7AA6',
     accentPressed: '#F0608F',
     onAccent: '#2A0614',
@@ -98,7 +100,7 @@ export const heroInk = {
   accentSoft: 'rgba(255,255,255,0.14)',
   onAccentSoft: '#FFFFFF',
   positive: '#8FF0C8',
-  negative: '#FFB8B0',
+  negative: '#FFC9C2',
   warning: '#FFD98A',
 };
 
@@ -142,6 +144,10 @@ export const CONTRAST_PAIRS = [
   ['onWarningSoft', 'warningSoft', 4.5],
   ['onInverse', 'inverse', 4.5],
   ['onGold', 'gold', 4.5],
+  // Borders of text fields: 3:1 so people can see where to type.
+  ['fieldBorder', 'surface', 3],
+  ['fieldBorder', 'canvas', 3],
+  ['fieldBorder', 'sunken', 3],
 ];
 
 export const space = { xxs: 2, xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32, huge: 48 };

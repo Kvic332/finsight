@@ -34,6 +34,8 @@ function ProviderLogo({ listing, size = 46 }) {
         source={{ uri: listing.logo_url }}
         onError={() => setFailed(true)}
         accessibilityIgnoresInvertColors
+        accessible={false}
+        importantForAccessibility="no"
         style={{ width: size, height: size, borderRadius: rounded, backgroundColor: c.sunken }}
       />
     );

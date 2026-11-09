@@ -737,7 +737,7 @@ function ListRowFlat({ tx, subtitle, money, onPress }) {
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.sm + 2 }}>
       <CategoryTile category={tx.cat} />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text variant="bodyStrong" family="semibold" numberOfLines={1}>{transactionName(tx)}</Text>
+        <Text variant="bodyStrong" family="semibold" numberOfLines={2}>{transactionName(tx)}</Text>
         <Text variant="label" family="regular" color="inkMuted" numberOfLines={1}>{subtitle}</Text>
       </View>
       <Money value={money} family="bold" tone="auto" showSign={money > 0} />

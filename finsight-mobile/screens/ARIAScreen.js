@@ -9,7 +9,7 @@ import AsyncStorage from '../services/dataStore';
 import * as Speech from 'expo-speech';
 import { fontFamily, radius, space, type } from '../constants/tokens';
 import {
-  Chip, Gradient, Icon, IconButton, ListRow, Sheet, Text, tapFeedback, useTheme, useToast,
+  Chip, Gradient, Icon, IconButton, ListRow, Sheet, Text, tapFeedback, useReducedMotion, useTheme, useToast,
 } from '../components/ui';
 import Voice from '../services/voice';
 import { trackEvent } from '../services/cloudSync';
@@ -127,6 +127,7 @@ export default function ARIAScreen({ navigation, user }) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const toast = useToast();
+  const reduceMotion = useReducedMotion();
   const firstName = user?.name?.split(' ')[0];
 
   const [messages, setMessages] = useState([{
@@ -190,6 +191,8 @@ export default function ARIAScreen({ navigation, user }) {
   }, [messages, loading]);
 
   function pulseMic() {
+    // Follows the phone's "remove animations" setting.
+    if (reduceMotion) return;
     Animated.loop(Animated.sequence([
       Animated.timing(micScale, { toValue: 1.15, duration: 400, useNativeDriver: true }),
       Animated.timing(micScale, { toValue: 1, duration: 400, useNativeDriver: true }),

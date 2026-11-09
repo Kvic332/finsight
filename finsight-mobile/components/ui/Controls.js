@@ -12,9 +12,9 @@ export function Chip({ label, selected, onPress, icon }) {
       onPress={() => { tapFeedback(); onPress?.(); }}
       accessibilityRole="button"
       accessibilityState={{ selected: !!selected }}
-      hitSlop={{ top: 6, bottom: 6 }}
+      hitSlop={{ top: 2, bottom: 2 }}
       style={({ pressed }) => ({
-        minHeight: 36, paddingHorizontal: space.md, borderRadius: radius.pill, borderWidth: 1,
+        minHeight: 44, paddingHorizontal: space.md, borderRadius: radius.pill, borderWidth: 1,
         flexDirection: 'row', alignItems: 'center', gap: space.xs, overflow: 'hidden',
         // Selected is a soft tint with an accent outline, not a gradient.
         backgroundColor: selected ? c.accentSoft : pressed ? c.lineStrong : c.sunken,
@@ -109,7 +109,7 @@ export function Input({
 }) {
   const { c } = useTheme();
   const [focused, setFocused] = useState(false);
-  const borderColor = error ? c.negative : focused ? c.accent : c.lineStrong;
+  const borderColor = error ? c.negative : focused ? c.accent : c.fieldBorder;
   return (
     <View style={{ gap: space.xs }}>
       {label ? <Text variant="label">{label}</Text> : null}

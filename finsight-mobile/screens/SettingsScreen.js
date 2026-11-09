@@ -608,7 +608,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md + 2 }}>
             <View style={{ width: 60, height: 60, borderRadius: 30, overflow: 'hidden', backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
               {user?.photo
-                ? <Image source={{ uri: user.photo }} accessibilityIgnoresInvertColors style={{ width: 60, height: 60 }} />
+                ? <Image source={{ uri: user.photo }} accessibilityIgnoresInvertColors accessible={false} importantForAccessibility="no" style={{ width: 60, height: 60 }} />
                 : <Text variant="title" family="bold" color="onAccentSoft">{firstName[0]?.toUpperCase()}</Text>}
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -720,7 +720,7 @@ export default function SettingsScreen({ navigation, theme, toggleTheme, user, s
           <Pressable onPress={pickPhoto} accessibilityRole="button" accessibilityLabel={editData.photo ? 'Change photo' : 'Add a photo'}>
             <View style={{ width: 92, height: 92, borderRadius: 46, overflow: 'hidden', backgroundColor: c.sunken, alignItems: 'center', justifyContent: 'center' }}>
               {editData.photo
-                ? <Image source={{ uri: editData.photo }} accessibilityIgnoresInvertColors style={{ width: 92, height: 92 }} />
+                ? <Image source={{ uri: editData.photo }} accessibilityIgnoresInvertColors accessibilityLabel="Your profile photo" style={{ width: 92, height: 92 }} />
                 : <Icon name="camera-outline" size={30} color="inkMuted" />}
             </View>
           </Pressable>

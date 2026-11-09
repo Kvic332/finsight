@@ -340,7 +340,7 @@ export default function AddTransactionScreen({ navigation, route, user }) {
               accessibilityLabel={`Category: ${cat}. Change category`}
               style={({ pressed }) => ({
                 flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.sm + 2,
-                borderRadius: radius.md, borderWidth: 1, borderColor: c.lineStrong,
+                borderRadius: radius.md, borderWidth: 1, borderColor: c.fieldBorder,
                 backgroundColor: pressed ? c.sunken : c.surface,
               })}
             >

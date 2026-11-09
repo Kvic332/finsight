@@ -33,7 +33,9 @@ export const CATEGORY_ICONS = {
 
 export function Icon({ name, size = 20, color = 'ink' }) {
   const { c } = useTheme();
-  return <Ionicons name={name} size={size} color={c[color] || color} />;
+  // Hidden from screen readers: every button with an icon already has a spoken name,
+  // and a bare icon would only add a pause or a stray symbol.
+  return <Ionicons name={name} size={size} color={c[color] || color} importantForAccessibility="no" accessibilityElementsHidden />;
 }
 
 export function IconTile({ name, size = 44, tone = 'neutral' }) {
